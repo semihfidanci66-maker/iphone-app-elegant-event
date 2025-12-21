@@ -22,23 +22,22 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18.2.0';
+        import React, { useState, useEffect, useMemo, useRef } from 'https://esm.sh/react@18.2.0';
         import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
         import { 
             LayoutDashboard, List, PlusCircle, MapPin, Calendar, DollarSign, Trash2,
             TrendingUp, Clock, CheckCircle, AlertCircle, CheckSquare, UserCheck,
             Archive, History, PieChart, Phone, Navigation, BarChart3, UserCircle,
-            LogOut, Lock, UserPlus, LogIn, Loader2, CloudOff, Sparkles, Cloud
+            LogOut, Lock, UserPlus, LogIn, Loader2, CloudOff, Sparkles, Cloud, Bell
         } from 'https://esm.sh/lucide-react@0.292.0';
 
-        // --- FIREBASE IMPORTE ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { 
             getFirestore, collection, addDoc, onSnapshot, 
             query, orderBy, doc, deleteDoc, updateDoc, serverTimestamp 
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // --- DEINE FIREBASE CONFIG ---
+        // --- FIREBASE CONFIG ---
         const firebaseConfig = {
             apiKey: "AIzaSyAugljddmPLH4QAKy2X2AaiOG4qp9IQg8c",
             authDomain: "elegantevent-27d55.firebaseapp.com",
@@ -51,15 +50,13 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const COL_NAME = "auftraege"; // Name der Sammlung in der Datenbank
+        const COL_NAME = "auftraege";
 
-        // --- KONSTANTEN ---
         const MASCOTS = ["Chase (Paw Patrol)", "Marshall (Paw Patrol)", "Skye (Paw Patrol)", "Sonic", "Stitch", "Micky Maus", "Minnie Maus", "Mario", "Luigi", "Mascha", "Der Bär", "Spiderman"];
         const TEAM_CODE = "maskottchen"; 
         const SEMIH_CODE = "Semih2005"; 
         const apiKey = ""; 
 
-        // --- HILFSFUNKTIONEN ---
         const formatCurrency = (amount) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount);
         const formatDate = (dateString) => {
             if (!dateString) return 'Ungültiges Datum';
@@ -165,7 +162,6 @@
             </div>
         );
 
-        // --- VIEWS ---
         const DashboardView = ({ stats, onDeleteRequest, onToggleStatus }) => (
             <div className="space-y-8 animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -294,7 +290,6 @@
                 if (!formData.date || !formData.time || !formData.revenue || selectedMascots.length === 0) { alert("Bitte fülle alle Felder aus."); return; }
                 setIsSubmitting(true);
                 try {
-                    // --- FIREBASE ADD ---
                     await addDoc(collection(db, COL_NAME), {
                         date: `${formData.date}T${formData.time}`,
                         location: formData.location || "Kein Ort",
@@ -349,6 +344,7 @@
             const [mode, setMode] = useState('login'); 
             const [formData, setFormData] = useState({ name: '', code: '' });
             const [error, setError] = useState('');
+            const [notifState, setNotifState] = useState(Notification.permission);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
@@ -360,11 +356,25 @@
                 onLogin(name);
             };
 
+            const requestPermission = () => {
+                Notification.requestPermission().then(p => {
+                    setNotifState(p);
+                    if(p === "granted") alert("Benachrichtigungen aktiviert!");
+                });
+            };
+
             if (currentUser) return (
                 <div className="max-w-md mx-auto bg-white p-12 rounded-3xl shadow-xl text-center border border-slate-100 mt-12 animate-fade-in">
                     <div className="w-32 h-32 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><UserCircle size={80} className="text-indigo-600" /></div>
                     <h2 className="text-4xl font-extrabold text-slate-800 mb-2">{currentUser.name}</h2>
                     <p className="text-indigo-600 font-semibold mb-8 bg-indigo-50 inline-block px-4 py-1.5 rounded-full">Team Mitglied</p>
+                    
+                    {notifState !== "granted" && (
+                        <button onClick={requestPermission} className="w-full py-3 mb-4 rounded-2xl bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 transition-colors flex items-center justify-center border border-indigo-200">
+                           <Bell size={20} className="mr-2"/> Benachrichtigungen aktivieren
+                        </button>
+                    )}
+
                     <button onClick={onLogout} className="w-full py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-red-50 hover:text-red-600 transition-colors flex items-center justify-center text-lg"><LogOut size={22} className="mr-3" /> Abmelden</button>
                 </div>
             );
@@ -427,19 +437,38 @@
             const [toast, setToast] = useState(null);
             const [deleteModalOpen, setDeleteModalOpen] = useState(false);
             const [itemToDelete, setItemToDelete] = useState(null);
+            const isInitialLoad = useRef(true);
 
-            // --- FIREBASE SYNC (ECHTZEIT!) ---
+            // --- FIREBASE SYNC MIT NATIVE NOTIFICATIONS ---
             useEffect(() => {
                 const q = query(collection(db, COL_NAME), orderBy("date", "desc"));
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     setBookings(jobs);
                     setIsLoaded(true);
+
+                    // --- BENACHRICHTIGUNG LOGIK ---
+                    if (!isInitialLoad.current) {
+                        snapshot.docChanges().forEach((change) => {
+                            if (change.type === "added") {
+                                const newJob = change.doc.data();
+                                // Benachrichtige nur, wenn ich nicht selbst der Ersteller bin
+                                if (currentUser && newJob.assignee !== currentUser.name) {
+                                    if (Notification.permission === "granted") {
+                                        new Notification("Neuer Auftrag!", {
+                                            body: `${newJob.revenue}€ - ${newJob.contact}`,
+                                            icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+                                        });
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    isInitialLoad.current = false;
                 });
                 return () => unsubscribe();
-            }, []);
+            }, [currentUser]); // Abhängigkeit von currentUser, damit wir wissen wer wir sind
 
-            // --- AUTH LOCAL STORAGE (Nur Login merken) ---
             useEffect(() => {
                 const savedUser = localStorage.getItem('mascot_user');
                 if (savedUser) { setCurrentUser(JSON.parse(savedUser)); setActiveTab('dashboard'); }
@@ -450,28 +479,14 @@
                 else localStorage.removeItem('mascot_user'); 
             }, [currentUser]);
 
-            // --- DATABASE ACTIONS ---
             const addBooking = () => { setActiveTab('list'); setToast({ message: "Auftrag gespeichert!", type: "success" }); };
-            
             const requestDelete = (id) => { setItemToDelete(id); setDeleteModalOpen(true); };
-            
-            const confirmDelete = async () => { 
-                if (itemToDelete) { 
-                    await deleteDoc(doc(db, COL_NAME, itemToDelete));
-                    setToast({ message: "Gelöscht.", type: "success" }); 
-                } 
-                setDeleteModalOpen(false); setItemToDelete(null); 
-            };
-            
-            const toggleStatus = async (id, currentStatus) => { 
-                const newStatus = currentStatus === 'completed' ? 'open' : 'completed';
-                await updateDoc(doc(db, COL_NAME, id), { status: newStatus });
-            };
+            const confirmDelete = async () => { if (itemToDelete) { await deleteDoc(doc(db, COL_NAME, itemToDelete)); setToast({ message: "Gelöscht.", type: "success" }); } setDeleteModalOpen(false); setItemToDelete(null); };
+            const toggleStatus = async (id, currentStatus) => { const newStatus = currentStatus === 'completed' ? 'open' : 'completed'; await updateDoc(doc(db, COL_NAME, id), { status: newStatus }); };
 
             const handleLogin = (name) => { setCurrentUser({ name }); setActiveTab('dashboard'); };
             const handleLogout = () => { setCurrentUser(null); setActiveTab('profile'); };
 
-            // --- STATS CALCULATION ---
             const stats = useMemo(() => {
                 const now = new Date();
                 const currentMonth = now.getMonth();
@@ -497,9 +512,7 @@
                 <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
                     {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
                     <ConfirmModal isOpen={deleteModalOpen} title="Löschen?" message="Endgültig löschen?" onConfirm={confirmDelete} onCancel={() => setDeleteModalOpen(false)} />
-                    
                     <Navbar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
-
                     <main className="container mx-auto px-4 md:px-6 py-8 flex-1">
                         {!currentUser ? ( <ProfileView currentUser={currentUser} onLogin={handleLogin} onLogout={handleLogout} /> ) : (
                             <>
@@ -511,7 +524,7 @@
                             </>
                         )}
                     </main>
-                    <div className="py-6 text-center text-slate-400 text-xs font-medium">ElegantEvent Manager v1.3 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
+                    <div className="py-6 text-center text-slate-400 text-xs font-medium">ElegantEvent Manager v1.5 • <Bell size={10} className="inline mr-1"/> Browser-Benachrichtigungen</div>
                 </div>
             );
         }
