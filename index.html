@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ElegantEvent App</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        @keyframes bounceIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        .maskot-btn.active { background-color: #4f46e5; color: white; border-color: #4f46e5; transform: scale(1.05); }
+        body { -webkit-tap-highlight-color: transparent; font-family: -apple-system, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 pb-24">
+
+    <div id="view-login" class="min-h-screen flex items-center justify-center p-6 bg-white">
+        <div class="w-full max-w-md text-center">
+            <h1 class="text-4xl font-extrabold mb-2">ElegantEvent</h1>
+            <p class="text-slate-500 mb-8">Management Portal</p>
+            <div class="space-y-4">
+                <input type="text" id="login-name" placeholder="Dein Name" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                <input type="password" id="login-code" placeholder="Team-Code" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                <button onclick="handleLogin()" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg">Anmelden</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden">
+        <nav class="bg-white/80 backdrop-blur-md border-b sticky top-0 z-40 px-6 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-black text-indigo-600">ElegantEvent</h1>
+            <span id="display-user" class="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full"></span>
+        </nav>
+
+        <main class="p-4 max-w-2xl mx-auto">
+            <div id="view-dashboard" class="view space-y-6 animate-bounce-in">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-6 rounded-3xl border shadow-sm">
+                        <span class="text-xs font-bold text-slate-400 uppercase flex items-center"><i data-lucide="clock" class="w-3 mr-1"></i> Offen</span>
+                        <div id="stats-open" class="text-4xl font-black">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-3xl border shadow-sm">
+                        <span class="text-xs font-bold text-slate-400 uppercase flex items-center"><i data-lucide="dollar-sign" class="w-3 mr-1"></i> Umsatz</span>
+                        <div id="stats-revenue" class="text-xl font-black text-emerald-600">0 €</div>
+                    </div>
+                </div>
+                <h2 class="text-2xl font-bold flex items-center"><i data-lucide="calendar" class="mr-2"></i> Termine</h2>
+                <div id="auftragsListe" class="space-y-4"></div>
+            </div>
+
+            <div id="view-add" class="view hidden space-y-6 animate-bounce-in">
+                <div class="bg-white p-6 rounded-3xl shadow-xl border">
+                    <h2 class="text-2xl font-bold mb-6">Neuer Auftrag</h2>
+                    <div class="space-y-4">
+                        <input type="text" id="f-kunde" placeholder="Kunde / Kontakt" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500">
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="date" id="f-datum" class="p-4 bg-slate-50 border rounded-2xl outline-none">
+                            <input type="time" id="f-zeit" class="p-4 bg-slate-50 border rounded-2xl outline-none">
+                        </div>
+                        <input type="text" id="f-ort" placeholder="Ort / Adresse" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                        <input type="number" id="f-umsatz" placeholder="Umsatz (€)" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                        
+                        <label class="block text-xs font-bold text-slate-500 uppercase">Maskottchen</label>
+                        <div id="mascot-grid" class="flex flex-wrap gap-2"></div>
+
+                        <textarea id="f-notizen" placeholder="Notizen..." class="w-full p-4 bg-slate-50 border rounded-2xl outline-none" rows="3"></textarea>
+                        
+                        <button id="saveBtn" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all flex justify-center items-center">
+                            <i data-lucide="plus-circle" class="mr-2"></i> Auftrag Speichern
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-xl border border-slate-200 px-8 py-4 rounded-full shadow-2xl flex space-x-12 z-50">
+            <button onclick="showView('dashboard')" class="nav-btn text-indigo-600"><i data-lucide="layout-dashboard"></i></button>
+            <button onclick="showView('add')" class="nav-btn text-slate-400"><i data-lucide="plus-circle"></i></button>
+            <button onclick="showView('login')" class="nav-btn text-slate-400"><i data-lucide="user"></i></button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAugljddmPLH4QAKy2X2AaiOG4qp9IQg8c",
+            authDomain: "elegantevent-27d55.firebaseapp.com",
+            projectId: "elegantevent-27d55",
+            storageBucket: "elegantevent-27d55.firebasestorage.app",
+            messagingSenderId: "13045694360",
+            appId: "1:13045694360:web:b05d85ed441e9895c3f5ed"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const colRef = collection(db, "auftraege");
+
+        const MASCOTS = ["Chase", "Marshall", "Skye", "Sonic", "Stitch", "Micky Maus", "Minnie Maus", "Mario", "Luigi", "Spiderman"];
+        let selectedMascots = [];
+        let currentUser = "";
+
+        // LOGIN FUNKTION
+        window.handleLogin = () => {
+            const name = document.getElementById('login-name').value;
+            const code = document.getElementById('login-code').value;
+            if (code === "maskottchen" || code === "Semih2005") {
+                currentUser = name;
+                document.getElementById('view-login').classList.add('hidden');
+                document.getElementById('main-app').classList.remove('hidden');
+                document.getElementById('display-user').innerText = name;
+                showView('dashboard');
+            } else {
+                alert("Falscher Code!");
+            }
+        };
+
+        // NAVIGATION
+        window.showView = (viewId) => {
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            const target = document.getElementById('view-' + viewId);
+            if(target) target.classList.remove('hidden');
+            
+            // Icon Farben anpassen
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.replace('text-indigo-600', 'text-slate-400'));
+            event?.currentTarget?.classList?.replace('text-slate-400', 'text-indigo-600');
+        };
+
+        // MASKOTTCHEN GRID ERSTELLEN
+        const grid = document.getElementById('mascot-grid');
+        MASCOTS.forEach(m => {
+            const btn = document.createElement('button');
+            btn.className = "maskot-btn px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 bg-white transition-all";
+            btn.innerText = m;
+            btn.onclick = () => {
+                btn.classList.toggle('active');
+                if(selectedMascots.includes(m)) selectedMascots = selectedMascots.filter(x => x !== m);
+                else selectedMascots.push(m);
+            };
+            grid.appendChild(btn);
+        });
+
+        // SPEICHERN
+        document.getElementById('saveBtn').onclick = async () => {
+            const kunde = document.getElementById('f-kunde').value;
+            const datum = document.getElementById('f-datum').value;
+            const zeit = document.getElementById('f-zeit').value;
+            const umsatz = document.getElementById('f-umsatz').value;
+            const ort = document.getElementById('f-ort').value;
+            const notizen = document.getElementById('f-notizen').value;
+
+            if (kunde && datum) {
+                await addDoc(colRef, {
+                    kunde, datum, zeit, ort, umsatz: parseFloat(umsatz) || 0,
+                    notizen, mascots: selectedMascots,
+                    user: currentUser, status: 'offen', erstelltAm: serverTimestamp()
+                });
+                alert("Gespeichert!");
+                location.reload(); // Einfacher Reset
+            }
+        };
+
+        // ECHTZEIT DATEN
+        onSnapshot(query(colRef, orderBy("datum", "asc")), (snapshot) => {
+            const liste = document.getElementById("auftragsListe");
+            let revenue = 0; let open = 0;
+            liste.innerHTML = "";
+            snapshot.forEach(d => {
+                const data = d.data();
+                if(data.status === 'offen') open++;
+                revenue += data.umsatz;
+
+                const card = document.createElement('div');
+                card.className = "bg-white p-5 rounded-3xl border shadow-sm flex flex-col space-y-2 relative";
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-black text-indigo-600 uppercase tracking-tighter">${data.datum} | ${data.zeit}</span>
+                        <button onclick="deleteJob('${d.id}')" class="text-slate-300"><i data-lucide="trash-2" class="w-4"></i></button>
+                    </div>
+                    <div class="text-lg font-bold">${data.kunde}</div>
+                    <div class="text-sm text-slate-500 flex items-center"><i data-lucide="map-pin" class="w-3 mr-1"></i> ${data.ort}</div>
+                    <div class="flex flex-wrap gap-1 mt-2">
+                        ${data.mascots.map(m => `<span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-lg text-[10px] font-bold">${m}</span>`).join('')}
+                    </div>
+                `;
+                liste.appendChild(card);
+            });
+            document.getElementById('stats-open').innerText = open;
+            document.getElementById('stats-revenue').innerText = revenue.toLocaleString() + " €";
+            lucide.createIcons();
+        });
+
+        window.deleteJob = async (id) => { if(confirm("Löschen?")) await deleteDoc(doc(db, "auftraege", id)); };
+        lucide.createIcons();
+    </script>
+</body>
+</html>
