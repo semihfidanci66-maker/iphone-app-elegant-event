@@ -2,137 +2,91 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ElegantEvent App</title>
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#ffffff">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
-        /* Animationen */
         .animate-bounce-in { animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
-        @keyframes bounceIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-        
-        /* Interaktive Styles */
-        .maskot-btn.active { background-color: #4f46e5; color: white; border-color: #4f46e5; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.3); }
-        
-        /* iOS Tweaks */
-        body { -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        
-        /* Hide Scrollbar for cleaner look */
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
-        
-        /* Safe Area für iPhone X und neuer */
-        .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
-        .pt-safe-top { padding-top: env(safe-area-inset-top); }
+        @keyframes bounceIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        .maskot-btn.active { background-color: #4f46e5; color: white; border-color: #4f46e5; transform: scale(1.05); }
+        body { -webkit-tap-highlight-color: transparent; font-family: -apple-system, sans-serif; }
+        /* Damit der Login Screen sicher sichtbar ist, bis JS lädt */
+        #view-login { display: flex; } 
+        #main-app { display: none; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800 pb-32 safe-pb select-none">
+<body class="bg-slate-50 pb-24">
 
-    <div id="view-login" class="min-h-screen flex items-center justify-center p-6 bg-white z-50 fixed inset-0">
-        <div class="w-full max-w-md text-center animate-bounce-in">
-            <div class="inline-block p-4 rounded-3xl bg-indigo-50 mb-4">
-                <i data-lucide="crown" class="w-12 h-12 text-indigo-600"></i>
-            </div>
-            <h1 class="text-4xl font-black mb-2 text-indigo-900 tracking-tight">ElegantEvent</h1>
-            <p class="text-slate-400 mb-10 font-medium">Management Portal</p>
-            
+    <div id="view-login" class="min-h-screen flex items-center justify-center p-6 bg-white">
+        <div class="w-full max-w-md text-center">
+            <h1 class="text-4xl font-extrabold mb-2">ElegantEvent</h1>
+            <p class="text-slate-500 mb-8">Management Portal</p>
             <div class="space-y-4">
-                <input type="text" id="login-name" placeholder="Dein Name" class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 focus:bg-white transition-all font-bold text-center placeholder:font-normal">
-                <input type="password" id="login-code" placeholder="Team-Code" class="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 focus:bg-white transition-all font-bold text-center placeholder:font-normal">
-                <button onclick="handleLogin()" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-200 active:scale-95 transition-all">Anmelden</button>
+                <input type="text" id="login-name" placeholder="Dein Name" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                <input type="password" id="login-code" placeholder="Team-Code" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                <button onclick="handleLogin()" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg">Anmelden</button>
             </div>
         </div>
     </div>
 
-    <div id="main-app" class="hidden">
-        <nav class="bg-white/90 backdrop-blur-md border-b border-slate-100 sticky top-0 z-40 px-6 py-4 flex justify-between items-center pt-safe-top">
+    <div id="main-app">
+        <nav class="bg-white/80 backdrop-blur-md border-b sticky top-0 z-40 px-6 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-black text-indigo-600">ElegantEvent</h1>
             <div class="flex items-center gap-2">
-                <i data-lucide="zap" class="w-5 h-5 text-indigo-600 fill-indigo-600"></i>
-                <h1 class="text-xl font-black text-slate-800 tracking-tight">ElegantEvent</h1>
-            </div>
-            <div class="flex items-center gap-3">
-                <span id="display-user" class="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-full">User</span>
-                <button onclick="handleLogout()" class="bg-red-50 text-red-500 p-2 rounded-full hover:bg-red-100"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+                <span id="display-user" class="text-xs font-bold bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full"></span>
+                <button onclick="logout()" class="text-red-400"><i data-lucide="log-out" class="w-4"></i></button>
             </div>
         </nav>
 
-        <main class="p-4 max-w-2xl mx-auto space-y-20">
-            
-            <div id="view-dashboard" class="view animate-bounce-in space-y-6">
+        <main class="p-4 max-w-2xl mx-auto">
+            <div id="view-dashboard" class="view space-y-6 animate-bounce-in">
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden">
-                        <div class="absolute -right-4 -top-4 bg-blue-50 w-24 h-24 rounded-full opacity-50"></div>
-                        <span class="text-xs font-bold text-slate-400 uppercase flex items-center relative z-10"><i data-lucide="clock" class="w-3 mr-1"></i> Offen</span>
-                        <div id="stats-open" class="text-4xl font-black mt-2 text-slate-800 relative z-10">0</div>
+                    <div class="bg-white p-6 rounded-3xl border shadow-sm">
+                        <span class="text-xs font-bold text-slate-400 uppercase flex items-center"><i data-lucide="clock" class="w-3 mr-1"></i> Offen</span>
+                        <div id="stats-open" class="text-4xl font-black">0</div>
                     </div>
-                    <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm relative overflow-hidden">
-                        <div class="absolute -right-4 -top-4 bg-emerald-50 w-24 h-24 rounded-full opacity-50"></div>
-                        <span class="text-xs font-bold text-slate-400 uppercase flex items-center relative z-10"><i data-lucide="dollar-sign" class="w-3 mr-1"></i> Umsatz</span>
-                        <div id="stats-revenue" class="text-2xl font-black mt-3 text-emerald-600 relative z-10">0 €</div>
+                    <div class="bg-white p-6 rounded-3xl border shadow-sm">
+                        <span class="text-xs font-bold text-slate-400 uppercase flex items-center"><i data-lucide="dollar-sign" class="w-3 mr-1"></i> Umsatz</span>
+                        <div id="stats-revenue" class="text-xl font-black text-emerald-600">0 €</div>
                     </div>
                 </div>
-
-                <div>
-                    <h2 class="text-xl font-bold flex items-center mb-4 text-slate-800"><i data-lucide="calendar" class="mr-2 w-5 text-indigo-600"></i> Termine</h2>
-                    <div id="auftragsListe" class="space-y-4 pb-12">
-                        <div class="text-center py-10 text-slate-400">Lade Daten...</div>
-                    </div>
-                </div>
+                <h2 class="text-2xl font-bold flex items-center"><i data-lucide="calendar" class="mr-2"></i> Termine</h2>
+                <div id="auftragsListe" class="space-y-4"></div>
             </div>
 
-            <div id="view-add" class="view hidden animate-bounce-in">
-                <div class="bg-white p-6 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100">
-                    <h2 class="text-2xl font-bold mb-6 text-slate-800">Neuer Auftrag</h2>
-                    
-                    <div class="space-y-5">
-                        <div>
-                            <input type="text" id="f-kunde" placeholder="Kunde / Kontakt" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
-                        </div>
-
+            <div id="view-add" class="view hidden space-y-6 animate-bounce-in">
+                <div class="bg-white p-6 rounded-3xl shadow-xl border">
+                    <h2 class="text-2xl font-bold mb-6">Neuer Auftrag</h2>
+                    <div class="space-y-4">
+                        <input type="text" id="f-kunde" placeholder="Kunde / Kontakt" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500">
                         <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <input type="date" id="f-datum" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-medium">
-                            </div>
-                            <div>
-                                <input type="time" id="f-zeit" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-medium">
-                            </div>
+                            <input type="date" id="f-datum" class="p-4 bg-slate-50 border rounded-2xl outline-none">
+                            <input type="time" id="f-zeit" class="p-4 bg-slate-50 border rounded-2xl outline-none">
                         </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                             <div class="col-span-2">
-                                <input type="text" id="f-ort" placeholder="Ort / Adresse" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-medium">
-                             </div>
-                             <div class="col-span-2">
-                                <input type="number" id="f-umsatz" placeholder="Umsatz (€)" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-medium text-emerald-600">
-                             </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-bold text-slate-400 uppercase ml-2 mb-2">Maskottchen</label>
-                            <div id="mascot-grid" class="flex flex-wrap gap-2"></div>
-                        </div>
-
-                        <div>
-                             <textarea id="f-notizen" placeholder="Notizen..." class="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-medium" rows="3"></textarea>
-                        </div>
+                        <input type="text" id="f-ort" placeholder="Ort / Adresse" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
+                        <input type="number" id="f-umsatz" placeholder="Umsatz (€)" class="w-full p-4 bg-slate-50 border rounded-2xl outline-none">
                         
-                        <button id="saveBtn" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-300 active:scale-95 transition-all flex justify-center items-center">
-                            <i data-lucide="plus-circle" class="mr-2 w-5"></i> Auftrag Speichern
+                        <label class="block text-xs font-bold text-slate-500 uppercase">Maskottchen</label>
+                        <div id="mascot-grid" class="flex flex-wrap gap-2"></div>
+
+                        <textarea id="f-notizen" placeholder="Notizen..." class="w-full p-4 bg-slate-50 border rounded-2xl outline-none" rows="3"></textarea>
+                        
+                        <button id="saveBtn" class="w-full bg-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all flex justify-center items-center">
+                            <i data-lucide="plus-circle" class="mr-2"></i> Auftrag Speichern
                         </button>
                     </div>
                 </div>
             </div>
         </main>
 
-        <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-xl border border-white/20 px-6 py-3 rounded-full shadow-2xl flex items-center gap-8 z-50 ring-1 ring-slate-200/50">
-            <button onclick="showView('dashboard')" id="nav-dashboard" class="nav-btn text-indigo-600 transition-colors p-2"><i data-lucide="layout-dashboard" class="w-6 h-6"></i></button>
-            <div class="w-px h-6 bg-slate-200"></div>
-            <button onclick="showView('add')" id="nav-add" class="nav-btn text-slate-400 hover:text-indigo-400 transition-colors p-2"><i data-lucide="plus-circle" class="w-6 h-6"></i></button>
+        <div class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-xl border border-slate-200 px-8 py-4 rounded-full shadow-2xl flex space-x-12 z-50">
+            <button onclick="showView('dashboard')" class="nav-btn text-indigo-600"><i data-lucide="layout-dashboard"></i></button>
+            <button onclick="showView('add')" class="nav-btn text-slate-400"><i data-lucide="plus-circle"></i></button>
         </div>
     </div>
 
@@ -140,7 +94,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // 1. FIREBASE CONFIG
+        // Deine Config
         const firebaseConfig = {
             apiKey: "AIzaSyAugljddmPLH4QAKy2X2AaiOG4qp9IQg8c",
             authDomain: "elegantevent-27d55.firebaseapp.com",
@@ -155,212 +109,149 @@
         const db = getFirestore(app);
         const colRef = collection(db, "auftraege");
 
-        // 2. STATE & CONSTANTS
-        const MASCOTS = [
-            "Chase", "Marshall", "Skye", "Sonic", "Stitch", 
-            "Micky Maus", "Minnie Maus", "Mario", "Luigi", 
-            "Spiderman", "Mascha", "Bär"
-        ];
+        const MASCOTS = ["Chase", "Marshall", "Skye", "Sonic", "Stitch", "Micky Maus", "Minnie Maus", "Mario", "Luigi", "Spiderman", "Mascha", "Bär"];
         let selectedMascots = [];
-        let sessionUser = null; 
+        let currentUser = "";
 
-        // 3. AUTHENTICATION & PERSISTENCE
+        // 1. GLOBAL FUNCTIONS (WICHTIG für onclick im HTML)
         window.handleLogin = () => {
-            const name = document.getElementById('login-name').value.trim();
-            const code = document.getElementById('login-code').value.trim();
+            const name = document.getElementById('login-name').value;
+            const code = document.getElementById('login-code').value;
             
-            // Jeder kommt rein
-            let valid = false;
-            if (code === "Semih2005" || code === "maskottchen") valid = true;
-
-            if (valid && name) {
-                // Save to LocalStorage
-                sessionUser = { name };
-                localStorage.setItem('ee_user', JSON.stringify(sessionUser));
+            // Jeder Code erlaubt Zugriff
+            if ((code === "maskottchen" || code === "Semih2005") && name) {
+                currentUser = name;
+                // Speichern im LocalStorage
+                localStorage.setItem('ee_user', name);
                 initApp();
             } else {
                 alert("Falscher Code oder Name fehlt!");
-                document.getElementById('login-code').value = "";
             }
         };
 
-        window.handleLogout = () => {
-            if(confirm("Abmelden?")) {
+        window.logout = () => {
+            if(confirm('Ausloggen?')) {
                 localStorage.removeItem('ee_user');
                 location.reload();
             }
         };
 
-        function checkSession() {
-            const stored = localStorage.getItem('ee_user');
-            if (stored) {
-                sessionUser = JSON.parse(stored);
-                initApp();
-            } else {
-                document.getElementById('view-login').classList.remove('hidden');
-            }
-        }
+        window.showView = (viewId) => {
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            const target = document.getElementById('view-' + viewId);
+            if(target) target.classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.replace('text-indigo-600', 'text-slate-400'));
+            // Da wir hier nicht das Event haben, setzen wir Dashboard oder Add manuell
+            if(viewId === 'dashboard') document.querySelector('.nav-btn:nth-child(1)').classList.replace('text-slate-400', 'text-indigo-600');
+            if(viewId === 'add') document.querySelector('.nav-btn:nth-child(2)').classList.replace('text-slate-400', 'text-indigo-600');
+        };
 
+        window.deleteJob = async (id) => { 
+            if(confirm("Löschen?")) await deleteDoc(doc(db, "auftraege", id)); 
+        };
+
+        // 2. INIT LOGIC
         function initApp() {
-            document.getElementById('view-login').classList.add('hidden');
-            document.getElementById('main-app').classList.remove('hidden');
-            document.getElementById('display-user').innerText = sessionUser.name;
-            showView('dashboard');
+            // UI Switch
+            document.getElementById('view-login').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            document.getElementById('display-user').innerText = currentUser;
+            
+            // Maskottchen Grid bauen
+            const grid = document.getElementById('mascot-grid');
+            grid.innerHTML = ''; // Reset
+            MASCOTS.forEach(m => {
+                const btn = document.createElement('button');
+                btn.className = "maskot-btn px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 bg-white transition-all";
+                btn.innerText = m;
+                btn.onclick = (e) => {
+                    e.preventDefault(); // Verhindert Neuladen
+                    btn.classList.toggle('active');
+                    if(selectedMascots.includes(m)) selectedMascots = selectedMascots.filter(x => x !== m);
+                    else selectedMascots.push(m);
+                };
+                grid.appendChild(btn);
+            });
+
+            // Echtzeit Daten laden
+            loadData();
             lucide.createIcons();
         }
 
-        // 4. NAVIGATION
-        window.showView = (viewId) => {
-            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
-            document.getElementById('view-' + viewId).classList.remove('hidden');
-            
-            // Icon Farben anpassen
-            document.querySelectorAll('.nav-btn').forEach(b => {
-                b.classList.remove('text-indigo-600');
-                b.classList.add('text-slate-400');
+        function loadData() {
+            onSnapshot(query(colRef, orderBy("datum", "asc")), (snapshot) => {
+                const liste = document.getElementById("auftragsListe");
+                let revenue = 0; let open = 0;
+                liste.innerHTML = "";
+                
+                snapshot.forEach(d => {
+                    const data = d.data();
+                    if(data.status === 'offen') open++;
+                    revenue += data.umsatz;
+
+                    const card = document.createElement('div');
+                    card.className = "bg-white p-5 rounded-3xl border shadow-sm flex flex-col space-y-2 relative";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <span class="text-xs font-black text-indigo-600 uppercase tracking-tighter">${data.datum} | ${data.zeit}</span>
+                            <button onclick="deleteJob('${d.id}')" class="text-red-400"><i data-lucide="trash-2" class="w-4"></i></button>
+                        </div>
+                        <div class="text-lg font-bold">${data.kunde}</div>
+                        <div class="text-sm text-slate-500 flex items-center"><i data-lucide="map-pin" class="w-3 mr-1"></i> ${data.ort}</div>
+                        <div class="flex flex-wrap gap-1 mt-2">
+                            ${data.mascots ? data.mascots.map(m => `<span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-lg text-[10px] font-bold">${m}</span>`).join('') : ''}
+                        </div>
+                    `;
+                    liste.appendChild(card);
+                });
+                document.getElementById('stats-open').innerText = open;
+                document.getElementById('stats-revenue').innerText = revenue.toLocaleString() + " €";
+                lucide.createIcons();
             });
-            const activeBtn = document.getElementById('nav-' + viewId);
-            if(activeBtn) {
-                activeBtn.classList.remove('text-slate-400');
-                activeBtn.classList.add('text-indigo-600');
-            }
-            
-            // Animation reset
-            const view = document.getElementById('view-' + viewId);
-            view.classList.remove('animate-bounce-in');
-            void view.offsetWidth; 
-            view.classList.add('animate-bounce-in');
-        };
+        }
 
-        // 5. MASKOTTCHEN GRID ERSTELLEN
-        const grid = document.getElementById('mascot-grid');
-        MASCOTS.forEach(m => {
-            const btn = document.createElement('button');
-            btn.className = "maskot-btn px-4 py-3 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-600 transition-all select-none";
-            btn.innerText = m;
-            btn.onclick = (e) => {
-                e.preventDefault(); 
-                btn.classList.toggle('active');
-                if(selectedMascots.includes(m)) {
-                    selectedMascots = selectedMascots.filter(x => x !== m);
-                } else {
-                    selectedMascots.push(m);
-                }
-            };
-            grid.appendChild(btn);
-        });
+        // 3. AUTO LOGIN CHECK
+        const savedUser = localStorage.getItem('ee_user');
+        if (savedUser) {
+            currentUser = savedUser;
+            initApp();
+        }
 
-        // 6. DATENBANK SPEICHERN
+        // 4. SAVE BUTTON LISTENER
         document.getElementById('saveBtn').onclick = async () => {
             const kunde = document.getElementById('f-kunde').value;
             const datum = document.getElementById('f-datum').value;
             const zeit = document.getElementById('f-zeit').value;
-            const ort = document.getElementById('f-ort').value;
             const umsatz = document.getElementById('f-umsatz').value;
+            const ort = document.getElementById('f-ort').value;
             const notizen = document.getElementById('f-notizen').value;
 
             if (kunde && datum) {
-                const btn = document.getElementById('saveBtn');
-                btn.innerHTML = `<i data-lucide="loader" class="animate-spin mr-2"></i> Speichere...`;
-                btn.disabled = true;
-
-                try {
-                    await addDoc(colRef, {
-                        kunde, datum, zeit, ort, 
-                        umsatz: parseFloat(umsatz) || 0,
-                        notizen, 
-                        mascots: selectedMascots,
-                        createdBy: sessionUser.name,
-                        status: 'offen', 
-                        createdAt: serverTimestamp()
-                    });
-                    
-                    alert("Gespeichert!");
-                    // Reset inputs
-                    document.getElementById('f-kunde').value = "";
-                    document.getElementById('f-ort').value = "";
-                    document.getElementById('f-umsatz').value = "";
-                    document.getElementById('f-notizen').value = "";
-                    selectedMascots = [];
-                    document.querySelectorAll('.maskot-btn').forEach(b => b.classList.remove('active'));
-                    
-                    showView('dashboard');
-                } catch(e) {
-                    console.error(e);
-                    alert("Fehler!");
-                } finally {
-                    btn.innerHTML = `<i data-lucide="plus-circle" class="mr-2"></i> Auftrag Speichern`;
-                    btn.disabled = false;
-                    lucide.createIcons();
-                }
-            } else {
-                alert("Name und Datum fehlen!");
-            }
-        };
-
-        // 7. ECHTZEIT DATEN & LÖSCHEN FÜR ALLE
-        onSnapshot(query(colRef, orderBy("datum", "asc")), (snapshot) => {
-            const liste = document.getElementById("auftragsListe");
-            let revenue = 0; 
-            let open = 0;
-            
-            liste.innerHTML = "";
-            
-            if (snapshot.empty) {
-                liste.innerHTML = `<div class="text-center py-10 text-slate-400 opacity-50"><i data-lucide="ghost" class="w-12 h-12 mx-auto mb-2"></i><p>Keine Aufträge</p></div>`;
-            }
-
-            snapshot.forEach(d => {
-                const data = d.data();
-                if(data.status === 'offen') open++;
-                revenue += data.umsatz;
-
-                const card = document.createElement('div');
-                card.className = "bg-white p-5 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col space-y-3 relative transition-all hover:shadow-md";
+                await addDoc(colRef, {
+                    kunde, datum, zeit, ort, 
+                    umsatz: parseFloat(umsatz) || 0,
+                    notizen, 
+                    mascots: selectedMascots,
+                    user: currentUser, 
+                    status: 'offen', 
+                    erstelltAm: serverTimestamp()
+                });
+                alert("Gespeichert!");
+                // Inputs leeren
+                document.getElementById('f-kunde').value = "";
+                document.getElementById('f-ort').value = "";
+                document.getElementById('f-umsatz').value = "";
+                selectedMascots = [];
+                document.querySelectorAll('.maskot-btn').forEach(b => b.classList.remove('active'));
                 
-                // Datum formatieren
-                const dateObj = new Date(data.datum);
-                const day = isNaN(dateObj) ? data.datum : dateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-
-                card.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div class="flex items-center gap-2">
-                             <span class="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wide">${day} | ${data.zeit}</span>
-                        </div>
-                        <button onclick="deleteJob('${d.id}')" class="p-2 bg-red-50 text-red-500 rounded-full hover:bg-red-100 transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                    </div>
-                    
-                    <div>
-                        <div class="text-lg font-bold text-slate-800 leading-tight">${data.kunde}</div>
-                        <div class="text-sm text-slate-500 flex items-center mt-1 font-medium"><i data-lucide="map-pin" class="w-3 h-3 mr-1"></i> ${data.ort || 'Kein Ort'}</div>
-                    </div>
-
-                    ${data.mascots && data.mascots.length > 0 ? `
-                    <div class="flex flex-wrap gap-1 pt-1">
-                        ${data.mascots.map(m => `<span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide">${m}</span>`).join('')}
-                    </div>` : ''}
-                    
-                    <div class="pt-3 border-t border-slate-50 flex justify-between items-end">
-                        <div class="text-xs text-slate-300 font-medium">Von: ${data.createdBy || 'Team'}</div>
-                        <div class="font-black text-emerald-600">${data.umsatz} €</div>
-                    </div>
-                `;
-                liste.appendChild(card);
-            });
-
-            document.getElementById('stats-open').innerText = open;
-            document.getElementById('stats-revenue').innerText = revenue.toLocaleString('de-DE') + " €";
-            lucide.createIcons();
-        });
-
-        // 8. LÖSCHFUNKTION (Jeder darf)
-        window.deleteJob = async (id) => { 
-            if(confirm("Wirklich löschen?")) {
-                await deleteDoc(doc(db, "auftraege", id)); 
+                showView('dashboard');
+            } else {
+                alert('Bitte Name und Datum eingeben');
             }
         };
-
-        checkSession();
+        
+        // Initial Icons
         lucide.createIcons();
     </script>
 </body>
