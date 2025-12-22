@@ -49,7 +49,7 @@
             TrendingUp, Clock, CheckCircle, AlertCircle, CheckSquare, UserCheck,
             Archive, History, PieChart, Phone, Navigation, BarChart3, UserCircle,
             LogOut, Lock, UserPlus, LogIn, Loader2, CloudOff, Sparkles, Cloud,
-            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins
+            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins, Pencil, Save
         } from 'https://esm.sh/lucide-react@0.292.0';
 
         // --- FIREBASE IMPORTE ---
@@ -182,7 +182,7 @@
             );
         };
 
-        const BookingCard = ({ booking, onDeleteRequest, onToggleStatus, readonly = false }) => {
+        const BookingCard = ({ booking, onDeleteRequest, onToggleStatus, onEditRequest, readonly = false }) => {
             const isCompleted = booking.status === 'completed';
             const isPastDate = new Date(booking.date) < new Date();
             const mascotList = Array.isArray(booking.mascot) ? booking.mascot : [booking.mascot];
@@ -192,7 +192,6 @@
             const endTime = booking.duration ? calculateEndTime(booking.date.split('T')[1], booking.duration) : null;
             const timeDisplay = endTime ? `${booking.date.split('T')[1].slice(0,5)} - ${endTime}` : booking.date.split('T')[1].slice(0,5);
 
-            // Payment Status Logic
             const paymentStatus = booking.paymentStatus || 'open';
             const paymentConfig = {
                 'open': { icon: DollarSign, color: 'text-slate-400 dark:text-slate-500', bg: 'bg-slate-100 dark:bg-slate-700' },
@@ -228,6 +227,9 @@
                                 <div className="flex space-x-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"> 
                                     <button onClick={(e) => { e.stopPropagation(); onToggleStatus(booking.id, booking.status); }} className={`p-2 rounded-lg transition-colors ${isCompleted ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400' : 'bg-slate-100 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:bg-slate-700 dark:text-slate-400 dark:hover:text-green-400 dark:hover:bg-slate-600'}`}>
                                         <CheckSquare size={18} />
+                                    </button>
+                                    <button onClick={(e) => { e.stopPropagation(); onEditRequest(booking); }} className="p-2 rounded-lg bg-blue-50 text-blue-400 hover:bg-blue-100 hover:text-blue-600 transition-colors dark:bg-blue-900/20 dark:hover:bg-blue-900/40">
+                                        <Pencil size={18} />
                                     </button>
                                     <button onClick={(e) => { e.stopPropagation(); onDeleteRequest(booking.id); }} className="p-2 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors dark:bg-red-900/20 dark:hover:bg-red-900/40">
                                         <Trash2 size={18} />
@@ -294,7 +296,7 @@
         );
 
         // --- VIEWS ---
-        const DashboardView = ({ stats, onDeleteRequest, onToggleStatus }) => (
+        const DashboardView = ({ stats, onDeleteRequest, onToggleStatus, onEditRequest }) => (
             <div className="space-y-8 animate-fade-in">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col relative overflow-hidden group hover:shadow-md transition-shadow">
@@ -312,7 +314,7 @@
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center mb-6"><Clock className="mr-3 text-indigo-600 dark:text-indigo-400" size={28}/> Nächste Termine</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {stats.nextThree.length > 0 ? (
-                            stats.nextThree.map(booking => <BookingCard key={booking.id} booking={booking} onDeleteRequest={onDeleteRequest} onToggleStatus={onToggleStatus} />)
+                            stats.nextThree.map(booking => <BookingCard key={booking.id} booking={booking} onDeleteRequest={onDeleteRequest} onToggleStatus={onToggleStatus} onEditRequest={onEditRequest} />)
                         ) : (
                             <div className="col-span-full p-12 text-center bg-slate-50 dark:bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700"><p className="text-slate-400 dark:text-slate-500 font-medium text-lg">Aktuell keine offenen Termine anstehend.</p></div>
                         )}
@@ -363,7 +365,7 @@
             );
         };
 
-        const ListView = ({ bookings, onDeleteRequest, onToggleStatus }) => {
+        const ListView = ({ bookings, onDeleteRequest, onToggleStatus, onEditRequest }) => {
             const [listType, setListType] = useState('open'); 
             const [filterMascot, setFilterMascot] = useState('Alle');
             const [filterMonth, setFilterMonth] = useState('Alle');
@@ -399,14 +401,17 @@
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredBookings.length > 0 ? filteredBookings.map(booking => <BookingCard key={booking.id} booking={booking} onDeleteRequest={onDeleteRequest} onToggleStatus={onToggleStatus} />) : <div className="col-span-full p-20 text-center bg-slate-50 dark:bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700"><List size={48} className="mx-auto mb-4 text-slate-300 dark:text-slate-600" /><p className="text-slate-400 dark:text-slate-500 font-medium text-lg">Keine Aufträge in dieser Ansicht gefunden.</p></div>}
+                        {filteredBookings.length > 0 ? filteredBookings.map(booking => <BookingCard key={booking.id} booking={booking} onDeleteRequest={onDeleteRequest} onToggleStatus={onToggleStatus} onEditRequest={onEditRequest} />) : <div className="col-span-full p-20 text-center bg-slate-50 dark:bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700"><List size={48} className="mx-auto mb-4 text-slate-300 dark:text-slate-600" /><p className="text-slate-400 dark:text-slate-500 font-medium text-lg">Keine Aufträge in dieser Ansicht gefunden.</p></div>}
                     </div>
                 </div>
             );
         };
 
-        const AddFormView = ({ onAdd, onCancel, currentUser, user }) => {
+        const BookingFormView = ({ onSave, onCancel, currentUser, user, initialData = null }) => {
+            const isEditing = !!initialData;
             const now = new Date();
+            
+            // Initial State Logic
             const [formData, setFormData] = useState({ 
                 date: now.toISOString().split('T')[0], 
                 time: now.toTimeString().slice(0, 5), 
@@ -426,6 +431,28 @@
             const [showSuggestions, setShowSuggestions] = useState(false);
             const [isGenerating, setIsGenerating] = useState(false);
             const [isSubmitting, setIsSubmitting] = useState(false);
+
+            // Populate form if editing
+            useEffect(() => {
+                if (initialData) {
+                    const [datePart, timePart] = initialData.date.split('T');
+                    setFormData({
+                        date: datePart,
+                        time: timePart,
+                        duration: initialData.duration || '1.0',
+                        location: initialData.location || '',
+                        revenue: initialData.revenue || '',
+                        deposit: initialData.deposit || '',
+                        paymentStatus: initialData.paymentStatus || 'open',
+                        customerName: initialData.customerName || '',
+                        assignee: initialData.assignee || '',
+                        contact: initialData.contact || '',
+                        notes: initialData.notes || '',
+                        eventType: initialData.eventType || 'Geburtstag'
+                    });
+                    setSelectedMascots(Array.isArray(initialData.mascot) ? initialData.mascot : [initialData.mascot]);
+                }
+            }, [initialData]);
 
             // Validation states
             const isPastDate = new Date(formData.date) < new Date(new Date().setHours(0,0,0,0));
@@ -460,8 +487,7 @@
                 
                 setIsSubmitting(true);
                 try {
-                    const publicCollection = collection(db, 'artifacts', appId, 'public', 'data', COL_NAME);
-                    await addDoc(publicCollection, {
+                    const dataToSave = {
                         date: `${formData.date}T${formData.time}`,
                         duration: formData.duration,
                         location: formData.location || "Kein Ort",
@@ -474,10 +500,15 @@
                         assignee: formData.assignee,
                         contact: formData.contact,
                         eventType: formData.eventType,
-                        status: 'open',
-                        createdAt: serverTimestamp()
-                    });
-                    onAdd(); 
+                        status: initialData ? initialData.status : 'open',
+                        updatedAt: serverTimestamp()
+                    };
+
+                    if (!isEditing) {
+                        dataToSave.createdAt = serverTimestamp();
+                    }
+
+                    await onSave(dataToSave, isEditing ? initialData.id : null);
                 } catch(e) { console.error(e); alert("Fehler beim Speichern: " + e.message); } 
                 finally { setIsSubmitting(false); }
             };
@@ -489,7 +520,10 @@
             return (
                 <div className="max-w-3xl mx-auto animate-fade-in">
                     <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-700">
-                        <h2 className="text-3xl font-extrabold text-slate-800 dark:text-white mb-8 pb-4 border-b border-slate-100 dark:border-slate-700">Neuer Auftrag</h2>
+                        <h2 className="text-3xl font-extrabold text-slate-800 dark:text-white mb-8 pb-4 border-b border-slate-100 dark:border-slate-700 flex items-center">
+                            {isEditing ? <Pencil className="mr-3 text-indigo-600"/> : <PlusCircle className="mr-3 text-indigo-600"/>}
+                            {isEditing ? 'Auftrag bearbeiten' : 'Neuer Auftrag'}
+                        </h2>
                         <form onSubmit={handleSubmit} className="space-y-6">
                             
                             {/* ZEIT & DATUM BEREICH */}
@@ -579,7 +613,12 @@
                                 <div className="flex justify-between items-end mb-2"><label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Notizen</label><button type="button" onClick={handleAIGenerate} disabled={isGenerating} className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-800">{isGenerating ? 'Lade...' : 'AI Planer'}</button></div>
                                 <textarea rows="6" className="w-full p-4 bg-slate-50 dark:bg-slate-700 dark:text-white dark:border-slate-600 rounded-xl border border-slate-200" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})}></textarea>
                             </div>
-                            <div className="flex space-x-4 pt-4"><button type="button" onClick={onCancel} className="px-8 py-4 bg-slate-100 dark:bg-slate-700 dark:text-slate-300 font-bold rounded-xl">Abbrechen</button><button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center">{isSubmitting ? <Loader2 className="animate-spin"/> : <><PlusCircle className="mr-2"/> Speichern</>}</button></div>
+                            <div className="flex space-x-4 pt-4">
+                                <button type="button" onClick={onCancel} className="px-8 py-4 bg-slate-100 dark:bg-slate-700 dark:text-slate-300 font-bold rounded-xl">Abbrechen</button>
+                                <button type="submit" disabled={isSubmitting} className="flex-1 bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-lg flex justify-center items-center hover:bg-indigo-700 transition-colors">
+                                    {isSubmitting ? <Loader2 className="animate-spin"/> : (isEditing ? <><Save className="mr-2"/> Änderungen speichern</> : <><PlusCircle className="mr-2"/> Auftrag anlegen</>)}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -672,6 +711,7 @@
             const [deleteModalOpen, setDeleteModalOpen] = useState(false);
             const [itemToDelete, setItemToDelete] = useState(null);
             const [user, setUser] = useState(null);
+            const [editingBooking, setEditingBooking] = useState(null); // State for editing
             
             // Dark Mode State
             const [darkMode, setDarkMode] = useState(() => {
@@ -735,7 +775,26 @@
             }, [currentUser]);
 
             // --- DATABASE ACTIONS ---
-            const addBooking = () => { setActiveTab('list'); setToast({ message: "Auftrag gespeichert!", type: "success" }); };
+            const saveBooking = async (data, id = null) => { 
+                try {
+                    const publicCollection = collection(db, 'artifacts', appId, 'public', 'data', COL_NAME);
+                    if (id) {
+                        // Update existing
+                        const docRef = doc(publicCollection, id);
+                        await updateDoc(docRef, data);
+                        setToast({ message: "Auftrag aktualisiert!", type: "success" });
+                    } else {
+                        // Create new
+                        await addDoc(publicCollection, data);
+                        setToast({ message: "Auftrag gespeichert!", type: "success" });
+                    }
+                    setActiveTab('dashboard'); 
+                    setEditingBooking(null);
+                } catch (e) {
+                    console.error(e);
+                    alert("Fehler beim Speichern: " + e.message);
+                }
+            };
             
             const requestDelete = (id) => { setItemToDelete(id); setDeleteModalOpen(true); };
             
@@ -753,6 +812,16 @@
                 const newStatus = currentStatus === 'completed' ? 'open' : 'completed';
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', COL_NAME, id);
                 await updateDoc(docRef, { status: newStatus });
+            };
+
+            const handleEditRequest = (booking) => {
+                setEditingBooking(booking);
+                setActiveTab('add');
+            };
+
+            const handleCancelEdit = () => {
+                setEditingBooking(null);
+                setActiveTab('dashboard');
             };
 
             const handleLogin = (name) => { setCurrentUser({ name }); setActiveTab('dashboard'); };
@@ -785,20 +854,20 @@
                     {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
                     <ConfirmModal isOpen={deleteModalOpen} title="Löschen?" message="Endgültig löschen?" onConfirm={confirmDelete} onCancel={() => setDeleteModalOpen(false)} />
                     
-                    <Navbar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} />
+                    <Navbar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); if(tab !== 'add') setEditingBooking(null); }} currentUser={currentUser} onLogout={handleLogout} darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} />
 
                     <main className="container mx-auto px-4 md:px-6 py-8 flex-1">
                         {!currentUser ? ( <ProfileView currentUser={currentUser} onLogin={handleLogin} onLogout={handleLogout} /> ) : (
                             <>
-                                {activeTab === 'dashboard' && <DashboardView stats={stats} onDeleteRequest={requestDelete} onToggleStatus={toggleStatus} currentUser={currentUser} />}
-                                {activeTab === 'list' && <ListView bookings={bookings} onDeleteRequest={requestDelete} onToggleStatus={toggleStatus} />}
+                                {activeTab === 'dashboard' && <DashboardView stats={stats} onDeleteRequest={requestDelete} onToggleStatus={toggleStatus} onEditRequest={handleEditRequest} currentUser={currentUser} />}
+                                {activeTab === 'list' && <ListView bookings={bookings} onDeleteRequest={requestDelete} onToggleStatus={toggleStatus} onEditRequest={handleEditRequest} />}
                                 {activeTab === 'finance' && <FinancialView stats={stats} historyData={historyData} bookings={bookings} />}
                                 {activeTab === 'profile' && <ProfileView currentUser={currentUser} onLogin={handleLogin} onLogout={handleLogout} />}
-                                {activeTab === 'add' && <AddFormView onAdd={addBooking} onCancel={() => setActiveTab('dashboard')} currentUser={currentUser} user={user} />}
+                                {activeTab === 'add' && <BookingFormView onSave={saveBooking} onCancel={handleCancelEdit} currentUser={currentUser} user={user} initialData={editingBooking} />}
                             </>
                         )}
                     </main>
-                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v1.7 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
+                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v1.8 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
                 </div>
             );
         }
