@@ -49,7 +49,7 @@
             TrendingUp, Clock, CheckCircle, AlertCircle, CheckSquare, UserCheck,
             Archive, History, PieChart, Phone, Navigation, BarChart3, UserCircle,
             LogOut, Lock, UserPlus, LogIn, Loader2, CloudOff, Sparkles, Cloud,
-            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins, Pencil, Save
+            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins, Pencil, Save, MessageCircle
         } from 'https://esm.sh/lucide-react@0.292.0';
 
         // --- FIREBASE IMPORTE ---
@@ -85,6 +85,7 @@
         const EVENT_TYPES = ["Geburtstag", "Firmenfeier", "Hochzeit", "Stadtfest", "Promotion", "Kindergarten/Schule", "Sonstiges"];
         const TEAM_CODE = "maskottchen"; 
         const SEMIH_CODE = "Semih2005"; 
+        const SEMIH_NUMBER = "4917634591111"; // Semihs Nummer im internationalen Format
         const apiKey = ""; 
 
         // --- HILFSFUNKTIONEN ---
@@ -130,6 +131,51 @@
                         <div className="bg-slate-50 dark:bg-slate-850 px-8 py-5 flex space-x-4 justify-end border-t border-slate-100 dark:border-slate-700">
                             <button onClick={onCancel} className="px-6 py-3 rounded-xl text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Abbrechen</button>
                             <button onClick={onConfirm} className="px-6 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 shadow-lg transition-colors">Löschen</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const WhatsAppModal = ({ isOpen, data, onClose }) => {
+            if (!isOpen || !data) return null;
+
+            const handleSend = () => {
+                const dateObj = new Date(data.date);
+                const dateStr = dateObj.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+                const timeStr = dateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                const mascots = Array.isArray(data.mascot) ? data.mascot.join(', ') : data.mascot;
+                
+                const message = `*Neuer Auftrag!* 🎭\n\n` +
+                    `📅 *Datum:* ${dateStr}\n` +
+                    `⏰ *Start:* ${timeStr} Uhr\n` +
+                    `⏳ *Dauer:* ${data.duration} Std.\n` +
+                    `📍 *Ort:* ${data.location}\n` +
+                    `🐻 *Maskottchen:* ${mascots}\n` +
+                    `💰 *Umsatz:* ${data.revenue}€\n\n` +
+                    `Bitte bestätigen! ✅`;
+
+                const url = `https://wa.me/${SEMIH_NUMBER}?text=${encodeURIComponent(message)}`;
+                window.open(url, '_blank');
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border dark:border-slate-700">
+                        <div className="p-8 text-center">
+                            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <MessageCircle size={40} className="text-green-600 dark:text-green-400" />
+                            </div>
+                            <h3 className="text-2xl font-extrabold text-slate-800 dark:text-white mb-2">Auftrag erstellt!</h3>
+                            <p className="text-slate-600 dark:text-slate-300 mb-6">Möchtest du Semih direkt per WhatsApp benachrichtigen?</p>
+                            
+                            <button onClick={handleSend} className="w-full py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold shadow-lg flex items-center justify-center mb-3 transition-colors text-lg">
+                                <MessageCircle className="mr-2" /> Auf WhatsApp senden
+                            </button>
+                            <button onClick={onClose} className="w-full py-3 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                                Nein, später
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -709,7 +755,8 @@
             const [deleteModalOpen, setDeleteModalOpen] = useState(false);
             const [itemToDelete, setItemToDelete] = useState(null);
             const [user, setUser] = useState(null);
-            const [editingBooking, setEditingBooking] = useState(null); // State for editing
+            const [editingBooking, setEditingBooking] = useState(null); 
+            const [whatsappData, setWhatsappData] = useState(null); // Neuer State für WhatsApp Modal
             
             // Dark Mode State
             const [darkMode, setDarkMode] = useState(() => {
@@ -750,9 +797,7 @@
                 
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // Client-Side Sorting - oldest first for dashboard logic later, or newest?
-                    // Actually usually lists want newest first, but stats calc handles its own sort.
-                    // Let's sort by date descending (newest first) as default state
+                    // Sort by date descending (newest first)
                     jobs.sort((a, b) => new Date(b.date) - new Date(a.date));
                     setBookings(jobs);
                     setIsLoaded(true);
@@ -784,13 +829,17 @@
                         const docRef = doc(publicCollection, id);
                         await updateDoc(docRef, data);
                         setToast({ message: "Auftrag aktualisiert!", type: "success" });
+                        setActiveTab('dashboard'); 
+                        setEditingBooking(null);
                     } else {
                         // Create new
                         await addDoc(publicCollection, data);
                         setToast({ message: "Auftrag gespeichert!", type: "success" });
+                        // Für neue Aufträge: Erst WhatsApp anbieten, dann Dashboard
+                        setWhatsappData(data);
+                        setActiveTab('dashboard'); 
+                        setEditingBooking(null);
                     }
-                    setActiveTab('dashboard'); 
-                    setEditingBooking(null);
                 } catch (e) {
                     console.error(e);
                     alert("Fehler beim Speichern: " + e.message);
@@ -836,8 +885,6 @@
                 const revenueMonth = bookings.filter(b => { const d = new Date(b.date); return d.getMonth() === currentMonth && d.getFullYear() === currentYear; }).reduce((sum, b) => sum + Number(b.revenue), 0);
                 const revenueYear = bookings.filter(b => new Date(b.date).getFullYear() === currentYear).reduce((sum, b) => sum + Number(b.revenue), 0);
                 
-                // FIX: Show ALL open jobs, sorted by date (oldest/soonest first)
-                // Removed: && new Date(b.date) > now
                 const upcoming = bookings
                     .filter(b => b.status !== 'completed')
                     .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -861,6 +908,8 @@
                     {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
                     <ConfirmModal isOpen={deleteModalOpen} title="Löschen?" message="Endgültig löschen?" onConfirm={confirmDelete} onCancel={() => setDeleteModalOpen(false)} />
                     
+                    <WhatsAppModal isOpen={!!whatsappData} data={whatsappData} onClose={() => setWhatsappData(null)} />
+
                     <Navbar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); if(tab !== 'add') setEditingBooking(null); }} currentUser={currentUser} onLogout={handleLogout} darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} />
 
                     <main className="container mx-auto px-4 md:px-6 py-8 flex-1">
@@ -874,7 +923,7 @@
                             </>
                         )}
                     </main>
-                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v1.9 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
+                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v2.0 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
                 </div>
             );
         }
