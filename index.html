@@ -49,7 +49,7 @@
             TrendingUp, Clock, CheckCircle, AlertCircle, CheckSquare, UserCheck,
             Archive, History, PieChart, Phone, Navigation, BarChart3, UserCircle,
             LogOut, Lock, UserPlus, LogIn, Loader2, CloudOff, Sparkles, Cloud,
-            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins, Bell, BellOff
+            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins
         } from 'https://esm.sh/lucide-react@0.292.0';
 
         // --- FIREBASE IMPORTE ---
@@ -106,40 +106,6 @@
             const newM = Math.floor(totalMinutes % 60);
             return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
         };
-
-        // --- NOTIFICATION HELPER (NEU) ---
-        const requestNotificationPermission = async () => {
-            if (!("Notification" in window)) {
-                alert("Dein Browser unterstützt keine Benachrichtigungen.");
-                return;
-            }
-            try {
-                // Safari-Safe Promise Handling
-                const permission = await Notification.requestPermission();
-                if (permission === "granted") {
-                    new Notification("Benachrichtigungen aktiviert 🔔", { 
-                        body: "Du wirst nun über neue Aufträge informiert.",
-                        icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-                    });
-                }
-            } catch (e) {
-                console.error("Fehler bei Benachrichtigungserlaubnis:", e);
-                // Fallback for older browsers if needed, mostly silently fail
-            }
-        };
-
-        const sendBrowserNotification = (title, body) => {
-            if (!("Notification" in window) || Notification.permission !== "granted") return;
-            try {
-                new Notification(title, { 
-                    body, 
-                    icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" 
-                });
-            } catch (e) {
-                console.error("Benachrichtigung konnte nicht gesendet werden:", e);
-            }
-        };
-
 
         // --- KOMPONENTEN ---
         const Toast = ({ message, type = 'success', onClose }) => {
@@ -678,9 +644,6 @@
                         </div>
                     )}
                     <div className="flex items-center space-x-4">
-                        <button onClick={requestNotificationPermission} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title="Benachrichtigungen aktivieren">
-                            <Bell size={20} />
-                        </button>
                         <button onClick={toggleDarkMode} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
                         </button>
@@ -751,19 +714,6 @@
                     const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     jobs.sort((a, b) => new Date(b.date) - new Date(a.date));
                     setBookings(jobs);
-                    
-                    // --- BENACHRICHTIGUNG LOGIK (NEU) ---
-                    // Nur feuern, wenn es nicht das erste Laden ist
-                    if (isLoaded) {
-                        snapshot.docChanges().forEach((change) => {
-                            if (change.type === "added") {
-                                const data = change.doc.data();
-                                const mascotName = Array.isArray(data.mascot) ? data.mascot[0] : (data.mascot || "Auftrag");
-                                sendBrowserNotification("Neuer Auftrag! 🎉", `${mascotName} am ${formatDate(data.date)}`);
-                            }
-                        });
-                    }
-                    
                     setIsLoaded(true);
                 }, (error) => {
                     console.error("Datenbank Fehler:", error);
@@ -771,7 +721,7 @@
                 });
 
                 return () => unsubscribe();
-            }, [user, isLoaded]); // isLoaded als dependency hinzugefügt
+            }, [user]);
 
             // --- AUTH LOCAL STORAGE ---
             useEffect(() => {
