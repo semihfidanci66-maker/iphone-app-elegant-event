@@ -49,7 +49,7 @@
             TrendingUp, Clock, CheckCircle, AlertCircle, CheckSquare, UserCheck,
             Archive, History, PieChart, Phone, Navigation, BarChart3, UserCircle,
             LogOut, Lock, UserPlus, LogIn, Loader2, CloudOff, Sparkles, Cloud,
-            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins, Pencil, Save, MessageCircle
+            Moon, Sun, X, Hourglass, ArrowRight, PartyPopper, User, CreditCard, Coins, Pencil, Save, MessageCircle, Bell
         } from 'https://esm.sh/lucide-react@0.292.0';
 
         // --- FIREBASE IMPORTE ---
@@ -108,6 +108,37 @@
             return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
         };
 
+        // --- NOTIFICATION HELPER ---
+        const requestNotificationPermission = async () => {
+            if (!("Notification" in window)) {
+                alert("Dein Browser unterstützt keine Benachrichtigungen.");
+                return;
+            }
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === "granted") {
+                    new Notification("Benachrichtigungen aktiviert 🔔", { 
+                        body: "Du wirst nun über neue Aufträge informiert.",
+                        icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+                    });
+                }
+            } catch (e) {
+                console.error("Fehler bei Benachrichtigungserlaubnis:", e);
+            }
+        };
+
+        const sendBrowserNotification = (title, body) => {
+            if (!("Notification" in window) || Notification.permission !== "granted") return;
+            try {
+                new Notification(title, { 
+                    body, 
+                    icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" 
+                });
+            } catch (e) {
+                console.error("Benachrichtigung konnte nicht gesendet werden:", e);
+            }
+        };
+
         // --- KOMPONENTEN ---
         const Toast = ({ message, type = 'success', onClose }) => {
             useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
@@ -145,14 +176,18 @@
                 const dateStr = dateObj.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
                 const timeStr = dateObj.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                 const mascots = Array.isArray(data.mascot) ? data.mascot.join(', ') : data.mascot;
+                const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.location)}`;
                 
+                // Nachricht ohne Umsatz, mit Maps-Link und Kundeninfos
                 const message = `*Neuer Auftrag!* 🎭\n\n` +
                     `📅 *Datum:* ${dateStr}\n` +
                     `⏰ *Start:* ${timeStr} Uhr\n` +
                     `⏳ *Dauer:* ${data.duration} Std.\n` +
                     `📍 *Ort:* ${data.location}\n` +
-                    `🐻 *Maskottchen:* ${mascots}\n` +
-                    `💰 *Umsatz:* ${data.revenue}€\n\n` +
+                    `🗺️ *Maps:* ${mapsUrl}\n` +
+                    `👤 *Kunde:* ${data.customerName || 'Kein Name'}\n` +
+                    `📞 *Kontakt:* ${data.contact || 'Keine Nummer'}\n` +
+                    `🐻 *Maskottchen:* ${mascots}\n\n` +
                     `Bitte bestätigen! ✅`;
 
                 const url = `https://wa.me/${SEMIH_NUMBER}?text=${encodeURIComponent(message)}`;
@@ -727,6 +762,9 @@
                         </div>
                     )}
                     <div className="flex items-center space-x-4">
+                        <button onClick={requestNotificationPermission} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title="Benachrichtigungen aktivieren">
+                            <Bell size={20} />
+                        </button>
                         <button onClick={toggleDarkMode} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
                         </button>
@@ -800,6 +838,19 @@
                     // Sort by date descending (newest first)
                     jobs.sort((a, b) => new Date(b.date) - new Date(a.date));
                     setBookings(jobs);
+                    
+                    // --- BENACHRICHTIGUNG LOGIK (NEU) ---
+                    // Nur feuern, wenn es nicht das erste Laden ist
+                    if (isLoaded) {
+                        snapshot.docChanges().forEach((change) => {
+                            if (change.type === "added") {
+                                const data = change.doc.data();
+                                const mascotName = Array.isArray(data.mascot) ? data.mascot[0] : (data.mascot || "Auftrag");
+                                sendBrowserNotification("Neuer Auftrag! 🎉", `${mascotName} am ${formatDate(data.date)}`);
+                            }
+                        });
+                    }
+                    
                     setIsLoaded(true);
                 }, (error) => {
                     console.error("Datenbank Fehler:", error);
@@ -807,7 +858,7 @@
                 });
 
                 return () => unsubscribe();
-            }, [user]);
+            }, [user, isLoaded]); // isLoaded als dependency hinzugefügt
 
             // --- AUTH LOCAL STORAGE ---
             useEffect(() => {
@@ -923,7 +974,7 @@
                             </>
                         )}
                     </main>
-                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v2.0 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
+                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v2.1 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
                 </div>
             );
         }
