@@ -85,7 +85,7 @@
         const EVENT_TYPES = ["Geburtstag", "Firmenfeier", "Hochzeit", "Stadtfest", "Promotion", "Kindergarten/Schule", "Sonstiges"];
         const TEAM_CODE = "maskottchen"; 
         const SEMIH_CODE = "Semih2005"; 
-        const SEMIH_NUMBER = "4917634591111"; // Semihs Nummer im internationalen Format
+        const SEMIH_NUMBER = "4917634591111"; 
         const apiKey = ""; 
 
         // --- HILFSFUNKTIONEN ---
@@ -108,43 +108,12 @@
             return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
         };
 
-        // --- NOTIFICATION HELPER ---
-        const requestNotificationPermission = async () => {
-            if (!("Notification" in window)) {
-                alert("Dein Browser unterstützt keine Benachrichtigungen.");
-                return;
-            }
-            try {
-                const permission = await Notification.requestPermission();
-                if (permission === "granted") {
-                    new Notification("Benachrichtigungen aktiviert 🔔", { 
-                        body: "Du wirst nun über neue Aufträge informiert.",
-                        icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-                    });
-                }
-            } catch (e) {
-                console.error("Fehler bei Benachrichtigungserlaubnis:", e);
-            }
-        };
-
-        const sendBrowserNotification = (title, body) => {
-            if (!("Notification" in window) || Notification.permission !== "granted") return;
-            try {
-                new Notification(title, { 
-                    body, 
-                    icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" 
-                });
-            } catch (e) {
-                console.error("Benachrichtigung konnte nicht gesendet werden:", e);
-            }
-        };
-
         // --- KOMPONENTEN ---
         const Toast = ({ message, type = 'success', onClose }) => {
             useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
             return (
-                <div className={`fixed top-24 right-5 px-6 py-4 rounded-xl shadow-2xl z-[100] flex items-center space-x-3 animate-bounce-in border ${type === 'success' ? 'bg-white border-green-500 text-green-700' : 'bg-white border-red-500 text-red-700'}`}>
-                    {type === 'success' ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
+                <div className={`fixed top-24 right-5 px-6 py-4 rounded-xl shadow-2xl z-[100] flex items-center space-x-3 animate-bounce-in border ${type === 'success' ? 'bg-white border-green-500 text-green-700' : type === 'error' ? 'bg-white border-red-500 text-red-700' : 'bg-white border-blue-500 text-blue-700'}`}>
+                    {type === 'success' ? <CheckCircle size={24} /> : type === 'error' ? <AlertCircle size={24} /> : <Bell size={24} />}
                     <span className="font-bold text-base">{message}</span>
                 </div>
             );
@@ -178,7 +147,6 @@
                 const mascots = Array.isArray(data.mascot) ? data.mascot.join(', ') : data.mascot;
                 const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.location)}`;
                 
-                // Nachricht ohne Umsatz, mit Maps-Link und Kundeninfos
                 const message = `*Neuer Auftrag!* 🎭\n\n` +
                     `📅 *Datum:* ${dateStr}\n` +
                     `⏰ *Start:* ${timeStr} Uhr\n` +
@@ -747,7 +715,7 @@
             );
         };
 
-        const Navbar = ({ activeTab, setActiveTab, currentUser, onLogout, darkMode, toggleDarkMode }) => (
+        const Navbar = ({ activeTab, setActiveTab, currentUser, onLogout, darkMode, toggleDarkMode, onRequestNotification }) => (
             <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-[50]">
                 <div className="container mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
@@ -762,7 +730,7 @@
                         </div>
                     )}
                     <div className="flex items-center space-x-4">
-                        <button onClick={requestNotificationPermission} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title="Benachrichtigungen aktivieren">
+                        <button onClick={onRequestNotification} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" title="Benachrichtigungen aktivieren">
                             <Bell size={20} />
                         </button>
                         <button onClick={toggleDarkMode} className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
@@ -794,7 +762,7 @@
             const [itemToDelete, setItemToDelete] = useState(null);
             const [user, setUser] = useState(null);
             const [editingBooking, setEditingBooking] = useState(null); 
-            const [whatsappData, setWhatsappData] = useState(null); // Neuer State für WhatsApp Modal
+            const [whatsappData, setWhatsappData] = useState(null); 
             
             // Dark Mode State
             const [darkMode, setDarkMode] = useState(() => {
@@ -811,6 +779,41 @@
                     localStorage.setItem('theme', 'light');
                 }
             }, [darkMode]);
+
+            // --- NOTIFICATION HANDLER ---
+            const requestNotificationPermission = async () => {
+                if (!("Notification" in window)) {
+                    setToast({ message: "Benachrichtigungen werden von diesem Browser nicht unterstützt.", type: "error" });
+                    return;
+                }
+                try {
+                    const permission = await Notification.requestPermission();
+                    if (permission === "granted") {
+                        new Notification("Benachrichtigungen aktiviert 🔔", { 
+                            body: "Du wirst nun über neue Aufträge informiert.",
+                            icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+                        });
+                        setToast({ message: "Benachrichtigungen aktiviert!", type: "success" });
+                    } else {
+                        setToast({ message: "Benachrichtigungen wurden abgelehnt.", type: "error" });
+                    }
+                } catch (e) {
+                    console.error("Fehler bei Benachrichtigungserlaubnis:", e);
+                    setToast({ message: "Fehler beim Aktivieren der Benachrichtigungen.", type: "error" });
+                }
+            };
+
+            const sendBrowserNotification = (title, body) => {
+                if (!("Notification" in window) || Notification.permission !== "granted") return;
+                try {
+                    new Notification(title, { 
+                        body, 
+                        icon: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png" 
+                    });
+                } catch (e) {
+                    console.error("Benachrichtigung konnte nicht gesendet werden:", e);
+                }
+            };
 
             // --- AUTHENTIFIZIERUNG FÜR DB ZUGRIFF ---
             useEffect(() => {
@@ -839,7 +842,7 @@
                     jobs.sort((a, b) => new Date(b.date) - new Date(a.date));
                     setBookings(jobs);
                     
-                    // --- BENACHRICHTIGUNG LOGIK (NEU) ---
+                    // --- BENACHRICHTIGUNG LOGIK ---
                     // Nur feuern, wenn es nicht das erste Laden ist
                     if (isLoaded) {
                         snapshot.docChanges().forEach((change) => {
@@ -961,7 +964,15 @@
                     
                     <WhatsAppModal isOpen={!!whatsappData} data={whatsappData} onClose={() => setWhatsappData(null)} />
 
-                    <Navbar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); if(tab !== 'add') setEditingBooking(null); }} currentUser={currentUser} onLogout={handleLogout} darkMode={darkMode} toggleDarkMode={() => setDarkMode(!darkMode)} />
+                    <Navbar 
+                        activeTab={activeTab} 
+                        setActiveTab={(tab) => { setActiveTab(tab); if(tab !== 'add') setEditingBooking(null); }} 
+                        currentUser={currentUser} 
+                        onLogout={handleLogout} 
+                        darkMode={darkMode} 
+                        toggleDarkMode={() => setDarkMode(!darkMode)}
+                        onRequestNotification={requestNotificationPermission}
+                    />
 
                     <main className="container mx-auto px-4 md:px-6 py-8 flex-1">
                         {!currentUser ? ( <ProfileView currentUser={currentUser} onLogin={handleLogin} onLogout={handleLogout} /> ) : (
@@ -974,7 +985,7 @@
                             </>
                         )}
                     </main>
-                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v2.1 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
+                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v2.2 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
                 </div>
             );
         }
