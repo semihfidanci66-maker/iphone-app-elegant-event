@@ -311,12 +311,12 @@
                     </div>
                 </div>
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center mb-6"><Clock className="mr-3 text-indigo-600 dark:text-indigo-400" size={28}/> Nächste Termine</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center mb-6"><Clock className="mr-3 text-indigo-600 dark:text-indigo-400" size={28}/> Aktuelle & Offene Aufträge</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {stats.nextThree.length > 0 ? (
                             stats.nextThree.map(booking => <BookingCard key={booking.id} booking={booking} onDeleteRequest={onDeleteRequest} onToggleStatus={onToggleStatus} onEditRequest={onEditRequest} />)
                         ) : (
-                            <div className="col-span-full p-12 text-center bg-slate-50 dark:bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700"><p className="text-slate-400 dark:text-slate-500 font-medium text-lg">Aktuell keine offenen Termine anstehend.</p></div>
+                            <div className="col-span-full p-12 text-center bg-slate-50 dark:bg-slate-800/50 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700"><p className="text-slate-400 dark:text-slate-500 font-medium text-lg">Aktuell keine offenen Aufträge.</p></div>
                         )}
                     </div>
                 </div>
@@ -752,6 +752,9 @@
                 
                 const unsubscribe = onSnapshot(q, (snapshot) => {
                     const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // Client-Side Sorting - oldest first for dashboard logic later, or newest?
+                    // Actually usually lists want newest first, but stats calc handles its own sort.
+                    // Let's sort by date descending (newest first) as default state
                     jobs.sort((a, b) => new Date(b.date) - new Date(a.date));
                     setBookings(jobs);
                     setIsLoaded(true);
@@ -834,7 +837,13 @@
                 const currentYear = now.getFullYear();
                 const revenueMonth = bookings.filter(b => { const d = new Date(b.date); return d.getMonth() === currentMonth && d.getFullYear() === currentYear; }).reduce((sum, b) => sum + Number(b.revenue), 0);
                 const revenueYear = bookings.filter(b => new Date(b.date).getFullYear() === currentYear).reduce((sum, b) => sum + Number(b.revenue), 0);
-                const upcoming = bookings.filter(b => b.status !== 'completed' && new Date(b.date) > now).sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                // FIX: Show ALL open jobs, sorted by date (oldest/soonest first)
+                // Removed: && new Date(b.date) > now
+                const upcoming = bookings
+                    .filter(b => b.status !== 'completed')
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
+                    
                 return { revenueMonth, revenueYear, openCount: bookings.filter(b => b.status !== 'completed').length, completedCount: bookings.filter(b => b.status === 'completed').length, nextThree: upcoming.slice(0, 3) };
             }, [bookings]);
 
@@ -867,7 +876,7 @@
                             </>
                         )}
                     </main>
-                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v1.8 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
+                    <div className="py-6 text-center text-slate-400 dark:text-slate-500 text-xs font-medium">ElegantEvent Manager v1.9 • <Cloud size={10} className="inline mr-1"/> Cloud Sync Aktiv</div>
                 </div>
             );
         }
