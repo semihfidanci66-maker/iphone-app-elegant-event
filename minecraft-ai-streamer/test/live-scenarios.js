@@ -131,6 +131,8 @@ async function run () {
 
   if (only.includes('pillar')) {
     await goDry(8)
+    await cmd('give KI_Streamer cobblestone 16')
+    await sleep(600)
     const g = ground()
     const h = ctx.actions.feet().offset(5, 0, -5)
     await cmd(`setblock ${h.x} ${g - 1} ${h.z} air`, `setblock ${h.x} ${g - 2} ${h.z} air`, `setblock ${h.x} ${g - 3} ${h.z} air`, `teleport KI_Streamer ${h.x} ${g - 3} ${h.z}`)
@@ -146,7 +148,7 @@ async function run () {
 
   if (only.includes('house')) {
     home = await goDry(10)
-    await cmd('give KI_Streamer cobblestone 64', 'give KI_Streamer cobblestone 64', 'give KI_Streamer oak_log 20', 'give KI_Streamer oak_planks 64', 'give KI_Streamer oak_planks 20', 'give KI_Streamer oak_slab 40', 'give KI_Streamer oak_door 1', 'give KI_Streamer oak_fence 8', 'give KI_Streamer chest 2', 'give KI_Streamer furnace 2', 'give KI_Streamer torch 8', 'give KI_Streamer red_bed 1', 'give KI_Streamer dirt 16')
+    await cmd('give KI_Streamer cobblestone 64', 'give KI_Streamer cobblestone 64', 'give KI_Streamer oak_log 16', 'give KI_Streamer crafting_table 1', 'give KI_Streamer oak_planks 64', 'give KI_Streamer oak_planks 20', 'give KI_Streamer oak_slab 40', 'give KI_Streamer oak_door 1', 'give KI_Streamer oak_fence 8', 'give KI_Streamer chest 2', 'give KI_Streamer furnace 2', 'give KI_Streamer torch 8', 'give KI_Streamer red_bed 1', 'give KI_Streamer dirt 16')
     await sleep(1500)
     const t0 = Date.now()
     let done = false
