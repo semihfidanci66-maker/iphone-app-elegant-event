@@ -74,6 +74,8 @@ const app = express()
 app.disable('x-powered-by')
 app.use('/vendor', express.static(path.join(ROOT, 'node_modules', 'skinview3d', 'bundles'), { maxAge: '1d' }))
 app.use(express.static(path.join(ROOT, 'public'), { extensions: ['html'] }))
+app.get('/skin.png', (req, res) => res.status(204).end()) // kein eigener Skin hinterlegt -> prozeduraler Standard-Skin
+app.get('/dashboard.html', (req, res) => res.sendFile(path.join(ROOT, 'public', 'index.html')))
 app.get('/health', (req, res) => res.json({ ok: true }))
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 256 * 1024 })

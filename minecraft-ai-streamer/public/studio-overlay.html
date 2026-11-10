@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, initial-scale=1">
+<title>Studio Overlay</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@500;600;700;800&display=swap">
+<style>
+/* Layout: 1920x1080-Bühne, Mitte bleibt frei. Facecam unten links, Legende rechts, Alerts oben mittig. */
+:root {
+  color-scheme: dark; /* gleiches Schema wie die einbettende Seite -> iframe bleibt transparent */
+  --ink: #f4f7fb;
+  --ink-dim: #a9b6c9;
+  --glass: rgba(10, 16, 28, .62);
+  --glass-edge: rgba(140, 220, 255, .28);
+  --cyan: #46e0ff;
+  --lime: #9dff6a;
+  --gold: #ffd257;
+  --red: #ff4d5e;
+  --violet: #b18cff;
+  --display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+  --body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; }
+body { font-family: var(--body); color: var(--ink); }
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+
+/* ---------- Facecam ---------- */
+#cam { position: absolute; left: 36px; bottom: 168px; width: 340px; height: 384px; }
+#camFrame {
+  position: absolute; inset: 0; border-radius: 22px; overflow: hidden;
+  background: linear-gradient(160deg, rgba(20, 34, 60, .78), rgba(8, 12, 22, .82));
+  border: 2px solid var(--glass-edge);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 28px rgba(70, 224, 255, .35), inset 0 0 40px rgba(70, 224, 255, .08);
+  transition: box-shadow .2s, border-color .2s;
+}
+#camFrame::before { /* Scan-Raster wie bei einer echten Kamera */
+  content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 4px);
+}
+#camGlow { position: absolute; inset: 0; z-index: 1; background: radial-gradient(120% 80% at 50% 110%, rgba(70, 224, 255, .28), transparent 60%); transition: background .25s; }
+#skin { position: absolute; inset: 0; width: 100% !important; height: 100% !important; z-index: 2; }
+#camFlash { position: absolute; inset: 0; z-index: 4; background: radial-gradient(circle, rgba(255, 60, 80, .15), rgba(255, 30, 60, .7)); opacity: 0; pointer-events: none; }
+#cam.speaking #camFrame { border-color: rgba(157, 255, 106, .75); box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 34px rgba(157, 255, 106, .45), inset 0 0 40px rgba(157, 255, 106, .1); }
+#cam.panic #camFrame { border-color: rgba(255, 77, 94, .9); box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 40px rgba(255, 77, 94, .6), inset 0 0 50px rgba(255, 77, 94, .16); }
+#cam.panic #camGlow { background: radial-gradient(120% 80% at 50% 110%, rgba(255, 77, 94, .4), transparent 60%); }
+#cam.hurt #camFlash { animation: flash .45s ease-out; }
+#cam.hurt { animation: shake .45s cubic-bezier(.36, .07, .19, .97); }
+@keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
+@keyframes shake { 10%, 90% { transform: translate(-3px, 1px) rotate(-.6deg); } 20%, 80% { transform: translate(6px, -2px) rotate(.8deg); } 30%, 50%, 70% { transform: translate(-9px, 3px) rotate(-1deg); } 40%, 60% { transform: translate(9px, -1px) rotate(1deg); } }
+
+#camTag { position: absolute; left: 14px; top: 12px; z-index: 5; display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .08em; }
+#camTag .live { background: var(--red); color: #fff; padding: 3px 9px; border-radius: 6px; display: flex; align-items: center; gap: 6px; }
+#camTag .live i { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }
+#camTag .ki { background: rgba(0, 0, 0, .55); padding: 3px 9px; border-radius: 6px; color: var(--cyan); border: 1px solid rgba(70, 224, 255, .4); }
+@keyframes pulse { 50% { opacity: .25; } }
+#camBar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; padding: 26px 14px 12px; background: linear-gradient(transparent, rgba(4, 8, 16, .92)); display: flex; flex-direction: column; gap: 7px; }
+#camName { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .03em; text-shadow: 0 2px 6px #000; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+#camAct { font-family: var(--body); font-size: 13px; font-weight: 600; color: var(--lime); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hp { display: flex; gap: 3px; }
+#hp b { width: 22px; height: 9px; border-radius: 3px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+#hp b i { display: block; height: 100%; background: linear-gradient(180deg, #ff7b88, #e8203a); }
+#meter { position: absolute; right: 14px; top: 10px; z-index: 5; display: flex; gap: 3px; align-items: flex-end; height: 34px; }
+#meter i { width: 4px; border-radius: 2px; background: var(--lime); height: 4px; opacity: .85; }
+
+/* ---------- Untertitel ---------- */
+#subs { position: absolute; left: 36px; bottom: 36px; width: 760px; min-height: 112px; display: flex; align-items: flex-start; }
+#subBox { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 16px; padding: 14px 20px; font-size: 30px; line-height: 1.28; font-weight: 800; letter-spacing: .005em; text-shadow: 0 2px 4px rgba(0, 0, 0, .9); backdrop-filter: blur(8px); opacity: 0; transform: translateY(8px); transition: opacity .18s, transform .18s; max-width: 100%; }
+#subBox.on { opacity: 1; transform: none; }
+#subBox .w { color: rgba(244, 247, 251, .34); transition: color .08s; }
+#subBox .w.said { color: var(--ink); }
+#subBox .w.now { color: var(--gold); }
+#subBox.panic .w.now { color: var(--red); }
+#subBox.hype .w.now { color: var(--lime); }
+
+/* ---------- Gift-Legende ---------- */
+#legend { position: absolute; right: 28px; top: 50%; transform: translateY(-50%); width: 292px; background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 20px; padding: 14px 12px 12px; backdrop-filter: blur(10px); box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+#legend h2 { font-family: var(--display); font-size: 16px; letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); text-align: center; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, .1); margin-bottom: 6px; }
+.gift { display: grid; grid-template-columns: 54px 1fr; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 12px; transition: background .25s; }
+.gift.hit { background: rgba(255, 210, 87, .2); }
+.gift + .gift { border-top: 1px solid rgba(255, 255, 255, .06); }
+.g3d { width: 54px; height: 54px; perspective: 260px; }
+.g3d .disc { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-size: 30px; background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .5), rgba(120, 190, 255, .16) 46%, rgba(10, 16, 28, .6)); border: 1px solid rgba(255, 255, 255, .28); box-shadow: 0 8px 14px rgba(0, 0, 0, .45), inset 0 -6px 10px rgba(0, 0, 0, .35); animation: float3d 4.2s ease-in-out infinite; transform-style: preserve-3d; }
+.g3d img { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6)); }
+.gift:nth-child(odd) .disc { animation-delay: -1.4s; }
+.gift:nth-child(3n) .disc { animation-delay: -2.6s; }
+@keyframes float3d { 0%, 100% { transform: translateY(2px) rotateY(-22deg) rotateX(6deg); } 50% { transform: translateY(-5px) rotateY(22deg) rotateX(-4deg); } }
+.gname { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.coin { font-family: var(--display); font-size: 13px; font-weight: 700; color: #3b2a00; background: linear-gradient(180deg, #ffe58a, #f0b21a); border-radius: 20px; padding: 1px 8px 1px 6px; display: inline-flex; align-items: center; gap: 4px; }
+.coin::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #fff3c0; border: 2px solid #b97d00; }
+.gfx { font-size: 14.5px; font-weight: 600; color: var(--ink-dim); margin-top: 2px; }
+.gfx b { color: var(--red); font-weight: 700; }
+.gift.support .gfx b { color: var(--lime); }
+.gift.boss .gfx b { color: var(--violet); }
+
+/* ---------- Gift-Alert ---------- */
+#alerts { position: absolute; left: 50%; top: 34px; transform: translateX(-50%); width: 760px; height: 170px; pointer-events: none; }
+.alert { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; padding: 12px 26px 12px 12px; border-radius: 80px; background: linear-gradient(100deg, rgba(14, 22, 40, .92), rgba(30, 20, 56, .92)); border: 2px solid rgba(255, 210, 87, .7); box-shadow: 0 0 34px rgba(255, 210, 87, .4), 0 14px 40px rgba(0, 0, 0, .5); white-space: nowrap; animation: alertIn .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+.alert.out { animation: alertOut .35s ease-in forwards; }
+.alert.support { border-color: rgba(157, 255, 106, .8); box-shadow: 0 0 34px rgba(157, 255, 106, .4), 0 14px 40px rgba(0, 0, 0, .5); }
+.alert.boss { border-color: rgba(177, 140, 255, .95); box-shadow: 0 0 60px rgba(177, 140, 255, .7), 0 14px 40px rgba(0, 0, 0, .5); }
+@keyframes alertIn { 0% { opacity: 0; transform: translateX(-50%) translateY(-60px) scale(.6); } 100% { opacity: 1; transform: translateX(-50%) scale(1); } }
+@keyframes alertOut { to { opacity: 0; transform: translateX(-50%) translateY(-40px) scale(.85); } }
+.ava { width: 74px; height: 74px; border-radius: 50%; border: 3px solid var(--gold); object-fit: cover; background: linear-gradient(135deg, #3558ff, #b93cff); display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 32px; flex: none; overflow: hidden; }
+.ava img { width: 100%; height: 100%; object-fit: cover; }
+.atext { display: flex; flex-direction: column; gap: 2px; }
+.auser { font-family: var(--display); font-weight: 700; font-size: 28px; max-width: 330px; overflow: hidden; text-overflow: ellipsis; }
+.asub { font-size: 18px; font-weight: 600; color: var(--ink-dim); }
+.asub b { color: var(--gold); }
+.aspin { width: 78px; height: 78px; perspective: 300px; flex: none; }
+.aspin > div { width: 100%; height: 100%; display: grid; place-items: center; font-size: 54px; animation: spin3d 1.6s linear infinite; transform-style: preserve-3d; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .6)); }
+.aspin img { width: 70px; height: 70px; object-fit: contain; }
+@keyframes spin3d { from { transform: rotateY(0) translateY(0); } 50% { transform: rotateY(180deg) translateY(-5px); } to { transform: rotateY(360deg) translateY(0); } }
+.combo { font-family: var(--display); font-weight: 700; font-size: 54px; color: var(--gold); text-shadow: 0 0 18px rgba(255, 210, 87, .8), 0 3px 0 #7a4b00; min-width: 96px; text-align: center; }
+.combo.bump { animation: bump .28s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes bump { 0% { transform: scale(1.7) rotate(-6deg); } 100% { transform: scale(1) rotate(0); } }
+.spark { position: absolute; width: 10px; height: 10px; border-radius: 2px; background: var(--gold); animation: spark .8s ease-out forwards; }
+@keyframes spark { to { transform: translate(var(--dx), var(--dy)) rotate(260deg) scale(.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .g3d .disc, .aspin > div { animation: none; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="alerts"></div>
+
+  <aside id="legend"><h2>Gifts steuern das Spiel</h2><div id="legendList"></div></aside>
+
+  <section id="cam">
+    <div id="camFrame">
+      <div id="camGlow"></div>
+      <canvas id="skin" width="680" height="768"></canvas>
+      <div id="camFlash"></div>
+      <div id="camTag"><span class="live"><i></i>LIVE</span><span class="ki">KI-STREAMER</span></div>
+      <div id="meter"><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="camBar">
+        <div id="camName"><span id="nameTxt">KI_Streamer</span><span id="camAct"></span></div>
+        <div id="hp"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="subs"><div id="subBox"></div></div>
+</div>
+
+<script src="vendor/skinview3d.bundle.js"></script>
+<script>
+'use strict'
+/* ============================================================================
+ * Studio-Overlay – EINE transparente 1920x1080-Seite für OBS / TikTok Live Studio.
+ * Audio: ausschließlich die vom Backend gerenderte männliche Neural-Stimme (WebSocket-Puffer).
+ * Es gibt bewusst KEINEN Browser-Sprachausgabe-Fallback.
+ * ========================================================================== */
+const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash)
+const $ = id => document.getElementById(id)
+const stage = $('stage')
+function fit () { const s = Math.min(innerWidth / 1920, innerHeight / 1080); stage.style.transform = `scale(${s})`; stage.style.left = (innerWidth - 1920 * s) / 2 + 'px'; stage.style.top = (innerHeight - 1080 * s) / 2 + 'px' }
+addEventListener('resize', fit); fit()
+
+/* ---------------------------------------------------------------- Skin (prozedural, 64x64) */
+const FACE = { x: 8, y: 8 }
+function drawSkin () {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64
+  const g = c.getContext('2d')
+  const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h) }
+  const skin = '#e8b48c'; const skinD = '#cf9a74'; const hair = '#2b1d14'; const hood = '#19c2ff'; const hoodD = '#0f8fc4'; const pants = '#1c2333'; const shoe = '#f2f5f9'
+  // Kopf
+  R(0, 8, 32, 8, skin); R(8, 0, 8, 8, hair); R(16, 0, 8, 8, skinD)
+  R(0, 8, 8, 3, hair); R(16, 8, 8, 3, hair); R(24, 8, 8, 8, hair) // Seiten + Hinterkopf
+  R(8, 8, 8, 2, hair); R(8, 10, 1, 1, hair); R(15, 10, 1, 1, hair) // Pony
+  R(9, 11, 2, 1, '#3a2a1e'); R(13, 11, 2, 1, '#3a2a1e') // Augenbrauen
+  R(9, 12, 2, 1, '#fff'); R(13, 12, 2, 1, '#fff'); R(10, 12, 1, 1, '#1d6bff'); R(13, 12, 1, 1, '#1d6bff') // Augen
+  R(11, 13, 2, 1, skinD) // Nase
+  // Körper (Hoodie)
+  R(16, 16, 24, 16, hood); R(20, 20, 8, 12, hood); R(23, 20, 2, 5, hoodD); R(21, 27, 6, 3, hoodD)
+  R(22, 22, 1, 1, '#fff'); R(25, 22, 1, 1, '#fff') // Kordeln
+  R(32, 20, 8, 12, hoodD)
+  // Arme
+  R(40, 16, 16, 16, hood); R(40, 29, 16, 3, skin); R(32, 48, 16, 16, hood); R(32, 61, 16, 3, skin)
+  // Beine
+  R(0, 16, 16, 16, pants); R(0, 29, 16, 3, shoe); R(16, 48, 16, 16, pants); R(16, 61, 16, 3, shoe)
+  // Headset (zweite Kopfschicht)
+  R(40, 3, 8, 2, '#10151f'); R(32, 10, 8, 4, '#10151f'); R(34, 11, 4, 2, '#46e0ff'); R(48, 10, 8, 4, '#10151f'); R(50, 11, 4, 2, '#46e0ff')
+  R(40, 14, 1, 1, '#10151f'); R(41, 15, 2, 1, '#10151f') // Mikrofon-Arm
+  return c
+}
+
+let viewer = null; let rig = null; let faceBase = null; let lastMouth = -1; let lastBlink = false
+function initCam () {
+  if (!window.skinview3d) return
+  const canvas = $('skin')
+  viewer = new skinview3d.SkinViewer({ canvas, width: 340, height: 384, pixelRatio: 2, skin: drawSkin() })
+  viewer.animation = null
+  viewer.controls.enableRotate = false; viewer.controls.enableZoom = false; viewer.controls.enablePan = false
+  viewer.fov = 30
+  viewer.camera.position.set(-7, 18, 50)
+  viewer.controls.target.set(0, 15.2, 0)
+  viewer.controls.update()
+  viewer.globalLight.intensity = 2.6
+  viewer.cameraLight.intensity = 1.1
+  rig = viewer.playerObject.skin
+  const tryCustom = new Image()
+  tryCustom.onload = () => { if (tryCustom.width >= 64) { viewer.loadSkin(tryCustom); setTimeout(grabFace, 60) } }
+  tryCustom.src = 'skin.png' // optional: eigener Skin in /public/skin.png
+  grabFace()
+}
+function grabFace () {
+  try { faceBase = viewer.skinCanvas.getContext('2d').getImageData(FACE.x, FACE.y, 8, 8); lastMouth = -1 } catch (_) { faceBase = null }
+}
+/** Mund/Kiefer und Blinzeln direkt in die Skin-Textur malen (0 = zu … 3 = weit offen). */
+function paintFace (mouth, blink) {
+  if (!viewer || !faceBase || (mouth === lastMouth && blink === lastBlink)) return
+  lastMouth = mouth; lastBlink = blink
+  const g = viewer.skinCanvas.getContext('2d')
+  g.putImageData(faceBase, FACE.x, FACE.y)
+  const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(FACE.x + x, FACE.y + y, w, h) }
+  if (blink) { R(1, 4, 2, 1, '#cf9a74'); R(5, 4, 2, 1, '#cf9a74') }
+  if (mouth === 0) R(3, 6, 2, 1, '#8a4a3c')
+  else if (mouth === 1) { R(3, 6, 2, 1, '#3b1512') } else if (mouth === 2) { R(2, 6, 4, 1, '#3b1512'); R(3, 7, 2, 1, '#3b1512'); R(3, 6, 2, 1, '#ffffff') } else { R(2, 6, 4, 2, '#3b1512'); R(2, 6, 4, 1, '#f5f5f5'); R(3, 7, 2, 1, '#d8525e') }
+  viewer.skinTexture.needsUpdate = true
+}
+
+/* ---------------------------------------------------------------- Audio + Lip-Sync */
+let actx = null; let analyser = null; let timeBuf = null; let curSrc = null
+function audio () {
+  if (!actx) {
+    try {
+      actx = new (window.AudioContext || window.webkitAudioContext)()
+      analyser = actx.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.25
+      analyser.connect(actx.destination)
+      timeBuf = new Uint8Array(analyser.fftSize)
+    } catch (_) { actx = null }
+  }
+  if (actx && actx.state === 'suspended') actx.resume().catch(() => {})
+  return actx
+}
+addEventListener('pointerdown', audio, { passive: true })
+
+const speech = { active: false, id: 0, start: 0, dur: 0, words: [], emotion: 'chill', hasAudio: false, idx: -1 }
+let level = 0 // geglätteter Pegel 0..1
+function measure (now) {
+  let raw = 0
+  if (speech.active && speech.hasAudio && analyser && actx.state === 'running') {
+    analyser.getByteTimeDomainData(timeBuf)
+    let sum = 0
+    for (let i = 0; i < timeBuf.length; i++) { const v = (timeBuf[i] - 128) / 128; sum += v * v }
+    raw = Math.min(1, Math.sqrt(sum / timeBuf.length) * 5.2)
+  } else if (speech.active) {
+    // Kein Audio (Dienst offline / Vorschau): Silbenhüllkurve aus den Wortzeiten
+    const t = now - speech.start
+    const w = speech.words[speech.idx]
+    if (w && t >= w.t && t <= w.t + w.d) { const syl = Math.max(1, Math.round(w.w.length / 3)); raw = 0.35 + 0.6 * Math.abs(Math.sin((t - w.t) / w.d * Math.PI * syl)) }
+  }
+  level += (raw - level) * (raw > level ? 0.55 : 0.28)
+  return level
+}
+
+function b64ToBuf (b64) { const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer }
+
+async function playTTS (m) {
+  if (curSrc) { try { curSrc.stop() } catch (_) {} curSrc = null }
+  const start = () => {
+    Object.assign(speech, { active: true, id: m.id, start: performance.now(), dur: m.durationMs, words: m.words || [], emotion: m.emotion || 'chill', idx: -1 })
+    renderSubs()
+  }
+  speech.hasAudio = false
+  if (m.audio && audio()) {
+    try {
+      const buf = await actx.decodeAudioData(b64ToBuf(m.audio))
+      const src = actx.createBufferSource(); src.buffer = buf; src.connect(analyser)
+      curSrc = src; speech.hasAudio = true
+      m.durationMs = Math.round(buf.duration * 1000)
+      src.onended = () => { if (curSrc === src) curSrc = null }
+      start(); src.start()
+      return
+    } catch (_) { speech.hasAudio = false }
+  }
+  start()
+}
+
+/* ---------------------------------------------------------------- Untertitel (Wort für Wort) */
+const subBox = $('subBox')
+let subSpans = []; let subWindow = [0, 0]
+function renderSubs () {
+  subBox.className = 'on ' + speech.emotion
+  subWindow = [0, 0]; fillWindow(0)
+}
+function fillWindow (from) {
+  // zwei Zeilen à ~38 Zeichen pro Fenster
+  let chars = 0; let to = from
+  while (to < speech.words.length && chars + speech.words[to].w.length + 1 <= 76) { chars += speech.words[to].w.length + 1; to++ }
+  if (to === from && to < speech.words.length) to++
+  subWindow = [from, to]
+  subBox.textContent = ''
+  subSpans = []
+  for (let i = from; i < to; i++) { const s = document.createElement('span'); s.className = 'w'; s.textContent = speech.words[i].w + ' '; subBox.appendChild(s); subSpans.push(s) }
+}
+function tickSubs (now) {
+  if (!speech.active) return
+  const t = now - speech.start
+  let idx = speech.idx
+  while (idx + 1 < speech.words.length && speech.words[idx + 1].t <= t) idx++
+  if (idx !== speech.idx) {
+    speech.idx = idx
+    if (idx >= subWindow[1]) fillWindow(idx)
+    subSpans.forEach((s, i) => { const wi = subWindow[0] + i; s.className = 'w' + (wi < idx ? ' said' : wi === idx ? ' now' : '') })
+  }
+  if (t > speech.dur + 350) { speech.active = false; subBox.classList.remove('on'); $('cam').classList.remove('speaking') }
+}
+
+/* ---------------------------------------------------------------- Avatar-Animation */
+const anim = { swing: 0, swingArm: 'right', hurt: 0, startle: 0, blinkAt: performance.now() + 2500, blinkUntil: 0, lookX: 0, lookY: 0, lookT: 0, tx: 0, ty: 0 }
+const meterBars = [...$('meter').children]
+function frame (now) {
+  requestAnimationFrame(frame)
+  const lv = measure(now)
+  tickSubs(now)
+  const cam = $('cam')
+  cam.classList.toggle('speaking', speech.active && lv > 0.05)
+  meterBars.forEach((b, i) => { b.style.height = (4 + Math.max(0, lv * 30 * (1 - Math.abs(i - 2) * 0.22) * (0.75 + 0.25 * Math.sin(now / 60 + i)))) + 'px' })
+  if (!rig) return
+  const t = now / 1000
+  // Blinzeln
+  if (now > anim.blinkAt) { anim.blinkUntil = now + 120; anim.blinkAt = now + 2200 + Math.random() * 3500 }
+  paintFace(lv < 0.08 ? 0 : lv < 0.3 ? 1 : lv < 0.58 ? 2 : 3, now < anim.blinkUntil)
+  // Blickziel wandert (schaut in den "Chat", zurück ins Spiel …)
+  if (now > anim.lookT) { anim.lookT = now + 1400 + Math.random() * 2600; anim.tx = (Math.random() - 0.5) * 0.5; anim.ty = (Math.random() - 0.4) * 0.22 }
+  anim.lookX += (anim.tx - anim.lookX) * 0.05; anim.lookY += (anim.ty - anim.lookY) * 0.05
+  const energy = speech.emotion === 'panic' ? 1.6 : speech.emotion === 'hype' ? 1.25 : 1
+  const startle = anim.startle > now ? (anim.startle - now) / 500 : 0
+  // Kopf nickt im Takt der Silben
+  rig.head.rotation.x = anim.lookY - lv * 0.2 * energy + Math.sin(t * 1.3) * 0.02 - startle * 0.35
+  rig.head.rotation.y = anim.lookX + Math.sin(t * 0.7) * 0.04 + (speech.active ? Math.sin(t * 5.1) * 0.035 * energy * lv : 0)
+  rig.head.rotation.z = Math.sin(t * 0.9) * 0.02 + (speech.active ? Math.sin(t * 3.3) * 0.04 * lv : 0)
+  // Oberkörper atmet / gestikuliert
+  rig.body.rotation.y = Math.sin(t * 0.6) * 0.03 + anim.lookX * 0.25
+  const gest = speech.active ? lv * energy : 0
+  let rx = Math.sin(t * 1.1) * 0.04 - gest * (0.5 + 0.25 * Math.sin(t * 6.3))
+  const lx = -Math.sin(t * 1.1) * 0.04 - gest * (0.35 + 0.25 * Math.sin(t * 5.1 + 1))
+  let rz = -0.06 - gest * 0.16; const lz = 0.06 + gest * 0.2
+  // Schwertschlag: Arm holt aus und schlägt durch
+  if (anim.swing > now) {
+    const p = 1 - (anim.swing - now) / 320
+    rx = -2.2 * Math.sin(p * Math.PI) - 0.2
+    rz = -0.1 - 0.45 * Math.sin(p * Math.PI)
+    rig.body.rotation.y += -0.3 * Math.sin(p * Math.PI)
+  }
+  if (startle > 0) { rx -= startle * 1.0; rz -= startle * 0.5 }
+  rig.rightArm.rotation.x = rx; rig.rightArm.rotation.z = rz
+  rig.leftArm.rotation.x = lx - (startle > 0 ? startle : 0); rig.leftArm.rotation.z = lz + (startle > 0 ? startle * 0.5 : 0)
+  viewer.playerObject.position.y = 8 + Math.sin(t * 1.8) * 0.08 + gest * 0.12 - startle * 0.5
+}
+function swing () { anim.swing = performance.now() + 320 }
+function hurt (strong) {
+  const cam = $('cam')
+  cam.classList.remove('hurt'); void cam.offsetWidth; cam.classList.add('hurt')
+  anim.startle = performance.now() + (strong ? 800 : 500)
+  setTimeout(() => cam.classList.remove('hurt'), 500)
+}
+let panicUntil = 0
+function setPanic (ms) { panicUntil = Math.max(panicUntil, performance.now() + ms); $('cam').classList.add('panic') }
+setInterval(() => { if (performance.now() > panicUntil) $('cam').classList.remove('panic') }, 300)
+
+/* ---------------------------------------------------------------- Status-Leiste der Facecam */
+const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen läuft', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'KAMPF', eat: 'Essen', sleep: 'Schlafen', explore: 'Erkunden', idle: 'Basis', recover: 'Loot holen', paused: 'Pause', offline: 'Offline' }
+const hpEl = $('hp')
+for (let i = 0; i < 10; i++) { const b = document.createElement('b'); b.appendChild(document.createElement('i')); hpEl.appendChild(b) }
+function setStatus (s) {
+  if (!s) return
+  if (s.username) $('nameTxt').textContent = s.username
+  const act = s.connected ? (ACT[s.activity] || '') : 'Offline'
+  $('camAct').textContent = act + (s.connected && s.activity === 'mine' && s.pos ? ` · Y ${s.pos.y}` : '')
+  $('camAct').style.color = s.fighting ? 'var(--red)' : ''
+  const hp = s.connected ? (s.health ?? 20) : 0
+  ;[...hpEl.children].forEach((b, i) => { b.firstChild.style.width = Math.max(0, Math.min(1, (hp - i * 2) / 2)) * 100 + '%' })
+  if (s.connected && (hp <= 8 || (s.threats || 0) >= 4)) setPanic(1500)
+}
+
+/* ---------------------------------------------------------------- Gift-Legende */
+let giftCfg = []
+function renderLegend (list) {
+  giftCfg = list || []
+  const root = $('legendList')
+  root.textContent = ''
+  for (const g of giftCfg.slice(0, 9)) {
+    const row = document.createElement('div')
+    row.className = 'gift' + (g.kind === 'support' ? ' support' : g.tier >= 5 ? ' boss' : '')
+    row.dataset.id = g.id
+    const d3 = document.createElement('div'); d3.className = 'g3d'
+    const disc = document.createElement('div'); disc.className = 'disc'
+    if (g.icon) { const im = new Image(); im.src = g.icon; im.alt = ''; im.onerror = () => { disc.textContent = g.emoji }; disc.appendChild(im) } else disc.textContent = g.emoji
+    d3.appendChild(disc)
+    const txt = document.createElement('div')
+    const nm = document.createElement('div'); nm.className = 'gname'
+    const n = document.createElement('span'); n.textContent = g.name
+    const c = document.createElement('span'); c.className = 'coin'; c.textContent = g.coins
+    nm.append(n, c)
+    const fx = document.createElement('div'); fx.className = 'gfx'
+    const b = document.createElement('b'); b.textContent = g.legend
+    fx.append('= ', b)
+    txt.append(nm, fx)
+    row.append(d3, txt)
+    root.appendChild(row)
+  }
+}
+
+/* ---------------------------------------------------------------- Gift-Alerts + Combo */
+const alertsEl = $('alerts')
+let curAlert = null; const alertQueue = []
+function chime (tier) {
+  if (!audio() || actx.state !== 'running') return
+  const t0 = actx.currentTime
+  const notes = tier >= 5 ? [196, 147, 110, 82] : tier >= 3 ? [523, 659, 784, 1047] : [784, 1047]
+  notes.forEach((f, i) => {
+    const o = actx.createOscillator(); const g = actx.createGain()
+    o.type = tier >= 5 ? 'sawtooth' : 'triangle'; o.frequency.value = f
+    g.gain.setValueAtTime(0, t0 + i * 0.09); g.gain.linearRampToValueAtTime(0.16, t0 + i * 0.09 + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t0 + i * 0.09 + (tier >= 5 ? 0.6 : 0.3))
+    o.connect(g); g.connect(actx.destination); o.start(t0 + i * 0.09); o.stop(t0 + i * 0.09 + 0.7)
+  })
+}
+function giftAlert (a) {
+  const key = a.uniqueId + '|' + a.gift.name
+  const row = [...document.querySelectorAll('.gift')].find(r => giftCfg.find(g => g.id === r.dataset.id && g.name === a.gift.name))
+  if (row) { row.classList.add('hit'); setTimeout(() => row.classList.remove('hit'), 900) }
+  if (curAlert && curAlert.key === key) { bumpCombo(curAlert, a.count); return }
+  const q = alertQueue.find(x => x.key === key)
+  if (q) { q.count = Math.max(q.count, a.count); return }
+  alertQueue.push({ ...a, key })
+  if (!curAlert) nextAlert()
+}
+function bumpCombo (al, count) {
+  al.count = Math.max(al.count, count)
+  al.comboEl.textContent = 'x' + al.count
+  al.comboEl.classList.remove('bump'); void al.comboEl.offsetWidth; al.comboEl.classList.add('bump')
+  clearTimeout(al.timer); al.timer = setTimeout(() => endAlert(al), 3200)
+  sparks(al.el, 6)
+}
+function sparks (el, n) {
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('i'); s.className = 'spark'
+    const ang = Math.random() * Math.PI * 2; const d = 90 + Math.random() * 130
+    s.style.cssText = `left:50%;top:50%;--dx:${Math.cos(ang) * d}px;--dy:${Math.sin(ang) * d}px;background:${['#ffd257', '#46e0ff', '#ff4d5e', '#9dff6a'][i % 4]}`
+    el.appendChild(s); setTimeout(() => s.remove(), 850)
+  }
+}
+function nextAlert () {
+  const a = alertQueue.shift()
+  if (!a) { curAlert = null; return }
+  const el = document.createElement('div')
+  el.className = 'alert' + (a.kind === 'support' ? ' support' : a.tier >= 5 ? ' boss' : '')
+  const ava = document.createElement('div'); ava.className = 'ava'
+  if (a.avatar) { const im = new Image(); im.src = a.avatar; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.onerror = () => { ava.textContent = (a.user || '?').charAt(0).toUpperCase() }; ava.appendChild(im) } else ava.textContent = (a.user || '?').charAt(0).toUpperCase()
+  const txt = document.createElement('div'); txt.className = 'atext'
+  const u = document.createElement('div'); u.className = 'auser'; u.textContent = '@' + a.user
+  const sub = document.createElement('div'); sub.className = 'asub'
+  const b = document.createElement('b'); b.textContent = a.legend || ''
+  sub.append(`${a.gift.name} `, a.legend ? '→ ' : '', b)
+  txt.append(u, sub)
+  const spin = document.createElement('div'); spin.className = 'aspin'
+  const inner = document.createElement('div')
+  if (a.gift.icon) { const im = new Image(); im.src = a.gift.icon; im.alt = ''; im.onerror = () => { inner.textContent = a.gift.emoji }; inner.appendChild(im) } else inner.textContent = a.gift.emoji
+  spin.appendChild(inner)
+  const combo = document.createElement('div'); combo.className = 'combo bump'; combo.textContent = 'x' + a.count
+  el.append(ava, txt, spin, combo)
+  alertsEl.appendChild(el)
+  curAlert = { ...a, el, comboEl: combo, timer: setTimeout(() => endAlert(curAlert), a.tier >= 4 ? 5200 : 3400) }
+  sparks(el, a.tier >= 4 ? 22 : 10)
+  chime(a.tier || 1)
+  if (a.tier >= 4 && a.kind !== 'support') setPanic(2500)
+}
+function endAlert (al) {
+  if (!al || al !== curAlert) return
+  al.el.classList.add('out')
+  setTimeout(() => { al.el.remove(); curAlert = null; nextAlert() }, 340)
+}
+
+/* ---------------------------------------------------------------- Nachrichten */
+function onMessage (m) {
+  switch (m.type) {
+    case 'GIFT_CONFIG_SYNC': renderLegend(m.gifts); break
+    case 'GIFT_ALERT': giftAlert(m); break
+    case 'TTS': playTTS(m); if (m.emotion === 'panic') setPanic(m.durationMs || 2000); break
+    case 'STATUS': setStatus(m.status); break
+    case 'BOT_EVENT':
+      if (m.event === 'swing') swing()
+      else if (m.event === 'hurt' || m.event === 'low_hp' || m.event === 'critical_hp') { hurt(m.event !== 'hurt'); if (m.event !== 'hurt') setPanic(3000) } else if (m.event === 'shield' || m.event === 'lava') { hurt(true); setPanic(2500) } else if (m.event === 'death') { hurt(true); setPanic(5000) }
+      break
+  }
+}
+
+let ws = null; let retry = 600
+function connect () {
+  try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=overlay`) } catch (_) { return setTimeout(connect, 2000) }
+  ws.onopen = () => { retry = 600 }
+  ws.onmessage = e => { try { onMessage(JSON.parse(e.data)) } catch (_) {} }
+  ws.onclose = () => { setTimeout(connect, retry); retry = Math.min(5000, retry * 1.6) }
+  ws.onerror = () => { try { ws.close() } catch (_) {} }
+}
+
+/* ---------------------------------------------------------------- Demo (nur mit #demo / ?demo – nie im Live-Betrieb) */
+function demo () {
+  const words = (text, speed = 1) => { let t = 120; return text.split(' ').map(w => { const d = (150 + w.length * 52) / speed; const o = { t: Math.round(t), d: Math.round(d), w }; t += d + 28; return o }) }
+  const say = (text, emotion = 'chill') => { const sp = { chill: 1.05, hype: 1.18, panic: 1.25 }[emotion]; const w = words(text, sp); onMessage({ type: 'TTS', id: Date.now(), text, emotion, words: w, durationMs: w[w.length - 1].t + w[w.length - 1].d + 200, audio: null }) }
+  const gifts = [
+    { id: 'rose', name: 'Rose', coins: 1, emoji: '🌹', legend: 'Zombie', kind: 'mob', tier: 1 },
+    { id: 'ice', name: 'Eistüte', coins: 1, emoji: '🍦', legend: 'Heilung', kind: 'support', tier: 1 },
+    { id: 'fh', name: 'Fingerherz', coins: 5, emoji: '💖', legend: 'Skelett-Schütze', kind: 'mob', tier: 2 },
+    { id: 'donut', name: 'Donut', coins: 30, emoji: '🍩', legend: 'TNT-Regen', kind: 'mob', tier: 3 },
+    { id: 'hh', name: 'Handherz', coins: 100, emoji: '🫶', legend: 'Baby-Zombie-Squad', kind: 'mob', tier: 4 },
+    { id: 'mg', name: 'Money Gun', coins: 500, emoji: '💸', legend: 'Hit-Squad x10', kind: 'mob', tier: 4 },
+    { id: 'gx', name: 'Galaxie', coins: 1000, emoji: '🌌', legend: 'Endboss', kind: 'mob', tier: 5 }
+  ]
+  onMessage({ type: 'GIFT_CONFIG_SYNC', gifts })
+  const st = { connected: true, username: 'KI_Streamer', activity: 'build', health: 20, threats: 0, fighting: false, pos: { x: 120, y: 64, z: -40 } }
+  onMessage({ type: 'STATUS', status: st })
+  const alertFor = (g, user, count) => onMessage({ type: 'GIFT_ALERT', user, uniqueId: user, avatar: null, gift: { name: g.name, emoji: g.emoji, coins: g.coins, icon: null }, count, legend: g.legend, kind: g.kind, tier: g.tier })
+  const status = p => { Object.assign(st, p); onMessage({ type: 'STATUS', status: st }) }
+  const fight = (ms) => { const end = Date.now() + ms; const iv = setInterval(() => { if (Date.now() > end) return clearInterval(iv); onMessage({ type: 'BOT_EVENT', event: 'swing' }) }, 625) }
+  const script = [
+    [600, () => say('So Leute, das Fundament steht! Jetzt kommen die Wände, Block für Block.')],
+    [5200, () => { alertFor(gifts[0], 'Lukas', 1); say('Ey Lukas, danke für die Rose, Bruder... aber musstest du mir echt direkt nen Zombie in den Nacken setzen?!', 'hype'); status({ activity: 'combat', fighting: true, threats: 1 }); fight(4500) }],
+    [7000, () => onMessage({ type: 'BOT_EVENT', event: 'hurt' })],
+    [11500, () => { status({ activity: 'build', fighting: false, threats: 0, health: 17 }); let c = 1; const iv = setInterval(() => { c += 1 + Math.floor(Math.random() * 3); alertFor(gifts[0], 'Lukas', c); if (c >= 14) clearInterval(iv) }, 260); say('Lukas schon wieder! Bruder, hast du heute ein persönliches Problem mit mir?! Lass mich doch erstmal mein Haus zu Ende bauen!', 'hype') }],
+    [19500, () => { alertFor(gifts[1], 'Mia', 1); status({ health: 20 }); say('Mia, du bist ein Ehrenmann! Die Eistüte kommt genau richtig, danke dir!', 'hype') }],
+    [25500, () => { alertFor(gifts[6], 'DerEchteTom', 1); status({ activity: 'combat', fighting: true, threats: 5, health: 9 }); onMessage({ type: 'BOT_EVENT', event: 'low_hp' }); say('NEIN! Tom schickt die Galaxie! Tausend Coins! Chat, der Endboss kommt, das war es mit meinem Haus!', 'panic'); fight(7000) }],
+    [28500, () => onMessage({ type: 'BOT_EVENT', event: 'shield' })],
+    [34500, () => { status({ activity: 'mine', fighting: false, threats: 0, health: 14, pos: { x: 118, y: -54, z: -37 } }); say('Puh. Überlebt. Ich grab mich jetzt auf Ebene Minus 54 runter, wir brauchen dringend Diamanten.') }],
+    [41000, () => {}]
+  ]
+  let timers = []
+  const run = () => { timers.forEach(clearTimeout); timers = script.map(([t, fn]) => setTimeout(fn, t)); timers.push(setTimeout(run, script[script.length - 1][0])) }
+  run()
+}
+
+initCam()
+requestAnimationFrame(frame)
+if (DEMO) demo(); else connect()
+</script>
+</body>
+</html>

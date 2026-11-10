@@ -1,0 +1,114 @@
+<title>KI-Streamer Vorschau</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: Kopfzeile mit drei Ansichten, darunter eine Bühne. Bewusst nur ein dunkler Look (Stream-Regie). */
+:root { color-scheme: dark; --bg: #0b1017; --panel: #131b26; --line: #243142; --ink: #e9eef6; --dim: #92a3b9; --cyan: #46e0ff; --gold: #ffd257; --display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif; --body: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--body); padding-block: 20px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 16px; }
+h1 { font: 700 24px/1.2 var(--display); margin: 0; letter-spacing: .01em; text-wrap: balance; }
+.lead { color: var(--dim); margin: 4px 0 0; max-width: 68ch; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tabs button { font: 600 14px var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 9px 16px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--cyan); color: #04202a; border-color: transparent; }
+.tabs button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.stageWrap { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #000; }
+.stage16 { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; }
+.stage16 canvas, .stage16 iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.stage16 iframe { background: transparent; }
+.dash iframe { width: 100%; height: 980px; border: 0; display: block; background: var(--bg); }
+.phoneRow { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; justify-content: center; padding: 18px 0; }
+.phone { width: min(390px, 100%); height: 780px; border-radius: 38px; border: 10px solid #1d2733; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); background: var(--bg); flex: none; }
+.phone iframe { width: 100%; height: 100%; border: 0; display: block; }
+.notes { flex: 1 1 280px; min-width: 0; max-width: 46ch; }
+.notes h2, .facts h2 { font: 700 13px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); margin: 0 0 8px; }
+.notes p { color: var(--dim); margin: 0 0 12px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.facts div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.facts p { margin: 0; color: var(--dim); font-size: 14px; }
+.cap { color: var(--dim); font-size: 13px; padding: 10px 14px; background: var(--panel); border-top: 1px solid var(--line); }
+code { font: 13px ui-monospace, Consolas, monospace; color: var(--gold); }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Minecraft-KI-Streamer: Overlay, Regie und Handy-Remote</h1>
+    <p class="lead">Alle drei Seiten laufen hier mit Beispieldaten in einer Schleife. Im Live-Betrieb kommen dieselben Ereignisse per WebSocket vom Bot, von TikTok und von der Sprachausgabe.</p>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="t-overlay" aria-selected="true" aria-controls="p-overlay">Studio-Overlay</button>
+    <button role="tab" id="t-dash" aria-selected="false" aria-controls="p-dash">Dashboard</button>
+    <button role="tab" id="t-mobile" aria-selected="false" aria-controls="p-mobile">Handy-Remote</button>
+  </div>
+
+  <div id="p-overlay" role="tabpanel" aria-labelledby="t-overlay">
+    <div class="stageWrap">
+      <div class="stage16">
+        <canvas id="mc" width="1280" height="720" aria-label="Platzhalter für dein aufgenommenes Minecraft-Fenster"></canvas>
+        <iframe src="studio-overlay.html#demo" title="Studio-Overlay im Demo-Modus" loading="eager"></iframe>
+      </div>
+      <div class="cap">Der Hintergrund steht für dein echtes Minecraft-Fenster aus OBS. Das Overlay selbst ist transparent, 1920×1080, und lässt die Bildmitte frei. Die Demo dauert rund 40 Sekunden: Rose, Combo, Eistüte, Galaxie-Endboss, Mining.</div>
+    </div>
+  </div>
+
+  <div id="p-dash" role="tabpanel" aria-labelledby="t-dash" hidden>
+    <div class="stageWrap dash"><iframe data-src="dashboard.html#demo" title="Dashboard mit Beispieldaten"></iframe>
+      <div class="cap">Buttons schreiben in der Vorschau nur ins Protokoll. Gift-Regeln, die du hier änderst, landen im Live-Betrieb sofort in der Overlay-Legende.</div></div>
+  </div>
+
+  <div id="p-mobile" role="tabpanel" aria-labelledby="t-mobile" hidden>
+    <div class="phoneRow">
+      <div class="phone"><iframe data-src="mobile.html#demo" title="Handy-Fernbedienung mit Beispieldaten"></iframe></div>
+      <div class="notes">
+        <h2>Von unterwegs steuern</h2>
+        <p>Im Dashboard startest du den Cloud-Tunnel. Der QR-Code enthält eine öffentliche Adresse mit geheimem Schlüssel, deshalb funktioniert die Fernbedienung über 5G ohne Heim-WLAN.</p>
+        <p>Unstuck löst den Pillar-Jump aus, Respawn setzt den Bot zurück, die Ziel-Tasten legen einen Wunsch ganz oben in den Verhaltensbaum.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="facts">
+    <div><h2>Facecam</h2><p>3D-Skin von der Brust bis zum Kopf. Mund, Kopfnicken und Gesten folgen dem Pegel der Sprachausgabe, der Arm schlägt bei jedem Schwerthieb mit.</p></div>
+    <div><h2>Untertitel</h2><p>Wort für Wort im Takt der Stimme. Die Farbe des aktuellen Worts zeigt die Stimmung: ruhig, Hype oder Panik.</p></div>
+    <div><h2>Gift-Legende</h2><p>Rechts am Rand, mit Preis und Wirkung. Sie aktualisiert sich, sobald du im Dashboard eine Regel änderst.</p></div>
+    <div><h2>Im Stream</h2><p>In OBS als Browserquelle <code>localhost:3000/studio-overlay.html</code> einbinden. Dort läuft keine Demo, nur echte Ereignisse.</p></div>
+  </div>
+</div>
+
+<script>
+'use strict'
+// Tabs
+const tabs = [...document.querySelectorAll('[role=tab]')]
+function show (id) {
+  for (const t of tabs) {
+    const on = t.id === id
+    t.setAttribute('aria-selected', on)
+    const panel = document.getElementById(t.getAttribute('aria-controls'))
+    panel.hidden = !on
+    if (on) for (const f of panel.querySelectorAll('iframe[data-src]')) { f.src = f.dataset.src; f.removeAttribute('data-src') }
+  }
+}
+tabs.forEach(t => { t.onclick = () => show(t.id) })
+
+// Blockige Platzhalter-Landschaft (steht für die Minecraft-Aufnahme)
+;(function () {
+  const c = document.getElementById('mc'); const g = c.getContext('2d'); const W = c.width; const H = c.height; const B = 20
+  const sky = g.createLinearGradient(0, 0, 0, H * 0.6); sky.addColorStop(0, '#5f9df0'); sky.addColorStop(1, '#b7d8ff')
+  g.fillStyle = sky; g.fillRect(0, 0, W, H)
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(255,255,255,.85)'; const x = rnd() * W; const y = 40 + rnd() * 140; g.fillRect(x, y, 120 + rnd() * 80, 24); g.fillRect(x + 30, y - 20, 70, 20) }
+  const layer = (base, amp, col, top) => {
+    for (let x = 0; x < W; x += B) {
+      const h = Math.round((base + Math.sin(x / 140 + amp) * 40 + Math.sin(x / 47 + amp * 3) * 16) / B) * B
+      g.fillStyle = top; g.fillRect(x, H - h, B, B)
+      g.fillStyle = col; g.fillRect(x, H - h + B, B, h)
+    }
+  }
+  layer(330, 1.3, '#4c7a35', '#6aa84a'); layer(250, 2.9, '#3e6a2b', '#5b9a3e'); layer(170, 0.4, '#6b4a2e', '#4f8a36')
+  for (let i = 0; i < 5; i++) { const x = Math.round((120 + i * 250 + rnd() * 60) / B) * B; const y = H - 300 - Math.round(rnd() * 3) * B; g.fillStyle = '#5a3d22'; g.fillRect(x, y, B, 80); g.fillStyle = '#2f6d2a'; g.fillRect(x - 40, y - 60, 100, 60); g.fillRect(x - 20, y - 80, 60, 20) }
+  g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(W / 2 - 1, H / 2 - 10, 2, 20); g.fillRect(W / 2 - 10, H / 2 - 1, 20, 2)
+  const hb = 9 * 44; g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(W / 2 - hb / 2, H - 56, hb, 46)
+  for (let i = 0; i < 9; i++) { g.strokeStyle = i === 0 ? '#fff' : 'rgba(255,255,255,.35)'; g.lineWidth = i === 0 ? 3 : 2; g.strokeRect(W / 2 - hb / 2 + i * 44 + 2, H - 54, 40, 42) }
+})()
+</script>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c1118">
+<title>KI-Streamer Remote</title>
+<style>
+/* Layout: einhändig bedienbare Fernbedienung – große Daumen-Tasten, Status oben. */
+:root { color-scheme: dark; --bg: #0c1118; --panel: #141c27; --line: #263446; --ink: #eef3f9; --dim: #8fa1b8; --cyan: #46e0ff; --lime: #8bea5c; --gold: #ffd257; --red: #ff5a6a; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.4 Inter, 'Segoe UI', system-ui, sans-serif; padding-block: 12px 24px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 520px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.top b { font-size: 17px; }
+.dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--dim); font-weight: 600; }
+.dot i { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+.dot.ok i { background: var(--lime); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+h2 { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+.stat { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.stat div { text-align: center; flex: 1; }
+.stat b { display: block; font-size: 20px; }
+.stat span { font-size: 11px; color: var(--dim); }
+#act { font-weight: 700; color: var(--lime); margin-bottom: 8px; min-height: 21px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid.three { grid-template-columns: 1fr 1fr 1fr; }
+button { font: inherit; font-weight: 700; color: var(--ink); background: #1c2838; border: 1px solid var(--line); border-radius: 12px; padding: 14px 8px; min-height: 52px; cursor: pointer; }
+button:active { transform: scale(.97); background: #26374d; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+button.big { background: var(--cyan); color: #04202a; border-color: transparent; }
+button.danger { background: #3a1820; border-color: #6b2a35; color: #ffb3bb; }
+button.gift { padding: 10px 4px; font-size: 13px; font-weight: 600; }
+button.gift b { display: block; font-size: 24px; }
+input, select { font: inherit; width: 100%; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+.row { display: flex; gap: 8px; margin-top: 8px; }
+.row select { flex: 0 0 104px; } .row button { flex: 0 0 96px; padding: 10px; }
+#toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #0a0f15; border: 1px solid var(--line); padding: 9px 16px; border-radius: 99px; font-weight: 600; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; }
+#toast.on { opacity: 1; }
+#denied { text-align: center; padding: 30px 10px; color: var(--dim); }
+</style>
+</head>
+<body>
+<div class="top"><b>KI-Streamer Remote</b><span class="dot" id="conn"><i></i><span>verbinde …</span></span></div>
+<div id="denied" hidden>Kein Zugriff. Bitte den QR-Code im Dashboard neu scannen – der Link enthält den geheimen Schlüssel.</div>
+<div id="app">
+  <div class="card">
+    <div id="act">–</div>
+    <div class="stat"><div><b id="sHp">–</b><span>Herzen</span></div><div><b id="sFood">–</b><span>Hunger</span></div><div><b id="sY">–</b><span>Ebene</span></div><div><b id="sMob">–</b><span>Gegner</span></div></div>
+  </div>
+  <div class="card">
+    <h2>Notfall</h2>
+    <div class="grid"><button class="big" id="unstuck">Unstuck</button><button id="pause">Pause</button><button class="danger" id="respawn">Respawn</button><button id="heal">Goldapfel geben</button></div>
+  </div>
+  <div class="card">
+    <h2>KI-Ziel erzwingen</h2>
+    <div class="grid" id="goals"></div>
+  </div>
+  <div class="card">
+    <h2>Items geben</h2>
+    <div class="grid three" id="items"></div>
+  </div>
+  <div class="card">
+    <h2>Sprachzeile</h2>
+    <input id="say" placeholder="Was soll er sagen?" enterkeyhint="send">
+    <div class="row"><select id="emo" aria-label="Stimmung"><option value="chill">Chill</option><option value="hype">Hype</option><option value="panic">Panik</option></select><div style="flex:1"></div><button class="big" id="sayBtn">Sprechen</button></div>
+  </div>
+  <div class="card">
+    <h2>Gift testen</h2>
+    <div class="grid three" id="gifts"></div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+<script>
+'use strict'
+const $ = id => document.getElementById(id)
+const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash)
+let key = new URLSearchParams(location.search).get('k')
+try { if (key) localStorage.setItem('remoteKey', key); else key = localStorage.getItem('remoteKey') } catch (_) {}
+let ws = null; let st = { paused: false }
+const toast = t => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1600) }
+const send = (m, label) => {
+  if (DEMO) return toast('Vorschau: ' + label)
+  if (!ws || ws.readyState !== 1) return toast('Nicht verbunden')
+  ws.send(JSON.stringify(m)); if (navigator.vibrate) navigator.vibrate(12); toast(label + ' gesendet')
+}
+const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'Kampf!', eat: 'Essen', sleep: 'Schlafen', explore: 'Erkunden', idle: 'Basis', recover: 'Loot holen', paused: 'Pause', offline: 'Offline' }
+function status (s) {
+  if (!s) return
+  st = s
+  $('act').textContent = s.connected ? (s.goal || ACT[s.activity] || s.activity) : 'Bot ist nicht in der Welt'
+  $('act').style.color = s.fighting ? 'var(--red)' : ''
+  $('sHp').textContent = s.connected ? (s.health / 2).toFixed(1) : '–'
+  $('sFood').textContent = s.connected ? s.food : '–'
+  $('sY').textContent = s.connected ? s.pos.y : '–'
+  $('sMob').textContent = s.connected ? s.threats : '–'
+  $('pause').textContent = s.paused ? 'Weiter' : 'Pause'
+}
+function build (goals, rules) {
+  const g = $('goals'); g.textContent = ''
+  for (const x of goals) { const b = document.createElement('button'); b.textContent = x.label; b.onclick = () => send({ type: 'BOT', cmd: 'goal', goal: x.id }, x.label); g.appendChild(b) }
+  const gf = $('gifts'); gf.textContent = ''
+  for (const r of rules.filter(r => r.enabled)) { const b = document.createElement('button'); b.className = 'gift'; const e = document.createElement('b'); e.textContent = r.emoji; b.append(e, r.giftName); b.onclick = () => send({ type: 'SIM_GIFT', ruleId: r.id, user: 'Regie', count: 1 }, r.giftName); gf.appendChild(b) }
+}
+const ITEMS = [['cooked_beef', 'Steak', 8], ['golden_apple', 'Goldapfel', 2], ['cobblestone', 'Bruchstein', 64], ['torch', 'Fackeln', 16], ['iron_ingot', 'Eisen', 8], ['diamond', 'Diamant', 3], ['shield', 'Schild', 1], ['water_bucket', 'Wasser', 1], ['oak_log', 'Holz', 16]]
+for (const [id, label, n] of ITEMS) { const b = document.createElement('button'); b.textContent = `${label} ×${n}`; b.onclick = () => send({ type: 'BOT', cmd: 'give', item: id, count: n }, label); $('items').appendChild(b) }
+$('unstuck').onclick = () => send({ type: 'BOT', cmd: 'unstuck' }, 'Unstuck')
+$('respawn').onclick = () => send({ type: 'BOT', cmd: 'respawn' }, 'Respawn')
+$('pause').onclick = () => send({ type: 'BOT', cmd: st.paused ? 'resume' : 'pause' }, st.paused ? 'Weiter' : 'Pause')
+$('heal').onclick = () => send({ type: 'BOT', cmd: 'give', item: 'golden_apple', count: 1 }, 'Goldapfel')
+const say = () => { const t = $('say').value.trim(); if (!t) return; send({ type: 'SAY', text: t, emotion: $('emo').value }, 'Sprachzeile'); $('say').value = '' }
+$('sayBtn').onclick = say
+$('say').addEventListener('keydown', e => { if (e.key === 'Enter') say() })
+
+function connect () {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=mobile${key ? '&k=' + encodeURIComponent(key) : ''}`)
+  ws.onopen = () => { $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'verbunden' }
+  ws.onmessage = e => {
+    let m; try { m = JSON.parse(e.data) } catch (_) { return }
+    if (m.type === 'DENIED') { $('denied').hidden = false; $('app').hidden = true; ws.onclose = null; $('conn').lastElementChild.textContent = 'kein Zugriff' } else if (m.type === 'STATE') { status(m.status); build(m.goals, m.rules) } else if (m.type === 'STATUS') status(m.status)
+  }
+  ws.onclose = () => { $('conn').className = 'dot'; $('conn').lastElementChild.textContent = 'getrennt'; setTimeout(connect, 1500) }
+}
+if (DEMO) {
+  $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'Vorschau'
+  status({ connected: true, activity: 'combat', goal: 'Kampf: 3 Gegner', fighting: true, health: 11, food: 15, pos: { y: 64 }, threats: 3, paused: false })
+  build([['wood', 'Holz holen'], ['house', 'Haus bauen'], ['iron_sword', 'Eisenschwert'], ['diamonds', 'Diamanten'], ['nether', 'Nether'], ['eat', 'Essen']].map(([id, label]) => ({ id, label })),
+    [['🌹', 'Rose'], ['🍦', 'Eistüte'], ['💖', 'Fingerherz'], ['🍩', 'Donut'], ['🫶', 'Handherz'], ['🌌', 'Galaxie']].map(([emoji, giftName], i) => ({ id: 'g' + i, emoji, giftName, enabled: true })))
+} else connect()
+</script>
+</body>
+</html>
