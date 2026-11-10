@@ -29,6 +29,7 @@ const { FoodPhase } = require('./bot/survival-food')
 const { BuildingPhase } = require('./bot/survival-building')
 const { EndgamePhase } = require('./bot/survival-endgame')
 const { Planner } = require('./bot/planner')
+const { CameraDirector } = require('./bot/camera-director')
 
 const VIEWER_GOALS = {
   wood: { label: 'Holz holen', activity: 'wood', task: (ctx, t) => ctx.wood.gather(Math.ceil(ctx.crafting.woodValue() / 4) + 6, t) },
@@ -65,7 +66,10 @@ const VIEWER_GOALS = {
       return ok
     }
   },
-  sleep: { label: 'Schlafen gehen', activity: 'sleep', task: (ctx, t) => ctx.building.sleepInBed(t) },
+  sleep: { label: 'Schlafen gehen', activity: 'sleep', pre: ['bed'], task: (ctx, t) => ctx.building.sleepInBed(t) },
+  bed: { label: 'Bett craften', facts: ['bed'] },
+  corpse: { label: 'Loot zurückholen', activity: 'corpse', task: async (ctx, t) => ctx.corpseRun(t, true) },
+  gear: { label: 'Beste Ausrüstung anlegen', activity: 'idle', task: async (ctx, t) => { await ctx.gear.craftUpgrades(t); await ctx.hotbar.organize(true); return true } },
   tidy: { label: 'Inventar aufräumen', activity: 'idle', task: async (ctx, t) => { await ctx.hotbar.organize(true); await ctx.building.storeExcess(t); return true } }
 }
 
@@ -92,7 +96,36 @@ class MinecraftAIBot extends EventEmitter {
     this.loopId = 0
     this.lastPlanKey = ''
     this.opWarned = false
+    this.lastDeath = null
+    this.camera = new CameraDirector(this)
+    // ---- EIN zentraler Game-Loop: 250 ms KI-Tick (Reflexe, Watchdog, Regie, Status, externe Ticker).
+    //      Die 50-ms-Ebene ist der Physik-Tick von mineflayer (Blicksteuerung, Tasten-Sperre).
+    this.tickers = []
+    this.tickCount = 0
+    this.master = setInterval(() => this._brainTick(), 250)
   }
+
+  /** Externe Module (Streamer-Hirn, Gift-Engine) hängen sich in den zentralen Loop statt eigene Timer zu starten. */
+  addTicker (fn, every = 1) { this.tickers.push({ fn, every: Math.max(1, every | 0) }) }
+
+  _brainTick () {
+    const n = ++this.tickCount
+    const ctx = this.ctx
+    const bot = this.bot
+    if (ctx && bot && bot.entity) {
+      try {
+        // Kampf-Reflex: unterbricht JEDE laufende Routine, sobald eine Bedrohung auftaucht
+        if (!this.paused && !ctx.combat.engaged && !(this.currentAction && this.currentAction.name === 'Combat') && ctx.combat.hasThreat()) this.interrupt('combat')
+        ctx.watchdog.tick()
+        this.camera.tick()
+        this.emit('pose', { yaw: bot.entity.yaw + ctx.look.headYawOffset, pitch: bot.entity.pitch + ctx.look.headPitchOffset, moveYaw: ctx.look.yaw, blocking: !!ctx.combat.blocking, onGround: bot.entity.onGround })
+        if (n % 4 === 0) this.emit('status', this.status())
+      } catch (e) { this._emit('log', { message: 'Tick: ' + e.message }) }
+    }
+    for (const t of this.tickers) { if (n % t.every === 0) { try { t.fn(n) } catch (e) { this._emit('log', { message: 'Ticker: ' + e.message }) } } }
+  }
+
+  dispose () { clearInterval(this.master); this.stop() }
 
   // ================================================================ Lebenszyklus
   start () {
@@ -146,8 +179,6 @@ class MinecraftAIBot extends EventEmitter {
   _teardown () {
     this.loopId++
     if (this.currentToken) this.currentToken.cancel('shutdown')
-    clearInterval(this.reflexTimer)
-    clearInterval(this.statusTimer)
     clearTimeout(this.commandTimer)
     this.commandTimer = null
     this.commandQueue = []
@@ -173,6 +204,7 @@ class MinecraftAIBot extends EventEmitter {
       setActivity: (key, data) => this.setActivity(key, data),
       explore: (token, dist) => this._explore(token, dist),
       isBaseBlock: pos => !!ctx.building && ctx.building.isBaseBlock(pos),
+      corpseRun: (t, forced) => this._corpseRun(t, forced),
       isPortalBlock: pos => !!ctx.endgame && ctx.endgame.isPortalBlock(pos)
     }
     ctx.look = new HumanLookController(bot)
@@ -194,14 +226,14 @@ class MinecraftAIBot extends EventEmitter {
 
     bot.on('death', () => {
       this.deaths++
-      const p = bot.entity.position
-      this.memory.deathPos = { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z), at: Date.now(), dimension: bot.game.dimension }
+      // lastDeath überlebt Respawn und Reconnect; der Corpse-Run startet beim nächsten Spawn
+      this.lastDeath = { pos: bot.entity.position.clone(), dimension: bot.game.dimension, time: Date.now(), tried: false }
       this.memory.mineEntrance = null
       this.memory.furnaceJob = null
       this.interrupt('death')
       this._emit('death', { deaths: this.deaths })
     })
-    bot.on('spawn', () => { ctx.look.syncFromEntity(); this._emit('respawn', {}) })
+    bot.on('spawn', () => { ctx.look.syncFromEntity(); this.camera.applied = null; this._emit('respawn', {}) })
     bot.on('health', () => {
       if (bot.health <= 6 && bot.health > 0) this._emit('critical_hp', { health: bot.health })
     })
@@ -226,14 +258,6 @@ class MinecraftAIBot extends EventEmitter {
         this._nightInit = true
       }
     })
-
-    // 200-ms-Kampf-Reflex: unterbricht JEDE laufende Routine, sobald eine Bedrohung auftaucht
-    this.reflexTimer = setInterval(() => {
-      if (!this.ctx || !bot.entity || this.paused) return
-      if (ctx.combat.engaged || (this.currentAction && this.currentAction.name === 'Combat')) return
-      if (ctx.combat.hasThreat()) this.interrupt('combat')
-    }, 200)
-    this.statusTimer = setInterval(() => this.emit('status', this.status()), 1000)
 
     this._emit('bot_spawned', { username: bot.username, version: bot.version })
     const id = ++this.loopId
@@ -289,32 +313,21 @@ class MinecraftAIBot extends EventEmitter {
           this.setActivity('eat')
           await this._run({ name: 'Eat', label: 'Essen' }, t => ctx.food.eatIfNeeded(t))
         }
-        // ---- Reflex 3: Loot nach dem Tod zurückholen (5 Minuten Zeit, wie jeder Spieler) ----
-        const dp = this.memory.deathPos
-        if (dp && Date.now() - dp.at < 280000 && dp.dimension === bot.game.dimension && !dp.tried) {
-          dp.tried = true
-          this.setActivity('recover')
-          this._emit('recover_start', {})
-          const r = await this._run({ name: 'RecoverLoot', label: 'Loot zurückholen' }, async t => {
-            const ok = await ctx.actions.goto(new goals.GoalNear(dp.x, dp.y, dp.z, 2), { token: t, timeout: 90000 })
-            if (ok) await ctx.actions.collectDrops(new Vec3(dp.x, dp.y, dp.z), 8, { token: t, timeout: 15000 })
-            return ok
-          })
-          if (r === 'interrupted') dp.tried = false
-          else { this.memory.deathPos = null; this._emit('recover_done', { ok: !!r }) }
+        // ---- STATE_CORPSE_RUN: höchste Priorität nach dem Respawn ----
+        if (this._corpseRunDue()) {
+          this.setActivity('corpse')
+          const r = await this._run({ name: 'CorpseRun', label: 'Loot zurückholen', activity: 'corpse' }, t => this._corpseRun(t, false))
+          if (r === 'interrupted' && this.lastDeath) this.lastDeath.tried = false
           continue
         }
-        // ---- Reflex 4: Schlafen, wenn ein Bett da ist ----
-        if (this.memory.bedPlaced && ctx.building.isNight() && !ctx.endgame.inNether() && !this._sleptTonight && ctx.building.findBed()) {
-          const c = this.memory.base.center
-          if (bot.entity.position.distanceTo(new Vec3(c.x, c.y, c.z)) < 48) {
-            this.setActivity('sleep')
-            const r = await this._run({ name: 'Sleep', label: 'Schlafen' }, t => ctx.building.sleepInBed(t))
-            if (r !== 'interrupted') this._sleptTonight = true
-            continue
-          }
+        // ---- STATE_SLEEP_NIGHT: Nacht oder Gewitter -> Bett ----
+        if (ctx.building.shouldSleep() && !ctx.endgame.inNether() && ctx.building.hasBedAvailable() && Date.now() > (this._sleepRetryAt || 0)) {
+          this.setActivity('sleep')
+          const r = await this._run({ name: 'Sleep', label: 'Schlafen', activity: 'sleep' }, t => ctx.building.sleepInBed(t))
+          // Monster in der Nähe / Bett blockiert: in 20 s noch einmal versuchen
+          if (r !== true) this._sleepRetryAt = Date.now() + 20000
+          continue
         }
-        if (!ctx.building.isNight()) this._sleptTonight = false
         // ---- Aufräumen: Hotbar, liegen gelassene Stationen, offener Ofen-Job ----
         await ctx.hotbar.organize()
         if (this.memory.furnaceJob) {
@@ -355,6 +368,48 @@ class MinecraftAIBot extends EventEmitter {
     }
   }
 
+  _corpseRunDue () {
+    const d = this.lastDeath
+    const bot = this.bot
+    if (!d || d.tried || !bot || !bot.entity) return false
+    if (Date.now() - d.time > 280000) { this.lastDeath = null; return false } // nach 5 Minuten ist der Loot despawnt
+    if (d.dimension !== bot.game.dimension) return false
+    if (bot.entity.position.distanceTo(d.pos) > 250) return false
+    return true
+  }
+
+  /**
+   * STATE_CORPSE_RUN: auf dem schnellsten Weg zur Todesstelle sprinten, alle Drops einsammeln,
+   * beste Rüstung und Waffen wieder anlegen.
+   */
+  async _corpseRun (token, forced) {
+    const { ctx, bot } = this
+    const d = this.lastDeath
+    if (!d || (forced && Date.now() - d.time > 300000)) { this._emit('corpse_run_none', {}); return false }
+    d.tried = true
+    this._emit('corpse_run_start', { distance: Math.round(bot.entity.position.distanceTo(d.pos)), secondsLeft: Math.max(0, Math.round((300000 - (Date.now() - d.time)) / 1000)) })
+    const p = d.pos
+    const before = bot.inventory.items().reduce((n, i) => n + i.count, 0)
+    let ok = await ctx.actions.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { token, timeout: 120000 })
+    // Todesstelle in einer Grube/Höhle: jetzt darf sich der Bot durchgraben (Notfall-Routine)
+    if (!ok && bot.entity.position.distanceTo(p) > 4) ok = await ctx.actions.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { token, timeout: 60000, moves: ctx.actions.digMoves })
+    if (ok || bot.entity.position.distanceTo(p) < 6) await ctx.actions.collectDrops(p, 9, { token, timeout: 20000 })
+    await ctx.hotbar.organize(true) // equipBestArmorAndWeapons: Rüstung, Schild, Hotbar
+    const got = bot.inventory.items().reduce((n, i) => n + i.count, 0) - before
+    this.lastDeath = null
+    this._emit('corpse_run_done', { ok: got > 0, items: Math.max(0, got) })
+    this.camera.highlight(5000)
+    return got > 0
+  }
+
+  /** Erzwingt den Corpse-Run (Dashboard/Handy/Chat "Hol deinen Loot"). */
+  forceCorpseRun () {
+    if (!this.lastDeath) { this._emit('corpse_run_none', {}); return false }
+    this.lastDeath.tried = false
+    this.interrupt('viewer_goal')
+    return true
+  }
+
   /** Alles erreicht: sinnvoll beschäftigen (Lager auffüllen, patrouillieren). */
   async _idle () {
     const { ctx } = this
@@ -384,6 +439,7 @@ class MinecraftAIBot extends EventEmitter {
 
   // ================================================================ Öffentliche API
   _emit (type, data = {}) {
+    if (type === 'build_done' || type === 'enchanted' || type === 'portal_lit' || type === 'kill') this.camera.highlight(type === 'kill' ? 2500 : 7000)
     this.emit('event', { type, data, status: this.connected ? this.status() : null, at: Date.now() })
   }
 
@@ -414,6 +470,9 @@ class MinecraftAIBot extends EventEmitter {
       fighting: ctx.combat.engaged,
       shield: !!off && off.name === 'shield',
       held: bot.heldItem ? bot.heldItem.name : null,
+      sleeping: !!bot.isSleeping,
+      camera: { mode: this.camera.mode, applied: this.camera.applied, player: this.camera.player },
+      lastDeath: this.lastDeath ? { secondsLeft: Math.max(0, Math.round((300000 - (Date.now() - this.lastDeath.time)) / 1000)) } : null,
       kills: ctx.combat.kills,
       deaths: this.deaths,
       inv: {
@@ -432,7 +491,9 @@ class MinecraftAIBot extends EventEmitter {
         torches: a.count('torch'),
         blazeRods: a.count('blaze_rod'),
         pickTier: a.pickTier(),
-        swordTier: ctx.gear.tierOf('sword')
+        swordTier: ctx.gear.tierOf('sword'),
+        hasBed: !!a.findMatch(/_bed$/) || !!this.memory.bedPlaced,
+        rawIronTotal: a.count('raw_iron') + a.count('iron_ingot')
       },
       base: this.memory.base ? { done: !!this.memory.base.done, started: !!this.memory.base.started } : null,
       portal: !!this.memory.portal,
@@ -449,6 +510,7 @@ class MinecraftAIBot extends EventEmitter {
     const def = VIEWER_GOALS[id]
     if (!def) return { ok: false, reason: 'unknown' }
     if (!this.ctx) return { ok: false, reason: 'offline', label: def.label }
+    if (id === 'corpse') return this.forceCorpseRun() ? { ok: true, label: def.label } : { ok: false, reason: 'no_loot', label: def.label }
     const ctx = this.ctx
     if (def.facts) {
       const facts = ctx.planner.facts()

@@ -17,54 +17,88 @@ const { WebSocketServer } = require('ws')
 const { MinecraftAIBot, VIEWER_GOALS } = require('./modules/mc-ai-bot')
 const { StreamerBrain } = require('./modules/ai-streamer-brain')
 const { TTSEngine, MALE_VOICES } = require('./modules/tts-engine')
-const { TikTokBridge } = require('./modules/tiktok-bridge')
-const { GiftEngine, ACTIONS, DEFAULT_RULES } = require('./modules/gift-engine')
+const { TikTokBridge, sanitizeUsername } = require('./modules/tiktok-bridge')
+const { GiftEngine, ACTIONS, MOBS } = require('./modules/gift-engine')
 const { Tunnel } = require('./modules/tunnel')
 
 const ROOT = __dirname
 const PORT = Number(process.env.PORT || 3000)
-const LOCAL_CFG = path.join(ROOT, 'config.local.json')
+const CFG_DIR = path.join(ROOT, 'config')
+const SETTINGS_FILE = path.join(CFG_DIR, 'settings.json')
+const LAYOUT_FILE = path.join(CFG_DIR, 'overlay-layout.json')
 
-// ------------------------------------------------------------------ Konfiguration
+// ------------------------------------------------------------------ Konfiguration (/config/settings.json)
+function readJson (file, fallback) { try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch (_) { return fallback } }
 function loadConfig () {
-  const base = JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8'))
-  let local = {}
-  try { local = JSON.parse(fs.readFileSync(LOCAL_CFG, 'utf8')) } catch (_) {}
+  const base = readJson(path.join(ROOT, 'config.json'), {})
+  const local = readJson(SETTINGS_FILE, {})
   const cfg = { ...base, ...local, minecraft: { ...base.minecraft, ...(local.minecraft || {}) } }
   if (!cfg.remoteKey) cfg.remoteKey = crypto.randomBytes(9).toString('base64url')
-  if (!Array.isArray(cfg.giftRules) || !cfg.giftRules.length) cfg.giftRules = DEFAULT_RULES
+  cfg.tiktokUsername = sanitizeUsername(cfg.tiktokUsername)
   return cfg
 }
 const config = loadConfig()
-let saveTimer = null
+let layout = readJson(LAYOUT_FILE, null)
+const pending = new Map()
+/** Gebündeltes, atomares Schreiben (tmp + rename) – ein Timer pro Datei, nie parallele Schreibzugriffe. */
+function writeLater (file, getData, delay = 250) {
+  clearTimeout(pending.get(file))
+  pending.set(file, setTimeout(() => {
+    pending.delete(file)
+    try {
+      fs.mkdirSync(CFG_DIR, { recursive: true })
+      fs.writeFileSync(file + '.tmp', JSON.stringify(getData(), null, 2))
+      fs.renameSync(file + '.tmp', file)
+    } catch (e) { console.log('[warn] Speichern fehlgeschlagen: ' + e.message) }
+  }, delay))
+}
 function saveConfig () {
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    const out = { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, giftRules: gifts.rules, autoStartBot: config.autoStartBot }
-    fs.writeFile(LOCAL_CFG, JSON.stringify(out, null, 2), () => {})
-  }, 300)
+  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules }))
+}
+function sanitizeLayout (l) {
+  if (!l || typeof l !== 'object') return null
+  const out = { format: ['16:9', '9:16', 'custom'].includes(l.format) ? l.format : '16:9', formats: {} }
+  for (const f of ['16:9', '9:16', 'custom']) {
+    const src = (l.formats && l.formats[f]) || {}
+    const dst = out.formats[f] = {}
+    for (const id of ['cam', 'subs', 'legend', 'alerts', 'hud']) {
+      const w = src[id]
+      if (!w) continue
+      const num = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d }
+      dst[id] = { x: num(w.x, -400, 2200, 0), y: num(w.y, -400, 2200, 0), s: num(w.s, 0.5, 2, 1), h: !!w.h }
+    }
+  }
+  return out
 }
 
 // ------------------------------------------------------------------ Module
 const bot = new MinecraftAIBot(config.minecraft)
 const tts = new TTSEngine({ voice: config.voice })
 const tiktok = new TikTokBridge()
+bot.camera.setPlayer(config.cameraPlayer || '')
+bot.camera.setMode(config.cameraMode || 'auto')
 const gifts = new GiftEngine({
   runCommands: cmds => bot.runCommands(cmds),
   spawnPoint: () => bot.spawnPoint(),
-  botPos: () => { const s = bot.status(); return s.connected ? s.pos : null }
+  botPos: () => { const s = bot.status(); return s.connected ? s.pos : null },
+  onChange: () => { saveConfig(); syncGiftConfig(); broadcastState() }
 }, config.giftRules)
 const tunnel = new Tunnel(PORT, () => broadcastState())
 const logs = []
+const feed = [] // Live-Feed (Chat + Gifts) für das Dashboard, hart begrenzt
+let ttsWarnAt = 0
+// Zentrale Ticker statt eigener Timer: Streamer-Hirn alle 250 ms, Bossbars alle 1,5 s
+setImmediate(() => { bot.addTicker(() => brain.tick()); bot.addTicker(() => gifts.tick(), 6) })
 
 const brain = new StreamerBrain({
   getStatus: () => bot.status(),
   pushGoal: (id, by) => bot.pushGoal(id, by),
   onAddress: () => bot.expressiveLook(),
+  getSupportGift: kinds => gifts.supportGift(kinds),
   speak: async (line) => {
     const r = await tts.synthesize(line.text, line.emotion)
     broadcast({ type: 'TTS', id: line.id, text: line.text, emotion: line.emotion, kind: line.kind, words: r.words, durationMs: r.durationMs, mime: r.mime, audio: r.audio ? r.audio.toString('base64') : null })
-    if (r.error) log('warn', 'TTS: ' + r.error)
+    if (r.error && ttsWarnAt < Date.now()) { ttsWarnAt = Date.now() + 60000; log('warn', 'TTS: ' + r.error) }
     return r.durationMs
   }
 })
@@ -110,7 +144,11 @@ function fullState () {
     botRunning: bot.running,
     tiktok: tiktok.state,
     tunnel: tunnel.state,
-    config: { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername || '', voice: tts.voice, voices: MALE_VOICES },
+    config: { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername || '', voice: tts.voice, voices: MALE_VOICES, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode },
+    mobs: Object.keys(MOBS),
+    layout,
+    designer: designerOn,
+    feed: feed.slice(-40),
     rules: gifts.rules,
     actions: Object.entries(ACTIONS).map(([id, a]) => ({ id, label: a.label, kind: a.kind })),
     goals: Object.entries(VIEWER_GOALS).map(([id, g]) => ({ id, label: g.label })),
@@ -119,6 +157,8 @@ function fullState () {
     logs: logs.slice(-40)
   }
 }
+let designerOn = false
+function pushFeed (item) { item.at = Date.now(); feed.push(item); if (feed.length > 80) feed.shift(); broadcast({ type: 'FEED', item }, isControl) }
 function broadcastState () { broadcast(fullState(), isControl) }
 function syncGiftConfig () { broadcast({ type: 'GIFT_CONFIG_SYNC', gifts: gifts.publicConfig() }) }
 
@@ -129,17 +169,20 @@ wss.on('connection', (ws, req) => {
   ws.role = url.searchParams.get('role') === 'overlay' ? 'overlay' : (url.searchParams.get('role') || 'dashboard')
   // Steuerung von außerhalb (Tunnel) nur mit Schlüssel; das Overlay empfängt nur
   ws.canControl = ws.role !== 'overlay' && (local || keyOk)
+  ws.canLayout = local || keyOk
   if (!local && !keyOk) { send(ws, { type: 'DENIED', reason: 'Schlüssel fehlt oder ist falsch' }); ws.close(); return }
   clients.add(ws)
   ws.on('close', () => clients.delete(ws))
   ws.on('error', () => clients.delete(ws))
   send(ws, { type: 'GIFT_CONFIG_SYNC', gifts: gifts.publicConfig() })
-  if (ws.role === 'overlay') send(ws, { type: 'STATUS', status: bot.status() })
+  if (ws.role === 'overlay') { send(ws, { type: 'STATUS', status: bot.status() }); send(ws, { type: 'LAYOUT', layout }); send(ws, { type: 'DESIGNER', on: designerOn }) }
   else send(ws, fullState())
   ws.on('message', raw => {
     let m
     try { m = JSON.parse(raw.toString()) } catch (_) { return }
-    if (!m || typeof m.type !== 'string' || !ws.canControl) return
+    if (!m || typeof m.type !== 'string') return
+    if (m.type === 'LAYOUT_SET' && ws.canLayout) { const l = sanitizeLayout(m.layout); if (l) { layout = l; writeLater(LAYOUT_FILE, () => layout); broadcast({ type: 'LAYOUT', layout }, c => c !== ws) } return }
+    if (!ws.canControl) return
     try { handle(m) } catch (e) { log('error', `Befehl ${m.type}: ${e.message}`) }
   })
 })
@@ -147,19 +190,24 @@ wss.on('connection', (ws, req) => {
 // ------------------------------------------------------------------ Befehle (Dashboard / Handy)
 function handle (m) {
   switch (m.type) {
-    case 'TIKTOK_CONNECT':
-      config.tiktokUsername = String(m.username || '').trim().replace(/^@/, '').slice(0, 40)
+    case 'TIKTOK_CONNECT': {
+      // Eingabe säubern (@, Leerzeichen, komplette URLs), dauerhaft speichern, Watchdog starten
+      const name = sanitizeUsername(m.username)
+      config.tiktokUsername = name
       saveConfig()
-      tiktok.connect(config.tiktokUsername)
-      break
-    case 'TIKTOK_DISCONNECT': tiktok.disconnect(); break
-    case 'GIFT_RULES_SET':
-      gifts.setRules(m.rules)
-      saveConfig()
-      syncGiftConfig() // Overlay-Legende aktualisiert sich in derselben Millisekunde
+      if (name) tiktok.start(name); else tiktok.stop()
       broadcastState()
       break
-    case 'GIFT_RULES_RESET': gifts.setRules(DEFAULT_RULES); saveConfig(); syncGiftConfig(); broadcastState(); break
+    }
+    case 'TIKTOK_DISCONNECT': tiktok.stop(); break
+    case 'GIFT_RULES_SET': gifts.setRules(m.rules); saveConfig(); syncGiftConfig(); broadcastState(); break
+    case 'GIFT_UPSERT': { const r = gifts.upsertRule(m.rule || {}); if (r) { log('info', `Gift gespeichert: ${r.giftName} (${r.coins}) -> ${r.legend}`); saveConfig(); syncGiftConfig(); broadcastState() } break }
+    case 'GIFT_REMOVE': if (gifts.removeRule(String(m.id))) { saveConfig(); syncGiftConfig(); broadcastState() } break
+    case 'GIFT_RULES_RESET': gifts.resetRules(); saveConfig(); syncGiftConfig(); broadcastState(); break
+    case 'DESIGNER': designerOn = !!m.on; broadcast({ type: 'DESIGNER', on: designerOn }); broadcastState(); break
+    case 'LAYOUT_FORMAT': if (['16:9', '9:16', 'custom'].includes(m.format)) { layout = sanitizeLayout({ ...(layout || {}), format: m.format }); writeLater(LAYOUT_FILE, () => layout); broadcast({ type: 'LAYOUT', layout }); broadcastState() } break
+    case 'LAYOUT_RESET': layout = null; try { fs.unlinkSync(LAYOUT_FILE) } catch (_) {} broadcast({ type: 'LAYOUT', layout: null, reset: true }); broadcastState(); break
+    case 'CAMERA': bot.camera.setMode(String(m.mode)); saveConfig(); broadcastState(); break
     case 'SIM_GIFT': {
       const rule = gifts.rules.find(r => r.id === m.ruleId)
       if (!rule) break
@@ -183,6 +231,7 @@ function handle (m) {
         Object.assign(bot.config, config.minecraft)
       }
       if (m.voice) config.voice = tts.setVoice(m.voice)
+      if (typeof m.cameraPlayer === 'string') bot.camera.setPlayer(m.cameraPlayer)
       saveConfig()
       broadcastState()
       break
@@ -197,6 +246,7 @@ function handle (m) {
         case 'unstuck': bot.unstuck().catch(() => {}); break
         case 'respawn': bot.respawn(); break
         case 'give': bot.give(String(m.item || ''), Number(m.count) || 1); break
+        case 'corpse': bot.forceCorpseRun(); break
         case 'goal': { const r = bot.pushGoal(String(m.goal || ''), 'Regie'); log('info', `Ziel ${m.goal}: ${JSON.stringify(r)}`); break }
         case 'clear_goals': bot.clearGoals(); break
         case 'chat': bot.say(m.text); break
@@ -210,26 +260,29 @@ function handle (m) {
 function onGift ({ viewer, gift, count, delta }) {
   const res = gifts.trigger(gift, viewer, delta)
   const rule = res.rule
-  const effect = res.effect || { kind: 'none', tier: 0, spawnText: '', label: '' }
+  const effect = res.effect
+  const coins = gift.coins || rule.coins
   broadcast({
     type: 'GIFT_ALERT',
     user: viewer.nickname || viewer.uniqueId,
     uniqueId: viewer.uniqueId,
     avatar: viewer.avatar || null,
-    gift: { name: rule ? rule.giftName : gift.name, emoji: rule ? rule.emoji : '🎁', icon: gift.icon || (rule && gifts.iconFor(rule)) || null, coins: gift.coins },
+    gift: { name: rule.giftName, emoji: rule.emoji, icon: gift.icon || rule.icon || null, coins },
     count,
-    legend: rule ? rule.legend : '',
+    legend: rule.legend,
     kind: effect.kind,
     tier: effect.tier
   })
-  if (rule) brain.onGift(viewer, { id: rule.id, name: rule.giftName, coins: gift.coins || rule.coins }, effect, delta)
-  if (!res.ok && res.reason === 'bot_offline') log('warn', `Gift ${gift.name} von ${viewer.uniqueId}: Bot ist nicht in der Welt`)
-  else log('info', `🎁 ${viewer.uniqueId}: ${gift.name} x${count} -> ${effect.label || 'keine Regel'}`)
+  pushFeed({ kind: 'gift', user: viewer.nickname || viewer.uniqueId, avatar: viewer.avatar || null, text: `${rule.giftName} x${count} (${coins} Coins) → ${rule.legend}`, emoji: rule.emoji })
+  // Das Streamer-Hirn bekommt Name, Coins und Wirkung dynamisch – auch für neue und eigene Gifts
+  if (res.discovered) brain.onGiftDiscovered(viewer, { name: rule.giftName })
+  if (effect.kind !== 'none') brain.onGift(viewer, { id: rule.id, name: rule.giftName, coins }, effect, delta)
+  if (!res.ok && res.reason === 'bot_offline') log('warn', `Gift ${rule.giftName} von ${viewer.uniqueId}: Bot ist nicht in der Welt`)
 }
 
 function onChat ({ viewer, text }) {
   const r = brain.onChat(viewer, text)
-  broadcast({ type: 'CHAT', user: viewer.nickname || viewer.uniqueId, text, intent: r.intent, goal: r.goal || null }, isControl)
+  pushFeed({ kind: 'chat', user: viewer.nickname || viewer.uniqueId, avatar: viewer.avatar || null, text, goal: r.goal || null })
 }
 
 tiktok.on('gift', onGift)
@@ -237,10 +290,17 @@ tiktok.on('chat', onChat)
 tiktok.on('follow', e => brain.onFollow(e.viewer))
 tiktok.on('share', e => brain.onShare(e.viewer))
 tiktok.on('like', e => brain.onLike(e.viewer, e.count))
-tiktok.on('state', s => { if (s.error) log('warn', 'TikTok: ' + s.error); broadcastState() })
-tiktok.on('gift_icons', icons => { gifts.icons = icons; syncGiftConfig() })
+let lastDiag = null
+tiktok.on('state', s => { if (s.diagnostic && s.diagnostic !== lastDiag) log('warn', 'TikTok: ' + s.diagnostic); lastDiag = s.diagnostic; broadcastState() })
+tiktok.on('gift_icons', icons => { if (gifts.learnIcons(icons)) { saveConfig(); syncGiftConfig(); broadcastState() } })
+tiktok.on('live', e => {
+  log('info', `TikTok LIVE verbunden: @${e.username} (Engine ${e.engine})`)
+  broadcast({ type: 'CHIME', kind: 'live' })
+  brain.onLiveConnected()
+})
+tiktok.on('follow', e => pushFeed({ kind: 'follow', user: e.viewer.nickname, text: 'folgt jetzt', emoji: '➕' }))
 
-const OVERLAY_EVENTS = new Set(['swing', 'hurt', 'shield', 'death', 'combat_start', 'combat_end', 'kill', 'low_hp', 'critical_hp', 'lava', 'enchanted', 'respawn', 'ate', 'build_done', 'portal_lit'])
+const OVERLAY_EVENTS = new Set(['camera', 'corpse_run_start', 'corpse_run_done', 'swing', 'hurt', 'shield', 'death', 'combat_start', 'combat_end', 'kill', 'low_hp', 'critical_hp', 'lava', 'enchanted', 'respawn', 'ate', 'build_done', 'portal_lit'])
 bot.on('event', e => {
   brain.onBotEvent(e.type, e.data)
   if (OVERLAY_EVENTS.has(e.type)) broadcast({ type: 'BOT_EVENT', event: e.type, data: e.data })
@@ -253,6 +313,7 @@ bot.on('event', e => {
   }
 })
 bot.on('status', status => broadcast({ type: 'STATUS', status }))
+bot.on('pose', pose => broadcast({ type: 'POSE', pose }, c => c.role === 'overlay'))
 
 server.listen(PORT, () => {
   console.log('')
@@ -262,6 +323,8 @@ server.listen(PORT, () => {
   console.log(`  Handy:           Tunnel im Dashboard starten und QR-Code scannen`)
   console.log('')
   if (config.autoStartBot) bot.start()
+  // Gespeicherter TikTok-Name: Watchdog startet ohne einen einzigen Klick
+  if (config.tiktokUsername) tiktok.start(config.tiktokUsername)
   if (process.env.OPEN_BROWSER === '1') {
     const cmd = process.platform === 'win32' ? 'start ""' : process.platform === 'darwin' ? 'open' : 'xdg-open'
     require('child_process').exec(`${cmd} http://localhost:${PORT}/`)
@@ -269,9 +332,9 @@ server.listen(PORT, () => {
 })
 
 function shutdown () {
-  try { bot.stop() } catch (_) {}
+  try { tiktok.stop() } catch (_) {}
+  try { bot.dispose() } catch (_) {}
   try { tunnel.stop() } catch (_) {}
-  try { gifts.dispose() } catch (_) {}
   process.exit(0)
 }
 process.on('SIGINT', shutdown)

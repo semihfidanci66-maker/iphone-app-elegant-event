@@ -4,7 +4,8 @@
  */
 const { Vec3 } = require('vec3')
 const { goals } = require('mineflayer-pathfinder')
-const { sleep, TaskToken } = require('./actions')
+const { TaskToken } = require('./actions')
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const CARDINALS = [new Vec3(1, 0, 0), new Vec3(-1, 0, 0), new Vec3(0, 0, 1), new Vec3(0, 0, -1)]
 
@@ -17,12 +18,12 @@ class StuckWatchdog {
     this.strikes = 0
     this._pillarFails = 0
     this.lastEscape = 0
-    this.timer = setInterval(() => this._sample(), 250)
   }
 
-  dispose () { clearInterval(this.timer) }
+  dispose () {}
 
-  _sample () {
+  /** Wird vom zentralen 250-ms-Game-Loop aufgerufen. */
+  tick () {
     const { bot, ctx } = this
     if (!bot.entity || this.escaping) return
     const now = Date.now()

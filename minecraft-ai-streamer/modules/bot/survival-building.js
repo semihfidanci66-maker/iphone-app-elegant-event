@@ -451,16 +451,44 @@ class BuildingPhase {
 
   isNight () { const t = this.bot.time.timeOfDay; return t >= 12542 && t <= 23459 }
 
-  /** Nachts ins Bett: Rechtsklick setzt den Spawnpunkt. */
+  isThunder () { const b = this.bot; return (b.thunderState || 0) > 0.2 }
+  shouldSleep () { return this.isNight() || this.isThunder() }
+  hasBedAvailable () {
+    const b = this.findBed()
+    if (b && b.position.distanceTo(this.bot.entity.position) < 64) return true
+    return !!this.ctx.actions.findMatch(/_bed$/)
+  }
+
+  /**
+   * STATE_SLEEP_NIGHT: Zum Basis-Bett laufen oder das mitgeführte Bett aufstellen, schlafen
+   * (setzt den Spawnpunkt, überspringt die Nacht) und ein mobiles Bett danach wieder einpacken.
+   */
   async sleepInBed (token) {
     const { bot, ctx } = this
-    const bed = this.findBed()
-    if (!bed || !this.isNight()) return false
-    if (!(await ctx.actions.reach(bed.position, 2.5, { token, timeout: 30000 }))) return false
-    ctx.actions.stopMoving()
-    await ctx.look.aim(bed.position.offset(0.5, 0.4, 0.5), { profile: 'work' })
+    const a = ctx.actions
+    if (!this.shouldSleep()) return false
+    let bed = this.findBed()
+    if (bed && bed.position.distanceTo(bot.entity.position) > 64) bed = null
+    let temp = false
+    if (!bed) {
+      const item = a.findMatch(/_bed$/)
+      if (!item) return false
+      const spot = ctx.crafting.findPlacementSpot(1, 3)
+      if (!spot) return false
+      if (!(await a.placeAt(spot, item.name, { token }))) return false
+      await bot.waitForTicks(4)
+      bed = bot.blockAt(spot)
+      if (!bed || !/_bed$/.test(bed.name)) return false
+      temp = true
+    }
+    ctx.emit('sleep_start', { thunder: this.isThunder(), temp })
+    let slept = false
     try {
+      if (!(await a.reach(bed.position, 2.5, { token, timeout: 30000 }))) return false
+      a.stopMoving()
+      await ctx.look.aim(bed.position.offset(0.5, 0.4, 0.5), { profile: 'work' })
       await bot.sleep(bed)
+      slept = true
       ctx.emit('sleep', {})
       ctx.memory.spawnSet = true
       await new Promise(resolve => {
@@ -469,12 +497,23 @@ class BuildingPhase {
         const unsub = token.onCancel(() => { bot.wake().catch(() => {}); done() })
         bot.once('wake', done)
       })
+      if (bot.isSleeping) { try { await bot.wake() } catch (_) {} }
       token.check()
       ctx.emit('wake', {})
       return true
     } catch (e) {
+      if (e.isInterrupt) throw e
       ctx.emit('sleep_failed', { reason: e.message })
       return false
+    } finally {
+      if (temp && !(token && token.cancelled)) {
+        // mobiles Bett wieder mitnehmen
+        try {
+          const b = bot.blockAt(bed.position)
+          if (b && /_bed$/.test(b.name)) { await a.dig(b, { token }); await a.collectDrops(bed.position.offset(0.5, 0, 0.5), 4, { token, timeout: 4000 }) }
+        } catch (e) { if (e.isInterrupt) throw e }
+      }
+      void slept
     }
   }
 

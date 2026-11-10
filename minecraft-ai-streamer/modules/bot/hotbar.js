@@ -36,7 +36,7 @@ const LAYOUT = [
   },
   { slot: 5, label: 'Essen', pick: a => a.findFirst(FOOD_PRIORITY) },
   { slot: 6, label: 'Fackeln', pick: a => a.find('torch') },
-  { slot: 7, label: 'Utility', pick: a => a.findFirst(['flint_and_steel', 'crafting_table', 'furnace', 'bucket']) },
+  { slot: 7, label: 'Utility', pick: a => a.findFirst(['flint_and_steel', 'crafting_table', 'furnace']) || a.findMatch(/_bed$/) || a.find('bucket') },
   { slot: 8, label: 'Wassereimer', pick: a => a.find('water_bucket') }
 ]
 

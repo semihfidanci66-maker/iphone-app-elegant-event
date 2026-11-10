@@ -1,99 +1,157 @@
 'use strict'
 /**
- * gift-engine.js – TikTok-Gifts -> echte, native Minecraft-1.21.1-Entities.
+ * gift-engine.js – TikTok-Gifts -> echte, native Minecraft-1.21.1-Entities und Support-Drops.
  *
- * - Keine Platzhalter-Blöcke, keine unsichtbaren Rüstungsständer: nur /summon echter Mobs
- * - Untote tragen einen Helm (brennen nie im Tageslicht)
- * - Namensschild: CustomName:'{"text":"⚡ @User","color":"red","bold":true}', CustomNameVisible:1b
- * - Jeder Befehl bleibt unter 256 Zeichen (Chat-Limit): summon mit Tag, danach gezielte Folgebefehle
+ * - Katalog mit 50 vorinstallierten Gifts + eigene Gifts (Custom Gift Builder) + Live-Auto-Discovery
+ * - Nur /summon echter Mobs (NoAI:0b), Untote mit Helm, natives Namensschild
+ *   CustomName:'{"text":"⚡ @User","color":"red","bold":true}', CustomNameVisible:1b
+ * - Jeder Befehl < 256 Zeichen (Chat-Limit): summon mit Tag, danach gezielte Folgebefehle
+ * - Kein eigener Timer: Bossbars werden über tick() aus dem zentralen Game-Loop gepflegt
  */
+const { buildDefaultRules, tierAction } = require('./gifts-catalog')
 
 const ACTIONS = {
   zombie_fast: { label: 'Schneller Zombie', kind: 'mob', mob: 'zombie', tier: 1, spawnText: 'einen Zombie' },
   skeleton_armored: { label: 'Gepanzerter Skelett-Schütze', kind: 'mob', mob: 'skeleton', tier: 2, spawnText: 'einen gepanzerten Skelett-Schützen' },
+  spawn_mob: { label: 'Mob spawnen (frei wählbar)', kind: 'mob', mob: 'zombie', tier: 2, spawnText: 'Monster' },
   tnt_rain: { label: 'TNT-Regen', kind: 'mob', mob: 'tnt', tier: 3, spawnText: 'TNT-Regen' },
+  lightning: { label: 'Blitzeinschlag', kind: 'mob', mob: 'lightning', tier: 3, spawnText: 'einen Blitzeinschlag' },
   creeper_duo: { label: 'Creeper-Duo', kind: 'mob', mob: 'creeper', tier: 3, spawnText: 'ein Creeper-Duo' },
   baby_squad: { label: '5x Baby-Zombie-Blitz-Squad', kind: 'mob', mob: 'zombie', tier: 4, spawnText: 'ein Baby-Zombie-Squad' },
   witch_jockey: { label: 'Hexe + Spinnenreiter', kind: 'mob', mob: 'witch', tier: 4, spawnText: 'eine Hexe mit Spinnenreiter' },
-  hit_squad_vindicator: { label: '10x Elite-Diener', kind: 'mob', mob: 'vindicator', tier: 4, spawnText: 'ein Hit-Squad aus zehn Dienern' },
-  hit_squad_brute: { label: '10x Piglin-Barbaren', kind: 'mob', mob: 'piglin_brute', tier: 4, spawnText: 'zehn gepanzerte Piglin-Barbaren' },
-  boss_ravager: { label: 'Endboss: Riesen-Verwüster', kind: 'mob', mob: 'ravager', tier: 5, spawnText: 'der Riesen-Verwüster' },
-  boss_warden: { label: 'Endboss: Wärter', kind: 'mob', mob: 'warden', tier: 5, spawnText: 'der Wärter' },
-  boss_wither_skeleton: { label: 'Endboss: Witherskelett-König', kind: 'mob', mob: 'wither_skeleton', tier: 5, spawnText: 'der Witherskelett-König' },
-  support_apple: { label: 'Heilung: Goldapfel', kind: 'support', tier: 1, spawnText: 'einen Goldapfel' },
-  support_speed: { label: 'Speed II', kind: 'support', tier: 1, spawnText: 'Speed zwei' },
+  hit_squad_vindicator: { label: '10x Elite-Diener', kind: 'mob', mob: 'vindicator', tier: 4, spawnText: 'ein Hit-Squad aus Dienern' },
+  hit_squad_brute: { label: '10x Piglin-Barbaren', kind: 'mob', mob: 'piglin_brute', tier: 4, spawnText: 'gepanzerte Piglin-Barbaren' },
+  boss_ravager: { label: 'Boss: Riesen-Verwüster', kind: 'mob', mob: 'ravager', tier: 5, spawnText: 'der Riesen-Verwüster' },
+  boss_warden: { label: 'Boss: Wärter', kind: 'mob', mob: 'warden', tier: 5, spawnText: 'der Wärter' },
+  boss_wither_skeleton: { label: 'Boss: Witherskelett-König', kind: 'mob', mob: 'wither_skeleton', tier: 5, spawnText: 'der Witherskelett-König' },
+  heal: { label: 'Heilung', kind: 'support', tier: 1, spawnText: 'eine Heilung' },
+  speed: { label: 'Speed II', kind: 'support', tier: 1, spawnText: 'Speed zwei' },
+  support_apple: { label: 'Goldapfel', kind: 'support', tier: 1, spawnText: 'einen Goldapfel' },
   support_golem: { label: 'Eisengolem-Bodyguard', kind: 'support', mob: 'iron_golem', tier: 1, spawnText: 'einen Eisengolem' },
   support_random: { label: 'Support-Drop (Zufall)', kind: 'support', tier: 1, spawnText: 'einen Support-Drop' },
+  drop_food: { label: 'Essen droppen', kind: 'support', tier: 1, spawnText: 'Steaks', gear: 'Essen' },
+  drop_weapon: { label: 'Waffe droppen (Eisenschwert)', kind: 'support', tier: 2, spawnText: 'ein Eisenschwert', gear: 'eine starke Waffe' },
+  drop_armor: { label: 'Rüstung droppen (Eisen)', kind: 'support', tier: 2, spawnText: 'eine Eisenrüstung', gear: 'eine Rüstung' },
+  drop_bed: { label: 'Bett droppen', kind: 'support', tier: 1, spawnText: 'ein Bett', gear: 'ein Bett' },
+  drop_diamond_gear: { label: 'Diamant-Ausrüstung droppen', kind: 'support', tier: 3, spawnText: 'Diamant-Ausrüstung', gear: 'Diamant-Ausrüstung' },
   none: { label: 'Nichts', kind: 'none', tier: 0, spawnText: '' }
 }
 
-const DEFAULT_RULES = [
-  { id: 'rose', giftName: 'Rose', match: ['rose'], coins: 1, emoji: '🌹', action: 'zombie_fast', legend: 'Zombie', enabled: true },
-  { id: 'ice_cream', giftName: 'Eistüte', match: ['ice cream cone', 'ice cream', 'eistüte', 'eis'], coins: 1, emoji: '🍦', action: 'support_random', legend: 'Heilung', enabled: true },
-  { id: 'gg', giftName: 'GG', match: ['gg'], coins: 1, emoji: '🎮', action: 'support_random', legend: 'Support-Drop', enabled: true },
-  { id: 'finger_heart', giftName: 'Fingerherz', match: ['finger heart', 'fingerherz'], coins: 5, emoji: '💖', action: 'skeleton_armored', legend: 'Skelett-Schütze', enabled: true },
-  { id: 'donut', giftName: 'Donut', match: ['doughnut', 'donut'], coins: 30, emoji: '🍩', action: 'tnt_rain', legend: 'TNT-Regen', enabled: true },
-  { id: 'hand_heart', giftName: 'Handherz', match: ['hand hearts', 'hand heart', 'handherz', 'heart me'], coins: 100, emoji: '🫶', action: 'baby_squad', legend: 'Baby-Zombie-Squad', enabled: true },
-  { id: 'money_gun', giftName: 'Money Gun', match: ['money gun'], coins: 500, emoji: '💸', action: 'hit_squad_vindicator', legend: 'Hit-Squad x10', enabled: true },
-  { id: 'galaxy', giftName: 'Galaxie', match: ['galaxy', 'galaxie'], coins: 1000, emoji: '🌌', action: 'boss_ravager', legend: 'Endboss', enabled: true }
-]
+// frei wählbare Mobs für "spawn_mob": Name -> [Basis-HP, deutscher Text, Waffe, Helm]
+const MOBS = {
+  zombie: [20, 'Zombies', null, 'iron_helmet'], husk: [20, 'Wüstenzombies', null, null], drowned: [20, 'Ertrunkene', 'trident', 'iron_helmet'], skeleton: [20, 'Skelette', 'bow', 'iron_helmet'], stray: [20, 'Eiswanderer', 'bow', 'iron_helmet'],
+  spider: [16, 'Spinnen', null, null], cave_spider: [12, 'Höhlenspinnen', null, null], creeper: [20, 'Creeper', null, null], witch: [26, 'Hexen', null, null], enderman: [40, 'Endermen', null, null],
+  phantom: [20, 'Phantome', null, null], blaze: [20, 'Lohen', null, null], vindicator: [24, 'Diener', 'iron_axe', null], pillager: [24, 'Plünderer', 'crossbow', null], piglin_brute: [50, 'Piglin-Barbaren', 'golden_axe', null],
+  wither_skeleton: [20, 'Witherskelette', 'stone_sword', null], ravager: [100, 'Verwüster', null, null], warden: [500, 'Wärter', null, null], slime: [16, 'Schleime', null, null], silverfish: [8, 'Silberfischchen', null, null]
+}
 
 const cleanName = n => String(n || 'Zuschauer').replace(/[^\p{L}\p{N}_.\-]/gu, '').slice(0, 20) || 'Zuschauer'
 const r1 = n => Math.round(n * 10) / 10
+const slug = s => String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 36) || 'gift'
 
 class GiftEngine {
   /**
-   * @param {{ runCommands: (cmds: string[]) => boolean, spawnPoint: () => {x:number,y:number,z:number}|null, botPos: () => {x:number,y:number,z:number}|null }} deps
+   * @param {{ runCommands: (cmds: string[]) => boolean, spawnPoint: () => {x:number,y:number,z:number}|null, botPos: () => {x:number,y:number,z:number}|null, onChange?: () => void }} deps
    */
   constructor (deps, rules) {
     this.deps = deps
-    this.rules = this.sanitizeRules(rules || DEFAULT_RULES)
+    this.rules = this.sanitizeRules(rules && rules.length ? rules : buildDefaultRules())
     this.seq = 0
-    this.bossTimers = new Map()
-    this.icons = {} // giftName(lower) -> Bild-URL (kommt live von TikTok)
+    this.bosses = new Map() // tag -> { bar, started }
+  }
+
+  sanitizeRule (r) {
+    if (!r || !(r.id || r.giftName)) return null
+    const act = ACTIONS[r.action] ? r.action : 'none'
+    const name = String(r.giftName || r.id).slice(0, 40)
+    const match = new Set((Array.isArray(r.match) ? r.match : []).map(m => String(m).toLowerCase().slice(0, 40)).filter(Boolean))
+    match.add(name.toLowerCase())
+    const icon = typeof r.icon === 'string' && /^https?:\/\//.test(r.icon) ? r.icon.slice(0, 400) : null
+    return {
+      id: String(r.id || slug(name)).slice(0, 40),
+      giftName: name,
+      match: [...match].slice(0, 8),
+      coins: Math.max(0, Math.min(100000, Number(r.coins) || 0)),
+      emoji: String(r.emoji || '🎁').slice(0, 8),
+      icon,
+      action: act,
+      mob: MOBS[r.mob] ? r.mob : null,
+      amount: Math.max(1, Math.min(20, Math.round(Number(r.amount) || 1))),
+      hpMult: Math.max(0.5, Math.min(10, Number(r.hpMult) || 1)),
+      legend: String(r.legend || ACTIONS[act].label).slice(0, 40),
+      enabled: r.enabled !== false,
+      inLegend: !!r.inLegend,
+      custom: !!r.custom,
+      discovered: !!r.discovered
+    }
   }
 
   sanitizeRules (rules) {
     const out = []
-    for (const r of Array.isArray(rules) ? rules : []) {
-      if (!r || !r.id) continue
-      out.push({
-        id: String(r.id).slice(0, 40),
-        giftName: String(r.giftName || r.id).slice(0, 40),
-        match: (Array.isArray(r.match) ? r.match : [r.giftName || r.id]).map(m => String(m).toLowerCase().slice(0, 40)),
-        coins: Math.max(0, Number(r.coins) || 0),
-        emoji: String(r.emoji || '🎁').slice(0, 8),
-        action: ACTIONS[r.action] ? r.action : 'none',
-        legend: String(r.legend || (ACTIONS[r.action] || ACTIONS.none).label).slice(0, 40),
-        enabled: r.enabled !== false
-      })
+    const seen = new Set()
+    for (const raw of Array.isArray(rules) ? rules : []) {
+      const r = this.sanitizeRule(raw)
+      if (!r || seen.has(r.id)) continue
+      seen.add(r.id)
+      out.push(r)
+      if (out.length >= 200) break
     }
     return out
   }
 
   setRules (rules) { this.rules = this.sanitizeRules(rules); return this.rules }
+  resetRules () { this.rules = this.sanitizeRules(buildDefaultRules()); return this.rules }
 
-  /** Öffentliche Sicht für Overlay/Dashboard (GIFT_CONFIG_SYNC). */
+  /** Eigenes Gift anlegen oder ein bestehendes ändern (Custom Gift Builder). */
+  upsertRule (raw) {
+    const r = this.sanitizeRule({ ...raw, id: raw.id || 'custom_' + slug(raw.giftName), custom: raw.custom !== false })
+    if (!r) return null
+    const i = this.rules.findIndex(x => x.id === r.id)
+    if (i >= 0) this.rules[i] = { ...this.rules[i], ...r, match: [...new Set([...this.rules[i].match, ...r.match])].slice(0, 8) }
+    else this.rules.push(r)
+    return i >= 0 ? this.rules[i] : r
+  }
+
+  removeRule (id) { const n = this.rules.length; this.rules = this.rules.filter(r => r.id !== id); return this.rules.length < n }
+
+  /** Icon-URLs, die TikTok live liefert, in den Katalog übernehmen. */
+  learnIcons (icons) {
+    let changed = false
+    for (const r of this.rules) {
+      if (r.icon) continue
+      for (const m of r.match) if (icons[m]) { r.icon = icons[m]; changed = true; break }
+    }
+    return changed
+  }
+
+  /** Öffentliche Sicht für die Overlay-Legende (GIFT_CONFIG_SYNC). */
   publicConfig () {
-    return this.rules.filter(r => r.enabled && r.action !== 'none').sort((a, b) => a.coins - b.coins).map(r => ({
-      id: r.id, name: r.giftName, coins: r.coins, emoji: r.emoji, legend: r.legend, kind: ACTIONS[r.action].kind, tier: ACTIONS[r.action].tier, icon: this.iconFor(r)
+    const act = r => ACTIONS[r.action]
+    let list = this.rules.filter(r => r.enabled && r.action !== 'none' && r.inLegend)
+    if (!list.length) list = this.rules.filter(r => r.enabled && r.action !== 'none').slice(0, 7)
+    return list.sort((a, b) => a.coins - b.coins).slice(0, 9).map(r => ({
+      id: r.id, name: r.giftName, coins: r.coins, emoji: r.emoji, legend: r.legend, kind: act(r).kind, tier: act(r).tier, icon: r.icon
     }))
   }
 
-  iconFor (rule) {
-    for (const m of [rule.giftName.toLowerCase(), ...rule.match]) if (this.icons[m]) return this.icons[m]
-    return null
+  /** Günstigstes aktives Support-Gift einer Art – für die taktischen Hilferufe des Streamers. */
+  supportGift (kinds) {
+    const c = this.rules.filter(r => r.enabled && kinds.includes(r.action)).sort((a, b) => a.coins - b.coins)[0]
+    return c ? { name: c.giftName, coins: c.coins, gear: ACTIONS[c.action].gear || ACTIONS[c.action].spawnText } : null
   }
 
   findRule (gift) {
     const name = String(gift.name || '').toLowerCase().trim()
-    let rule = this.rules.find(r => r.enabled && (r.id === gift.ruleId || r.match.includes(name) || r.giftName.toLowerCase() === name))
-    if (!rule && gift.coins > 0) {
-      // Unbekanntes Gift: die Regel mit dem höchsten Preis <= Wert greift (jedes Gift löst etwas aus)
-      const cands = this.rules.filter(r => r.enabled && r.coins <= gift.coins && ACTIONS[r.action].kind === 'mob').sort((a, b) => b.coins - a.coins)
-      rule = cands[0] || null
-    }
-    return rule || null
+    return this.rules.find(r => r.id === gift.ruleId) || this.rules.find(r => r.match.includes(name)) || null
+  }
+
+  /** Live-Auto-Discovery: unbekanntes Gift in den Katalog aufnehmen, Aktion passend zum Coin-Wert. */
+  discover (gift) {
+    const t = tierAction(gift.coins || 1)
+    const rule = this.sanitizeRule({ id: 'live_' + slug(gift.name || gift.id), giftName: gift.name || `Gift ${gift.id}`, coins: gift.coins || 1, emoji: '🎁', icon: gift.icon, action: t.action, amount: t.amount, legend: t.legend, enabled: true, discovered: true })
+    this.rules.push(rule)
+    if (this.deps.onChange) this.deps.onChange('discovered', rule)
+    return rule
   }
 
   nameTag (user, prefix = '⚡', color = 'red') {
@@ -101,53 +159,83 @@ class GiftEngine {
   }
 
   /**
-   * Baut die Befehlsliste für eine Aktion. Rein funktional -> testbar ohne Server.
+   * Baut die Befehlsliste für eine Regel. Rein funktional -> testbar ohne Server.
    * @returns {{cmds: string[], effect: object, tag: string}}
    */
-  build (actionId, user, count = 1, at = null, botPos = null) {
-    const act = ACTIONS[actionId] || ACTIONS.none
+  build (rule, user, count = 1, at = null, botPos = null) {
+    if (typeof rule === 'string') rule = { action: rule, amount: 1, hpMult: 1, mob: null }
+    let actionId = ACTIONS[rule.action] ? rule.action : 'none'
+    if (actionId === 'support_random') actionId = ['support_apple', 'speed', 'heal', 'support_golem'][Math.floor(Math.random() * 4)]
+    const act = ACTIONS[actionId]
     const tag = `g${++this.seq}`
     const sel = `@e[tag=${tag}]`
     const p = at || { x: 0, y: 64, z: 0 }
     const X = (dx = 0) => r1(p.x + dx)
     const Z = (dz = 0) => r1(p.z + dz)
-    const spread = () => (Math.random() - 0.5) * 3
+    const spread = (k = 1) => (Math.random() - 0.5) * 3 * k
     const cmds = []
-    const tags = `Tags:["giftmob","${tag}"],PersistenceRequired:1b`
+    const tags = `NoAI:0b,Tags:["giftmob","${tag}"],PersistenceRequired:1b`
     const name = (prefix, color) => cmds.push(`execute as ${sel} run data merge entity @s ${this.nameTag(user, prefix, color)}`)
-    const n = Math.max(1, Math.min(8, count))
+    const amount = rule.amount || 1
+    const n = Math.max(1, Math.min(20, amount * Math.max(1, Math.min(8, count))))
+    const hpMult = rule.hpMult || 1
+    const scaleHp = (base) => {
+      if (hpMult === 1) return
+      const hp = Math.round(base * hpMult)
+      cmds.push(`execute as ${sel} run attribute @s minecraft:generic.max_health base set ${hp}`)
+      cmds.push(`execute as ${sel} run data merge entity @s {Health:${hp}f}`)
+    }
+    const summonN = (mob, k, extra = '', wide = 1) => { for (let i = 0; i < k; i++) cmds.push(`summon ${mob} ${X(i ? spread(wide) : 0)} ${p.y} ${Z(i ? spread(wide) : 0)} {${extra}${tags}}`) }
+    let mobName = act.mob
+    let spawnText = act.spawnText
 
     switch (actionId) {
       case 'zombie_fast':
-        for (let i = 0; i < n; i++) cmds.push(`summon zombie ${X(i ? spread() : 0)} ${p.y} ${Z(i ? spread() : 0)} {${tags}}`)
+        summonN('zombie', n)
         cmds.push(`item replace entity ${sel} armor.head with iron_helmet`)
         cmds.push(`execute as ${sel} run attribute @s minecraft:generic.movement_speed base set 0.31`)
-        name('⚡', 'red')
+        scaleHp(20); name('⚡', 'red')
+        if (n > 1) spawnText = `${n} Zombies`
         break
       case 'skeleton_armored':
-        for (let i = 0; i < Math.min(n, 4); i++) cmds.push(`summon skeleton ${X(i ? spread() : 0)} ${p.y} ${Z(i ? spread() : 0)} {${tags}}`)
+        summonN('skeleton', Math.min(n, 6))
         cmds.push(`item replace entity ${sel} weapon.mainhand with bow`)
         cmds.push(`item replace entity ${sel} armor.head with golden_helmet`)
         cmds.push(`item replace entity ${sel} armor.chest with chainmail_chestplate`)
-        name('🏹', 'red')
+        scaleHp(20); name('🏹', 'red')
         break
+      case 'spawn_mob': {
+        const mob = MOBS[rule.mob] ? rule.mob : 'zombie'
+        const [hp, text, weapon, helmet] = MOBS[mob]
+        mobName = mob
+        spawnText = n > 1 ? `${n} ${text}` : text
+        summonN(mob, Math.min(n, mob === 'warden' || mob === 'ravager' ? 3 : 12), mob === 'piglin_brute' ? 'IsImmuneToZombification:1b,' : '', 1.4)
+        if (weapon) cmds.push(`item replace entity ${sel} weapon.mainhand with ${weapon}`)
+        if (helmet) cmds.push(`item replace entity ${sel} armor.head with ${helmet}`)
+        scaleHp(hp); name('⚡', 'red')
+        break
+      }
       case 'tnt_rain': {
         const c = botPos || p
-        for (let i = 0; i < Math.min(8, 4 + n); i++) {
-          cmds.push(`summon tnt ${r1(c.x + (Math.random() - 0.5) * 9)} ${c.y + 12 + i} ${r1(c.z + (Math.random() - 0.5) * 9)} {fuse:${50 + i * 6},Tags:["giftmob","${tag}"]}`)
-        }
+        const k = Math.min(12, 3 + n)
+        for (let i = 0; i < k; i++) cmds.push(`summon tnt ${r1(c.x + (Math.random() - 0.5) * 9)} ${c.y + 12 + i} ${r1(c.z + (Math.random() - 0.5) * 9)} {fuse:${50 + i * 6},Tags:["giftmob","${tag}"]}`)
         name('💣', 'gold')
+        break
+      }
+      case 'lightning': {
+        const c = botPos || p
+        for (let i = 0; i < Math.min(6, n); i++) cmds.push(`summon lightning_bolt ${r1(c.x + (Math.random() - 0.5) * 7)} ${c.y} ${r1(c.z + (Math.random() - 0.5) * 7)}`)
         break
       }
       case 'creeper_duo':
         cmds.push(`summon creeper ${X(-1)} ${p.y} ${Z()} {${tags}}`)
         cmds.push(`summon creeper ${X(1)} ${p.y} ${Z()} {${tags}}`)
-        name('💥', 'green')
+        scaleHp(20); name('💥', 'green')
         break
       case 'baby_squad':
-        for (let i = 0; i < 5; i++) cmds.push(`summon zombie ${X(spread())} ${p.y} ${Z(spread())} {IsBaby:1b,${tags}}`)
+        summonN('zombie', 5, 'IsBaby:1b,')
         cmds.push(`item replace entity ${sel} armor.head with golden_helmet`)
-        name('⚡', 'red')
+        scaleHp(20); name('⚡', 'red')
         break
       case 'witch_jockey':
         cmds.push(`summon witch ${X(-1.5)} ${p.y} ${Z()} {${tags}}`)
@@ -156,27 +244,30 @@ class GiftEngine {
         cmds.push(`item replace entity @e[tag=${tag}r] armor.head with iron_helmet`)
         name('🧪', 'dark_purple')
         break
-      case 'hit_squad_vindicator':
-        for (let i = 0; i < 10; i++) cmds.push(`summon vindicator ${X(spread() * 1.6)} ${p.y} ${Z(spread() * 1.6)} {${tags}}`)
+      case 'hit_squad_vindicator': {
+        const k = amount > 1 ? Math.min(12, amount) : 10
+        summonN('vindicator', k, '', 1.6)
         cmds.push(`item replace entity ${sel} weapon.mainhand with iron_axe`)
         cmds.push(`item replace entity ${sel} armor.head with iron_helmet`)
-        name('🪓', 'dark_red')
+        scaleHp(24); name('🪓', 'dark_red')
+        spawnText = `ein Hit-Squad aus ${k} Dienern`
         break
+      }
       case 'hit_squad_brute':
-        for (let i = 0; i < 10; i++) cmds.push(`summon piglin_brute ${X(spread() * 1.6)} ${p.y} ${Z(spread() * 1.6)} {IsImmuneToZombification:1b,${tags}}`)
+        summonN('piglin_brute', 10, 'IsImmuneToZombification:1b,', 1.6)
         cmds.push(`item replace entity ${sel} weapon.mainhand with golden_axe`)
         cmds.push(`item replace entity ${sel} armor.chest with golden_chestplate`)
-        name('🪓', 'gold')
+        scaleHp(50); name('🪓', 'gold')
         break
       case 'boss_ravager':
       case 'boss_warden':
       case 'boss_wither_skeleton': {
         const mob = act.mob
-        const hp = mob === 'warden' ? 500 : mob === 'ravager' ? 200 : 150
+        const hp = Math.round((mob === 'warden' ? 500 : mob === 'ravager' ? 200 : 150) * hpMult)
         const title = { ravager: 'Riesen-Verwüster', warden: 'Wärter', wither_skeleton: 'Witherskelett-König' }[mob]
-        cmds.push(`summon ${mob} ${X()} ${p.y} ${Z()} {${tags}}`)
-        if (mob !== 'warden') {
-          cmds.push(`execute as ${sel} run attribute @s minecraft:generic.scale base set ${mob === 'ravager' ? 1.5 : 2}`)
+        summonN(mob, Math.min(3, amount), '', 2)
+        if (mob !== 'warden') cmds.push(`execute as ${sel} run attribute @s minecraft:generic.scale base set ${mob === 'ravager' ? 1.5 : 2}`)
+        if (mob !== 'warden' || hpMult !== 1) {
           cmds.push(`execute as ${sel} run attribute @s minecraft:generic.max_health base set ${hp}`)
           cmds.push(`execute as ${sel} run data merge entity @s {Health:${hp}f}`)
         }
@@ -191,59 +282,57 @@ class GiftEngine {
         cmds.push(`bossbar set ${bar} max ${hp}`)
         cmds.push(`bossbar set ${bar} value ${hp}`)
         cmds.push(`bossbar set ${bar} players @a`)
-        this.trackBoss(tag, bar)
+        this.bosses.set(tag, { bar, started: Date.now() })
         break
       }
-      case 'support_apple':
-        cmds.push(`give @s golden_apple ${Math.min(n, 3)}`)
+      case 'heal':
+        cmds.push('effect give @s minecraft:instant_health 1 1')
+        cmds.push('effect give @s minecraft:regeneration 12 1')
+        cmds.push('effect give @s minecraft:saturation 2 0')
         break
-      case 'support_speed':
-        cmds.push('effect give @s minecraft:speed 30 1')
-        break
+      case 'speed': cmds.push('effect give @s minecraft:speed 30 1'); break
+      case 'support_apple': cmds.push(`give @s golden_apple ${Math.min(n, 4)}`); break
       case 'support_golem':
         cmds.push(`summon iron_golem ${X()} ${p.y} ${Z()} {PlayerCreated:1b,Tags:["giftfriend","${tag}"]}`)
         name('🛡', 'green')
         break
-      default:
-        break
+      case 'drop_food': cmds.push(`give @s cooked_beef ${Math.min(32, 8 * n)}`); break
+      case 'drop_weapon': cmds.push('give @s iron_sword 1'); break
+      case 'drop_armor': for (const part of ['helmet', 'chestplate', 'leggings', 'boots']) cmds.push(`give @s iron_${part} 1`); cmds.push('give @s shield 1'); break
+      case 'drop_bed': cmds.push('give @s red_bed 1'); break
+      case 'drop_diamond_gear': for (const it of ['diamond_sword', 'diamond_pickaxe', 'diamond_chestplate', 'golden_apple']) cmds.push(`give @s ${it} 1`); break
+      default: break
     }
-    return { cmds, tag, effect: { ...act, action: actionId } }
+    return { cmds, tag, effect: { ...act, action: actionId, mob: mobName, spawnText, label: rule.legend || act.label } }
   }
 
-  /** Bossbar folgt serverseitig der Boss-Gesundheit und verschwindet mit dem Boss. */
-  trackBoss (tag, bar) {
-    const started = Date.now()
-    const timer = setInterval(() => {
-      if (Date.now() - started > 8 * 60000) {
-        clearInterval(timer); this.bossTimers.delete(tag)
-        this.deps.runCommands([`bossbar remove ${bar}`])
-        return
-      }
-      this.deps.runCommands([
-        `execute store result bossbar ${bar} value run data get entity @e[tag=${tag},limit=1] Health`,
-        `execute unless entity @e[tag=${tag}] run bossbar remove ${bar}`
-      ])
-    }, 1500)
-    this.bossTimers.set(tag, timer)
+  /** Aus dem zentralen Game-Loop: Bossbar folgt der Boss-Gesundheit und verschwindet mit dem Boss. */
+  tick () {
+    if (!this.bosses.size) return
+    const cmds = []
+    for (const [tag, b] of this.bosses) {
+      if (Date.now() - b.started > 8 * 60000) { cmds.push(`bossbar remove ${b.bar}`); this.bosses.delete(tag); continue }
+      cmds.push(`execute store result bossbar ${b.bar} value run data get entity @e[tag=${tag},limit=1] Health`)
+      cmds.push(`execute unless entity @e[tag=${tag}] run bossbar remove ${b.bar}`)
+    }
+    if (cmds.length) this.deps.runCommands(cmds)
   }
-
-  dispose () { for (const t of this.bossTimers.values()) clearInterval(t); this.bossTimers.clear() }
 
   /**
-   * Gift auslösen.
-   * @returns {{ok: boolean, rule?: object, effect?: object, reason?: string}}
+   * Gift auslösen. Unbekannte Gifts werden automatisch in den Katalog aufgenommen.
+   * @returns {{ok: boolean, rule: object, effect: object, reason?: string, discovered?: boolean}}
    */
   trigger (gift, viewer, count = 1) {
-    const rule = this.findRule(gift)
-    if (!rule) return { ok: false, reason: 'no_rule' }
-    let actionId = rule.action
-    if (actionId === 'support_random') actionId = ['support_apple', 'support_speed', 'support_golem'][Math.floor(Math.random() * 3)]
-    if (actionId === 'tnt_rain' && Math.random() < 0.35) actionId = 'creeper_duo'
+    let rule = this.findRule(gift)
+    let discovered = false
+    if (!rule) { rule = this.discover(gift); discovered = true }
+    if (gift.icon && !rule.icon) { rule.icon = gift.icon; if (this.deps.onChange) this.deps.onChange('icon', rule) }
+    if (!rule.enabled || rule.action === 'none') return { ok: false, rule, effect: { ...ACTIONS.none, label: 'deaktiviert' }, reason: 'disabled', discovered }
     const at = this.deps.spawnPoint()
-    const built = this.build(actionId, viewer.uniqueId || viewer.nickname, count, at, this.deps.botPos())
+    const built = this.build(rule, viewer.uniqueId || viewer.nickname, count, at, this.deps.botPos())
     const sent = at ? this.deps.runCommands(built.cmds) : false
-    return { ok: !!sent, rule, effect: built.effect, reason: sent ? null : 'bot_offline' }
+    return { ok: !!sent, rule, effect: built.effect, reason: sent ? null : 'bot_offline', discovered }
   }
 }
 
-module.exports = { GiftEngine, ACTIONS, DEFAULT_RULES, cleanName }
+module.exports = { GiftEngine, ACTIONS, MOBS, cleanName }

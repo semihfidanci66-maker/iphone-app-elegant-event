@@ -79,7 +79,7 @@ class TTSEngine {
     const words = result.words && result.words.length ? result.words : this.fallbackWords(text, durationMs)
     const out = { audio: result.audio, mime: 'audio/mpeg', words, durationMs, voice: this.voice }
     this.cache.set(key, out)
-    if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value)
+    if (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value)
     return out
   }
 

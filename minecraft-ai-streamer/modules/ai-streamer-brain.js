@@ -125,13 +125,35 @@ const L = {
     hunt: ['Jagen gehen, alles klar {user}! Ich brauch eh Steaks.'],
     mine: ['Ab in die Mine, {user}! Spitzhacke raus!', '{user} schickt mich unter Tage. Treppe graben und los!'],
     sleep: ['Du hast recht, {user}, ich sollte schlafen gehen. Ab ins Bett!'],
-    tidy: ['Inventar aufräumen, gute Idee {user}! Hier sieht\'s aus wie bei Hempels.']
+    tidy: ['Inventar aufräumen, gute Idee {user}! Hier sieht\'s aus wie bei Hempels.'],
+    corpse: ['Du hast recht, {user}! Ich hol sofort meinen Loot zurück!'],
+    bed: ['Ein Bett, gute Idee {user}! Ich such mir drei Schafe.'],
+    gear: ['Stimmt {user}, ich leg erstmal vernünftige Ausrüstung an!']
   },
   goal_already: ['Hab ich schon erledigt, {user}! {label} ist längst abgehakt.', '{user}, da bin ich dir einen Schritt voraus: {label} ist schon fertig!'],
   goal_busy: ['Mach ich, {user}! Aber erst muss ich hier überleben!', 'Notiert, {user}! Sobald die Mobs weg sind, geht\'s los.'],
   goal_offline: ['Würd ich gern machen, {user}, aber ich bin gerade nicht in der Welt.'],
   goal_done: ['Check! {label} ist erledigt{by_part}!', '{label}: abgehakt{by_part}! Was kommt als Nächstes, Chat?'],
   goal_failed: ['Okay Leute, {label} hat gerade nicht geklappt. Ich versuch\'s später noch mal.'],
+
+  live_connected: ['So Chat, die Verbindung steht! Wir sind live drin – wehe, ihr eskaliert heute wieder mit den Rosen!'],
+  gift_discovered: ['Oha, {gift} kannte ich noch gar nicht! Ist ab sofort im Katalog, danke {user}!'],
+  callout_weapon: [
+    'Chat, das sind viel zu viele {mobs} für {weapon}! {iron_part}schickt mir schnell {gift}, damit ich {gear} bekomme!',
+    'Leute, {threats} {mobs} und ich steh hier mit {weapon_dat}! {iron_part}mit {gift} könnt ihr mir {gear} schicken!'
+  ],
+  callout_weapon_nogift: ['Chat, das sind viel zu viele {mobs} für {weapon}! {iron_part}drückt mir die Daumen!'],
+  callout_heal: ['Chat, ich hab nur noch {hp} Herzen und nichts zu essen! Schickt mir {gift}, das heilt mich sofort!', 'Ich brauch Hilfe, Leute! {hp} Herzen! Einmal {gift} bitte, sonst war es das!'],
+  callout_food: ['Mein Magen ist komplett leer, Chat! Wer {gift} schickt, rettet mich vor dem Verhungern!'],
+  sleep_start: ['Es wird dunkel, Chat! Schnell ins Bett, Spawnpunkt sichern und Nacht überspringen!', 'Nacht bricht an, Leute. Ab ins Bett, bevor die Monster kommen. Spawnpunkt wird gesetzt!'],
+  sleep_thunder: ['Gewitter, Chat! Da schlaf ich lieber, bevor mich noch ein Blitz erwischt.'],
+  sleep_failed: ['Ich kann nicht schlafen, hier sind Monster in der Nähe! Erst aufräumen.'],
+  wake: ['Guten Morgen, Chat! Nacht übersprungen, Spawnpunkt sitzt. Weiter geht es!'],
+  bed_crafted: ['Bett ist gecraftet! Danke an die drei Schafe. Ab jetzt wird jede Nacht geschlafen.'],
+  corpse_run_start: ['Nein, ich bin gestorben! Sofort zurück zu meinem Loot, bevor meine Sachen despawnen!', 'Tot! Aber noch ist nichts verloren. {secondsLeft} Sekunden, dann despawnt alles. Rennen, rennen, rennen!'],
+  corpse_run_done: { ok: ['JA! Ich hab meinen Loot wieder! Alles eingesammelt, Rüstung ist wieder an. Chat, das war knapp!', 'Geschafft! Alle Sachen zurück im Inventar. Wir sind wieder im Spiel, Leute!'], fail: ['Mein Loot ist weg. Okay. Dann fangen wir halt noch mal von vorne an. Charakterbildend.'] },
+  corpse_run_none: ['Da gibt es gerade nichts mehr zu holen, Leute. Entweder bin ich nicht gestorben oder der Loot ist schon weg.'],
+  camera: { third: ['Kamera raus, das will ich von außen sehen!'], ego: [] },
 
   // ---- Bot-Ereignisse ----
   plan: ['Neuer Plan, Leute: {goal}! Dafür mach ich jetzt: {steps}.', 'So, nächstes Ziel: {goal}. Erster Schritt: {first}.'],
@@ -250,6 +272,7 @@ const GOAL_PATTERNS = [
   ['eat', /\b(iss|ess|essen|futter\w*|friss)\b.*\b(was|mal|etwas|endlich)|\b(iss|friss) ?(doch|mal|was)|\bdu (musst|solltest) (was )?essen\b|\bhunger\b/i],
   ['hunt', /\b(jag\w*|kuh|k[üu]he|schwein\w*|tiere?)\b.*\b(jag|t[öo]te|schlacht|kill|hol)|\bgeh\w* jagen\b/i],
   ['mine', /\b(mine\w*|minen|bergbau|grab\w*|h[öo]hle)\b.*\b(geh|runter|mal|los)|\bgeh\w*\b.*\b(mine|minen|h[öo]hle|runter)\b/i],
+  ['corpse', /\b(hol|sammel|rette|such)\w*\b.*\b(loot|sachen|items|zeug|inventar)\b|\bcorpse ?run\b/i],
   ['sleep', /\b(schlaf\w*|bett|penn\w*)\b.*\b(geh|leg|mal)|\bgeh\w* (schlafen|pennen|ins bett)\b/i],
   ['tidy', /\b(inventar|hotbar|kiste)\b.*\b(aufr[äa]um|sortier|ordne)|\br[äa]um\w* (mal )?auf\b/i]
 ]
@@ -275,21 +298,24 @@ class StreamerBrain extends EventEmitter {
     this.likeCount = 0
     this.enabled = true
     this.lastStage = -1
-    this.timer = setInterval(() => this._tick(), 250)
+    this.timer = null // kein eigener Timer: tick() hängt am zentralen Game-Loop
+    this.tickN = 0
   }
 
-  dispose () { clearInterval(this.timer) }
+  dispose () {}
+  /** Vom zentralen 250-ms-Loop aufgerufen. */
+  tick () { this._tick(); if (++this.tickN % 4 === 0) this.tacticalCallout() }
   status () { return this.deps.getStatus() || { connected: false, activity: 'offline' } }
 
   // ---------------------------------------------------------------- Zuschauergedächtnis
   viewer (v) {
     const id = String(v.uniqueId || v.nickname || 'anonym').toLowerCase()
     let m = this.viewerMemoryMap.get(id)
-    if (!m) {
-      m = { id, name: this.speakable(v.nickname || v.uniqueId || 'Unbekannt'), gifts: {}, totalGifts: 0, coins: 0, chats: 0, firstSeen: Date.now(), lastSeen: 0, greeted: false, goals: 0 }
-      this.viewerMemoryMap.set(id, m)
-      if (this.viewerMemoryMap.size > 3000) this.viewerMemoryMap.delete(this.viewerMemoryMap.keys().next().value)
-    }
+    if (m) this.viewerMemoryMap.delete(id) // LRU: zuletzt gesehene wandern ans Ende
+    else m = { id, name: this.speakable(v.nickname || v.uniqueId || 'Unbekannt'), gifts: {}, totalGifts: 0, coins: 0, chats: 0, firstSeen: Date.now(), lastSeen: 0, greeted: false, goals: 0 }
+    this.viewerMemoryMap.set(id, m)
+    // harte Obergrenze 200 Einträge -> RAM bleibt über 12+ Stunden flach
+    while (this.viewerMemoryMap.size > 200) this.viewerMemoryMap.delete(this.viewerMemoryMap.keys().next().value)
     m.lastSeen = Date.now()
     return m
   }
@@ -484,6 +510,7 @@ class StreamerBrain extends EventEmitter {
       const res = this.deps.pushGoal(goal, m.name) || { ok: false }
       m.goals++
       if (!res.ok && res.reason === 'offline') reply(this.line(L.goal_offline, vars), { priority: 3 })
+      else if (!res.ok && res.reason === 'no_loot') reply(this.line(L.corpse_run_none, vars), { priority: 3 })
       else if (res.already) reply(this.line(L.goal_already, { ...vars, label: res.label }), { priority: 3 })
       else if (res.ok && fighting) reply(this.line(L.goal_busy, vars), { priority: 3 })
       else if (res.ok) reply(this.line(L.goal_ack[goal], vars), { priority: 4, ttl: 15000 })
@@ -560,7 +587,15 @@ class StreamerBrain extends EventEmitter {
       }
       case 'build_done': this.lastStage = -1; return say(L.build_done, d, { emotion: 'hype', priority: 3, cd: 600000 })
       case 'build_paused': return say(L.build_paused, { missing: (d.missing || []).map(k => KIND_DE[k] || k).join(' und ') || 'Material' }, { cd: 90000 })
-      case 'sleep': return say(L.sleep, d, { cd: 300000 })
+      case 'sleep_start': return say(d.thunder ? L.sleep_thunder : L.sleep_start, d, { key: 'sleep_start', cd: 120000, priority: 3 })
+      case 'sleep_failed': return say(L.sleep_failed, d, { cd: 120000 })
+      case 'wake': return say(L.wake, d, { cd: 120000 })
+      case 'bed_crafted': return say(L.bed_crafted, d, { emotion: 'hype', priority: 2 })
+      case 'corpse_run_start': return say(L.corpse_run_start, d, { emotion: 'panic', priority: 6, cd: 3000, ttl: 20000 })
+      case 'corpse_run_done': return say(d.ok ? L.corpse_run_done.ok : L.corpse_run_done.fail, d, { emotion: d.ok ? 'hype' : 'chill', priority: 4, cd: 3000, ttl: 20000 })
+      case 'corpse_run_none': return say(L.corpse_run_none, d, { cd: 15000 })
+      case 'camera': if (d.mode === 'third' && d.auto) say(L.camera.third, d, { cd: 180000 }); return
+      case 'sleep': return
       case 'enchanted': return say(L.enchanted, d, { emotion: 'hype', priority: 4, cd: 3000, ttl: 20000 })
       case 'enchant_table': return say(L.enchant_table, d, { emotion: 'hype', priority: 2 })
       case 'obsidian': if (d.count % 3 === 1) say(L.obsidian, d, { cd: 30000 }); return
@@ -584,7 +619,6 @@ class StreamerBrain extends EventEmitter {
       case 'critical_hp': return say(L.critical_hp, d, { emotion: 'panic', priority: 4, key: 'low_hp', cd: 25000 })
       case 'ate': return d.underPressure ? say(L.ate_pressure, d, { emotion: 'hype', priority: 2 }) : say(L.ate, { item_de: itemDe(d.item) }, { cd: 90000 })
       case 'death': this.queue = []; return say(L.death, d, { emotion: 'panic', priority: 6, cd: 3000, ttl: 20000 })
-      case 'recover_done': return say(d.ok ? L.recover_done.ok : L.recover_done.fail, d, { priority: 2 })
       case 'stuck': return say(d.depth > 1 ? L.stuck.hole : L.stuck.other, d, { cd: 30000, emotion: 'hype' })
       case 'night': return say(L.night, d, { cd: 300000 })
       case 'day': return say(L.day, d, { cd: 300000 })
@@ -595,6 +629,48 @@ class StreamerBrain extends EventEmitter {
       default:
         void s
     }
+  }
+
+  // ---------------------------------------------------------------- Selbstbewusste Hilferufe
+  /**
+   * Prüft die echte Lage (Gegnerzahl, Waffe, Leben, Hunger) und nennt ein konkretes Gift aus der
+   * LIVE-Konfiguration, das jetzt helfen würde. Nichts ist fest verdrahtet: Name und Wirkung
+   * kommen aus getSupportGift().
+   */
+  tacticalCallout () {
+    const s = this.status()
+    if (!s.connected || !this.enabled) return false
+    const inv = s.inv || {}
+    const gift = kinds => (this.deps.getSupportGift ? this.deps.getSupportGift(kinds) : null)
+    const v = this.stateVars()
+    const hp = s.health ?? 20
+    const mobsDe = { zombie: 'Zombies', skeleton: 'Skelette', creeper: 'Creeper', spider: 'Spinnen', vindicator: 'Diener', piglin_brute: 'Piglin-Barbaren', husk: 'Wüstenzombies' }
+    if (s.fighting && (s.threats || 0) >= 3 && (inv.swordTier ?? 0) <= 2) {
+      if (!this.cooldown('ev:callout', 25000) || !this.cooldown('ev:callout_weapon', 60000)) return false
+      const g = gift(['drop_weapon', 'drop_diamond_gear', 'drop_armor'])
+      const missing = Math.max(0, 2 - (inv.rawIronTotal || 0))
+      const weapon = ['meine bloßen Fäuste', 'mein Holzschwert', 'mein Steinschwert'][inv.swordTier ?? 0]
+      const vars = { ...v, mobs: mobsDe[(s.threatNames || [])[0]] || 'Gegner', weapon, weapon_dat: ['bloßen Fäusten', 'einem Holzschwert', 'einem Steinschwert'][inv.swordTier ?? 0], iron_part: missing > 0 ? `Mir fehlen noch ${missing} Eisen für ein Eisenschwert – oder ` : 'Ich brauch dringend was Besseres – ', gift: g ? g.name : '', gear: g ? g.gear : '' }
+      return this.say(this.line(g ? L.callout_weapon : L.callout_weapon_nogift, vars), { emotion: 'panic', priority: 4, kind: 'callout' })
+    }
+    if (hp <= 8 && !(inv.food > 0)) {
+      const g = gift(['heal', 'support_apple', 'support_random'])
+      if (!g || !this.cooldown('ev:callout', 25000) || !this.cooldown('ev:callout_heal', 60000)) return false
+      return this.say(this.line(L.callout_heal, { ...v, gift: g.name }), { emotion: 'panic', priority: 4, kind: 'callout' })
+    }
+    if ((s.food ?? 20) <= 6 && !(inv.food > 0) && !s.fighting) {
+      const g = gift(['drop_food', 'heal', 'support_random'])
+      if (!g || !this.cooldown('ev:callout', 25000) || !this.cooldown('ev:callout_food', 90000)) return false
+      return this.say(this.line(L.callout_food, { ...v, gift: g.name }), { emotion: 'chill', priority: 2, kind: 'callout' })
+    }
+    return false
+  }
+
+  onLiveConnected () { this.lastExternal = Date.now(); this.say(this.line(L.live_connected), { emotion: 'hype', priority: 5, kind: 'system', ttl: 20000 }) }
+
+  onGiftDiscovered (viewer, gift) {
+    if (!this.cooldown('ev:discovered', 20000)) return
+    this.say(this.line(L.gift_discovered, { user: this.viewer(viewer).name, gift: gift.name }), { emotion: 'hype', priority: 2, kind: 'gift' })
   }
 
   // ---------------------------------------------------------------- Idle-Monologe

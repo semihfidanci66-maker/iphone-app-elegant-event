@@ -9,7 +9,7 @@
  */
 
 const GOAL_LABEL = {
-  woodKit: 'Holzwerkzeug', stoneKit: 'Steinwerkzeug & Ofen', food: 'Essensvorrat', ironKit: 'Eisenausrüstung & Schild', waterBucket: 'Wassereimer', base: 'Haus bauen', diamondPick: 'Diamantspitzhacke', enchanted: 'Ausrüstung verzaubern', blazeRods: 'Nether & Lohenruten', diamonds: 'Diamanten', portal: 'Netherportal'
+  woodKit: 'Holzwerkzeug', bed: 'Bett craften', stoneKit: 'Steinwerkzeug & Ofen', food: 'Essensvorrat', ironKit: 'Eisenausrüstung & Schild', waterBucket: 'Wassereimer', base: 'Haus bauen', diamondPick: 'Diamantspitzhacke', enchanted: 'Ausrüstung verzaubern', blazeRods: 'Nether & Lohenruten', diamonds: 'Diamanten', portal: 'Netherportal'
 }
 
 class Planner {
@@ -18,7 +18,7 @@ class Planner {
     this.cooldowns = new Map() // Aktionsname -> bis wann gesperrt
     this.failures = new Map()
     this.goalStack = [] // Zuschauer-/Operator-Ziele (oben = höchste Priorität)
-    this.progression = ['woodKit', 'stoneKit', 'food', 'ironKit', 'waterBucket', 'base', 'diamondPick', 'enchanted', 'blazeRods']
+    this.progression = ['woodKit', 'stoneKit', 'food', 'bed', 'ironKit', 'waterBucket', 'base', 'diamondPick', 'enchanted', 'blazeRods']
     this.actions = this.buildActions()
     this.lastPlanKey = ''
   }
@@ -46,6 +46,7 @@ class Planner {
       stoneKit: pick >= 2 && sword >= 2 && (g.has('furnace') || baseDone || !!m.furnaceJob),
       rawFood: ctx.food.foodCount() >= 5,
       food: ctx.food.cookedCount() >= 5,
+      bed: !!a.findMatch(/_bed$/) || !!m.bedPlaced,
       rawIron: rawIron + iron >= 6 || ironKit,
       ironIngots: iron >= 6 || ironKit,
       ironKit,
@@ -84,6 +85,15 @@ class Planner {
       A('CraftStoneKit', 'Steinwerkzeug craften', 'craft', ['cobble', 'woodPick'], ['stoneKit'], 1, async t => ctx.gear.craftUpgrades(t)),
       A('Hunt', 'Tiere jagen', 'hunt', ['woodKit'], ['rawFood'], 4, async t => ctx.food.hunt(8, t)),
       A('CookFood', 'Fleisch braten', 'smelt', ['rawFood', 'stoneKit'], ['food'], 3, async t => ctx.food.smeltAll(t)),
+      A('GetBed', 'Schafe für ein Bett scheren', 'hunt', ['woodKit'], ['bed'], 5, async t => {
+        // 3 Schafe -> 3 Wolle, dazu 3 Planken an der Werkbank
+        for (let i = 0; i < 3 && ctx.gear.sameWool() < 3; i++) await ctx.food.hunt(3 - ctx.gear.sameWool(), t, ['sheep'])
+        if (ctx.gear.sameWool() < 3) return false
+        if (!(await ctx.crafting.ensurePlanks(3, t))) await ctx.wood.gather(Math.ceil(ctx.crafting.woodValue() / 4) + 1, t)
+        const ok = await ctx.crafting.craftAtTable([[ctx.gear.sameWoolName().replace('_wool', '_bed'), 1]], t)
+        if (ok) ctx.emit('bed_crafted', {})
+        return ok
+      }),
       A('MineIron', 'Eisen suchen', 'mine', ['stoneKit'], ['rawIron'], 8, async t => {
         const ok = await ctx.mining.mineFor('iron', () => a().count('raw_iron') + a().count('iron_ingot') >= 12, t)
         await surface(t)
