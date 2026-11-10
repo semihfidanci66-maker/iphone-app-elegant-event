@@ -50,7 +50,15 @@ input, select { font: inherit; width: 100%; color: var(--ink); background: #0e15
   </div>
   <div class="card">
     <h2>Notfall</h2>
-    <div class="grid"><button class="big" id="unstuck">Unstuck</button><button id="pause">Pause</button><button class="danger" id="respawn">Respawn</button><button id="heal">Goldapfel geben</button></div>
+    <div class="grid"><button class="big" id="unstuck">Unstuck</button><button id="pause">Pause</button><button id="corpse">Loot holen</button><button id="sleepBtn">Schlafen</button><button class="danger" id="respawn">Respawn</button><button id="heal">Goldapfel geben</button></div>
+  </div>
+  <div class="card">
+    <h2>Kamera</h2>
+    <div class="grid three" id="cams"><button data-cam="ego">👁️ Ego</button><button data-cam="third">🎥 Freecam</button><button data-cam="auto">🔄 Auto</button></div>
+  </div>
+  <div class="card">
+    <h2>Ausrüstung geben</h2>
+    <div class="grid" id="gearBtns"><button data-kit="iron">Eisen-Set + Schild</button><button data-kit="dia">Diamant-Set</button><button data-kit="tools">Werkzeug-Set</button><button data-kit="bed">Bett</button></div>
   </div>
   <div class="card">
     <h2>KI-Ziel erzwingen</h2>
@@ -77,7 +85,7 @@ const $ = id => document.getElementById(id)
 const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash)
 let key = new URLSearchParams(location.search).get('k')
 try { if (key) localStorage.setItem('remoteKey', key); else key = localStorage.getItem('remoteKey') } catch (_) {}
-let ws = null; let st = { paused: false }
+let ws = null; let st = { paused: false }; let built = false
 const toast = t => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1600) }
 const send = (m, label) => {
   if (DEMO) return toast('Vorschau: ' + label)
@@ -107,6 +115,12 @@ for (const [id, label, n] of ITEMS) { const b = document.createElement('button')
 $('unstuck').onclick = () => send({ type: 'BOT', cmd: 'unstuck' }, 'Unstuck')
 $('respawn').onclick = () => send({ type: 'BOT', cmd: 'respawn' }, 'Respawn')
 $('pause').onclick = () => send({ type: 'BOT', cmd: st.paused ? 'resume' : 'pause' }, st.paused ? 'Weiter' : 'Pause')
+$('corpse').onclick = () => send({ type: 'BOT', cmd: 'corpse' }, 'Corpse-Run')
+$('sleepBtn').onclick = () => send({ type: 'BOT', cmd: 'goal', goal: 'sleep' }, 'Schlafen')
+const KITS = { iron: ['iron_sword', 'iron_helmet', 'iron_chestplate', 'iron_leggings', 'iron_boots', 'shield'], dia: ['diamond_sword', 'diamond_pickaxe', 'diamond_chestplate'], tools: ['iron_pickaxe', 'iron_axe', 'iron_shovel'], bed: ['red_bed'] }
+for (const b of document.querySelectorAll('[data-kit]')) b.onclick = () => { if (DEMO) return toast('Vorschau: ' + b.textContent); for (const it of KITS[b.dataset.kit]) ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: 'BOT', cmd: 'give', item: it, count: 1 })); send({ type: 'BOT', cmd: 'goal', goal: 'gear' }, b.textContent) }
+for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => { send({ type: 'CAMERA', mode: b.dataset.cam }, b.textContent); markCam(b.dataset.cam) }
+const markCam = m => { for (const b of document.querySelectorAll('[data-cam]')) b.classList.toggle('big', b.dataset.cam === m) }
 $('heal').onclick = () => send({ type: 'BOT', cmd: 'give', item: 'golden_apple', count: 1 }, 'Goldapfel')
 const say = () => { const t = $('say').value.trim(); if (!t) return; send({ type: 'SAY', text: t, emotion: $('emo').value }, 'Sprachzeile'); $('say').value = '' }
 $('sayBtn').onclick = say
@@ -117,14 +131,15 @@ function connect () {
   ws.onopen = () => { $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'verbunden' }
   ws.onmessage = e => {
     let m; try { m = JSON.parse(e.data) } catch (_) { return }
-    if (m.type === 'DENIED') { $('denied').hidden = false; $('app').hidden = true; ws.onclose = null; $('conn').lastElementChild.textContent = 'kein Zugriff' } else if (m.type === 'STATE') { status(m.status); build(m.goals, m.rules) } else if (m.type === 'STATUS') status(m.status)
+    if (m.type === 'DENIED') { $('denied').hidden = false; $('app').hidden = true; ws.onclose = null; $('conn').lastElementChild.textContent = 'kein Zugriff' } else if (m.type === 'STATE') { status(m.status); markCam(m.config.cameraMode); if (!built) { built = true; build(m.goals, m.rules.filter(r => r.inLegend || r.custom)) } } else if (m.type === 'STATUS') status(m.status)
   }
   ws.onclose = () => { $('conn').className = 'dot'; $('conn').lastElementChild.textContent = 'getrennt'; setTimeout(connect, 1500) }
 }
 if (DEMO) {
   $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'Vorschau'
+  markCam('auto')
   status({ connected: true, activity: 'combat', goal: 'Kampf: 3 Gegner', fighting: true, health: 11, food: 15, pos: { y: 64 }, threats: 3, paused: false })
-  build([['wood', 'Holz holen'], ['house', 'Haus bauen'], ['iron_sword', 'Eisenschwert'], ['diamonds', 'Diamanten'], ['nether', 'Nether'], ['eat', 'Essen']].map(([id, label]) => ({ id, label })),
+  build([['wood', 'Holz holen'], ['house', 'Haus bauen'], ['bed', 'Bett craften'], ['iron_sword', 'Eisenschwert'], ['diamonds', 'Diamanten'], ['nether', 'Nether'], ['eat', 'Essen'], ['mine', 'Minen gehen']].map(([id, label]) => ({ id, label })),
     [['🌹', 'Rose'], ['🍦', 'Eistüte'], ['💖', 'Fingerherz'], ['🍩', 'Donut'], ['🫶', 'Handherz'], ['🌌', 'Galaxie']].map(([emoji, giftName], i) => ({ id: 'g' + i, emoji, giftName, enabled: true })))
 } else connect()
 </script>

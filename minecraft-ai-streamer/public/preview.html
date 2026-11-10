@@ -14,7 +14,10 @@ h1 { font: 700 24px/1.2 var(--display); margin: 0; letter-spacing: .01em; text-w
 .tabs button[aria-selected="true"] { background: var(--cyan); color: #04202a; border-color: transparent; }
 .tabs button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .stageWrap { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #000; }
-.stage16 { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; }
+.stage16 { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; margin: 0 auto; }
+.stage16.tall { aspect-ratio: 9 / 16; width: min(100%, 460px); }
+.stage16.design { aspect-ratio: auto; height: min(86vh, 900px); width: 100%; }
+.tabs button[aria-pressed="true"] { background: var(--cyan); color: #04202a; border-color: transparent; }
 .stage16 canvas, .stage16 iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
 .stage16 iframe { background: transparent; }
 .dash iframe { width: 100%; height: 980px; border: 0; display: block; background: var(--bg); }
@@ -43,12 +46,16 @@ code { font: 13px ui-monospace, Consolas, monospace; color: var(--gold); }
   </div>
 
   <div id="p-overlay" role="tabpanel" aria-labelledby="t-overlay">
+    <div class="tabs" style="margin-bottom:10px" role="group" aria-label="Overlay-Designer">
+      <button id="pvDesigner" aria-pressed="false">🎨 Designer-Modus</button>
+      <button data-pf="16:9" aria-pressed="true">🖥️ 16:9</button><button data-pf="9:16" aria-pressed="false">📱 9:16</button><button data-pf="custom" aria-pressed="false">📐 Split</button>
+    </div>
     <div class="stageWrap">
-      <div class="stage16">
+      <div class="stage16" id="pvStage">
         <canvas id="mc" width="1280" height="720" aria-label="Platzhalter für dein aufgenommenes Minecraft-Fenster"></canvas>
-        <iframe src="studio-overlay.html#demo" title="Studio-Overlay im Demo-Modus" loading="eager"></iframe>
+        <iframe id="pvOverlay" src="studio-overlay.html#demo" title="Studio-Overlay im Demo-Modus" loading="eager"></iframe>
       </div>
-      <div class="cap">Der Hintergrund steht für dein echtes Minecraft-Fenster aus OBS. Das Overlay selbst ist transparent, 1920×1080, und lässt die Bildmitte frei. Die Demo dauert rund 40 Sekunden: Rose, Combo, Eistüte, Galaxie-Endboss, Mining.</div>
+      <div class="cap">Der Hintergrund steht für dein echtes Minecraft-Fenster aus OBS. Im Designer-Modus ziehst du jedes Widget mit der Maus, skalierst es am gelben Griff oder per Regler und blendest es mit dem Auge aus. Die Demo dauert rund 40 Sekunden: Rose, Combo, Eistüte, Galaxie-Boss, Mining.</div>
     </div>
   </div>
 
@@ -69,9 +76,9 @@ code { font: 13px ui-monospace, Consolas, monospace; color: var(--gold); }
   </div>
 
   <div class="facts">
-    <div><h2>Facecam</h2><p>3D-Skin von der Brust bis zum Kopf. Mund, Kopfnicken und Gesten folgen dem Pegel der Sprachausgabe, der Arm schlägt bei jedem Schwerthieb mit.</p></div>
+    <div><h2>Facecam</h2><p>Der Kopf folgt der echten Blickrichtung des Bots, der Mund dem Pegel der Stimme. Der Arm schlägt bei jedem Schwerthieb mit, beim Schildblock geht der linke Arm hoch.</p></div>
     <div><h2>Untertitel</h2><p>Wort für Wort im Takt der Stimme. Die Farbe des aktuellen Worts zeigt die Stimmung: ruhig, Hype oder Panik.</p></div>
-    <div><h2>Gift-Legende</h2><p>Rechts am Rand, mit Preis und Wirkung. Sie aktualisiert sich, sobald du im Dashboard eine Regel änderst.</p></div>
+    <div><h2>Dashboard</h2><p>Oben links den TikTok-Namen eingeben und verbinden: Die Vorschau simuliert den Watchdog, der auf den Live-Start wartet. Darunter der Gift-Katalog mit eigenem Geschenk.</p></div>
     <div><h2>Im Stream</h2><p>In OBS als Browserquelle <code>localhost:3000/studio-overlay.html</code> einbinden. Dort läuft keine Demo, nur echte Ereignisse.</p></div>
   </div>
 </div>
@@ -90,6 +97,20 @@ function show (id) {
   }
 }
 tabs.forEach(t => { t.onclick = () => show(t.id) })
+
+// Designer-Modus und Format steuern das eingebettete Overlay per postMessage
+const pvFrame = document.getElementById('pvOverlay'); const pvStage = document.getElementById('pvStage')
+let pvDesign = false; let pvFormat = '16:9'
+function pvApply () {
+  pvStage.classList.toggle('design', pvDesign)
+  pvStage.classList.toggle('tall', !pvDesign && pvFormat === '9:16')
+  document.getElementById('mc').hidden = pvDesign
+  document.getElementById('pvDesigner').setAttribute('aria-pressed', pvDesign)
+  for (const b of document.querySelectorAll('[data-pf]')) b.setAttribute('aria-pressed', b.dataset.pf === pvFormat)
+}
+document.getElementById('pvDesigner').onclick = () => { pvDesign = !pvDesign; pvFrame.contentWindow.postMessage({ type: 'designer', on: pvDesign }, '*'); pvApply() }
+for (const b of document.querySelectorAll('[data-pf]')) b.onclick = () => { pvFormat = b.dataset.pf; pvFrame.contentWindow.postMessage({ type: 'format', format: pvFormat }, '*'); pvApply() }
+addEventListener('message', e => { const m = e.data || {}; if (m.type === 'overlay-layout' && m.format) { pvFormat = m.format; pvApply() } else if (m.type === 'overlay-designer') { pvDesign = !!m.on; pvApply() } })
 
 // Blockige Platzhalter-Landschaft (steht für die Minecraft-Aufnahme)
 ;(function () {

@@ -5,20 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KI-Streamer Regie</title>
 <style>
-/* Layout: schlanke Regie-Seite, zwei Spalten (Steuerung | Gifts + Log), auf dem Handy einspaltig. */
+/* Layout: oben links der TikTok-Connector, darunter zwei Spalten (Steuerung | Gifts + Live-Feed). */
 :root { color-scheme: dark; --bg: #0c1118; --panel: #141c27; --line: #243142; --ink: #e8eef6; --dim: #8fa1b8; --cyan: #46e0ff; --lime: #8bea5c; --gold: #ffd257; --red: #ff5a6a; --r: 12px; }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, 'Segoe UI', system-ui, sans-serif; padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-h1 { font-size: 18px; margin: 0; letter-spacing: .02em; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, 'Segoe UI', system-ui, sans-serif; padding-block: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 0 0 10px; }
-header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; margin-bottom: 14px; }
+@media (max-width: 860px) { header, main { grid-template-columns: minmax(0, 1fr) !important; } }
+#tik { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; min-width: 0; }
+#tikBadge { display: block; margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: #0e151e; border: 1px solid var(--line); font-weight: 700; font-size: 13.5px; cursor: help; }
+#tikBadge.live { border-color: #2f6b2a; background: #12240f; color: var(--lime); }
+#tikBadge.wait { border-color: #6b5a1c; background: #241f0c; color: var(--gold); }
+#tikDiag { color: var(--dim); font-size: 12px; margin-top: 6px; min-height: 17px; overflow-wrap: anywhere; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; }
 .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
 .chip.ok i { background: var(--lime); } .chip.bad i { background: var(--red); } .chip.warn i { background: var(--gold); }
-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 14px; align-items: start; }
-@media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px; align-items: start; }
 .col { display: grid; gap: 14px; min-width: 0; }
 section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; min-width: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -28,35 +32,42 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 input { flex: 1 1 120px; }
 button { cursor: pointer; font-weight: 600; background: #1b2635; }
 button:hover { background: #233247; }
-button.pri { background: var(--cyan); color: #04202a; border-color: transparent; }
+button.pri, button.on { background: var(--cyan); color: #04202a; border-color: transparent; }
 button.danger { background: #3a1820; border-color: #6b2a35; color: #ffb3bb; }
 button.sm { padding: 5px 9px; font-size: 12.5px; }
-label { color: var(--dim); font-size: 12px; display: grid; gap: 4px; flex: 1 1 110px; }
-.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }
-.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+label { color: var(--dim); font-size: 12px; display: grid; gap: 4px; flex: 1 1 100px; min-width: 0; }
+.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
 .kv div { background: #0e151e; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .kv b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
 .kv span { color: var(--dim); font-size: 11px; }
 table { width: 100%; border-collapse: collapse; }
-td, th { padding: 5px 4px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; }
-th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-td input, td select { width: 100%; padding: 5px 6px; }
-td.n input { width: 64px; } td.e input { width: 44px; text-align: center; }
-.tw { overflow-x: auto; }
-#log { height: 190px; overflow: auto; font: 12px/1.5 ui-monospace, Consolas, monospace; background: #0a0f15; border: 1px solid var(--line); border-radius: 8px; padding: 8px; color: #b9c6d8; }
+td, th { padding: 4px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; white-space: nowrap; }
+th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; position: sticky; top: 0; background: var(--panel); }
+td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width: 62px; padding: 4px 6px; flex: none; } td input[type=text] { width: 120px; padding: 4px 6px; }
+.tw { overflow: auto; max-height: 420px; border: 1px solid var(--line); border-radius: 8px; }
+.ico { width: 24px; height: 24px; object-fit: contain; vertical-align: middle; } .emo { font-size: 18px; }
+.tag { font-size: 10px; padding: 1px 6px; border-radius: 99px; background: #233247; color: var(--cyan); margin-left: 6px; }
+#feed, #log { height: 200px; overflow: auto; background: #0a0f15; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 13px; }
+#log { font: 12px/1.5 ui-monospace, Consolas, monospace; color: #b9c6d8; height: 150px; }
 #log .warn { color: var(--gold); } #log .error { color: var(--red); }
+#feed div { padding: 2px 0; overflow-wrap: anywhere; } #feed b { color: var(--cyan); } #feed .gift b { color: var(--gold); } #feed .goal { color: var(--lime); font-weight: 600; }
 #qr { width: 150px; height: 150px; border-radius: 8px; background: #fff; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--cyan); }
 .hint { color: var(--dim); font-size: 12px; margin-top: 6px; }
 #plan { color: var(--lime); font-weight: 600; }
+#builder { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; margin-top: 10px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>KI-Streamer Regie</h1>
+  <div id="tik">
+    <h2>TikTok Live · Auto-Connector</h2>
+    <div class="row"><input id="tikUser" placeholder="@name oder https://www.tiktok.com/@name/live" autocomplete="off" spellcheck="false" aria-label="TikTok-Benutzername"><button class="pri" id="tikBtn">Verbinden</button></div>
+    <span id="tikBadge" title="">⚪ Nicht verbunden</span>
+    <div id="tikDiag"></div>
+  </div>
   <div class="chips">
     <span class="chip" id="cBot"><i></i><span>Bot offline</span></span>
-    <span class="chip" id="cTik"><i></i><span>TikTok getrennt</span></span>
     <span class="chip" id="cTts"><i></i><span>Stimme</span></span>
     <span class="chip" id="cWs"><i></i><span>Server</span></span>
   </div>
@@ -64,24 +75,26 @@ td.n input { width: 64px; } td.e input { width: 44px; text-align: center; }
 <main>
   <div class="col">
     <section>
-      <h2>TikTok Live</h2>
-      <div class="row"><input id="tikUser" placeholder="@dein_tiktok_name" autocomplete="off"><button class="pri" id="tikBtn">Verbinden</button></div>
-      <div class="hint" id="tikHint">1 Klick: verbindet sich mit deinem laufenden Live-Stream.</div>
-    </section>
-    <section>
       <h2>Bot</h2>
       <div class="row" id="plan">–</div>
       <div class="kv" id="kv" style="margin-top:10px"></div>
       <div class="row" style="margin-top:10px">
-        <button id="bStart">Start</button><button id="bPause">Pause</button><button id="bUnstuck">Unstuck</button><button id="bRespawn" class="danger">Respawn</button>
+        <button id="bStart">Start</button><button id="bPause">Pause</button><button id="bUnstuck">Unstuck</button><button id="bCorpse">Loot holen</button><button id="bSleep">Schlafen</button><button id="bRespawn" class="danger">Respawn</button>
       </div>
       <div class="row"><select id="goalSel" aria-label="Ziel"></select><button id="goalBtn">Ziel erzwingen</button></div>
-      <div class="row"><input id="giveItem" placeholder="Item, z. B. cooked_beef" list="items"><input id="giveN" type="number" value="8" min="1" max="64" style="flex:0 0 70px" aria-label="Anzahl"><button id="giveBtn">Geben</button>
-        <datalist id="items"><option value="cooked_beef"><option value="golden_apple"><option value="cobblestone"><option value="iron_ingot"><option value="diamond"><option value="shield"><option value="water_bucket"><option value="torch"><option value="oak_log"></datalist></div>
+      <div class="row"><input id="giveItem" placeholder="Item, z. B. cooked_beef" list="items" aria-label="Item"><input id="giveN" type="number" value="8" min="1" max="64" style="flex:0 0 70px" aria-label="Anzahl"><button id="giveBtn">Geben</button>
+        <datalist id="items"><option value="cooked_beef"><option value="golden_apple"><option value="cobblestone"><option value="iron_ingot"><option value="diamond"><option value="shield"><option value="water_bucket"><option value="torch"><option value="oak_log"><option value="red_bed"><option value="iron_sword"></datalist></div>
+    </section>
+    <section>
+      <h2>Kamera &amp; Overlay</h2>
+      <div class="row" id="camBtns"><button data-cam="ego">👁️ Ego-Perspektive</button><button data-cam="third">🎥 3rd-Person-Freecam</button><button data-cam="auto">🔄 Auto-Regie</button></div>
+      <div class="row"><label>Dein Minecraft-Name (Aufnahme-Account)<input id="camPlayer" placeholder="wird in den Zuschauermodus gesetzt"></label></div>
+      <div class="row"><button id="dzBtn">🎨 Designer-Modus</button><button data-fmt="16:9">🖥️ 16:9</button><button data-fmt="9:16">📱 9:16</button><button data-fmt="custom">📐 Split</button><button id="dzReset" class="sm">Layout zurücksetzen</button></div>
+      <div class="hint">Designer: Widgets im Overlay ziehen und skalieren (auch per F2 direkt im Overlay). Änderungen landen sofort in OBS.</div>
     </section>
     <section>
       <h2>Sprachzeile</h2>
-      <div class="row"><input id="sayTxt" placeholder="Was soll der Streamer sagen?"><select id="sayEmo" aria-label="Stimmung"><option value="chill">Chill</option><option value="hype">Hype</option><option value="panic">Panik</option></select><button id="sayBtn">Sprechen</button></div>
+      <div class="row"><input id="sayTxt" placeholder="Was soll der Streamer sagen?" aria-label="Sprachzeile"><select id="sayEmo" aria-label="Stimmung"><option value="chill">Chill</option><option value="hype">Hype</option><option value="panic">Panik</option></select><button id="sayBtn">Sprechen</button></div>
     </section>
     <section>
       <h2>Minecraft-Server</h2>
@@ -92,20 +105,27 @@ td.n input { width: 64px; } td.e input { width: 44px; text-align: center; }
       <h2>Handy-Fernbedienung</h2>
       <div class="row" style="align-items:flex-start">
         <img id="qr" alt="QR-Code für die Handy-Fernbedienung" hidden>
-        <div style="flex:1 1 180px;min-width:0"><button id="tunBtn" class="pri">Cloud-Tunnel starten</button><div class="mono" id="tunUrl" style="margin-top:8px"></div><div class="hint" id="tunHint">Erzeugt eine öffentliche URL mit geheimem Schlüssel. QR scannen, fertig – funktioniert über 5G.</div></div>
+        <div style="flex:1 1 180px;min-width:0"><button id="tunBtn" class="pri">Cloud-Tunnel starten</button><div class="mono" id="tunUrl" style="margin-top:8px"></div><div class="hint" id="tunHint"></div></div>
       </div>
     </section>
   </div>
   <div class="col">
     <section>
-      <h2>Gift-Regeln</h2>
-      <div class="tw"><table><thead><tr><th>An</th><th></th><th>Gift</th><th>Coins</th><th>Aktion im Spiel</th><th>Legende</th><th>Test</th></tr></thead><tbody id="rules"></tbody></table></div>
-      <div class="row" style="margin-top:10px"><input id="simUser" value="Lukas" placeholder="Test-Zuschauer" style="flex:0 1 150px" aria-label="Test-Zuschauer"><input id="simN" type="number" value="1" min="1" max="50" style="flex:0 0 70px" aria-label="Combo"><button id="resetRules" class="sm">Standard</button><span class="hint" style="margin:0">Änderungen landen sofort im Overlay.</span></div>
+      <h2>Gift-Katalog <span id="giftCount" style="color:var(--cyan)"></span></h2>
+      <div class="row"><input id="giftFilter" placeholder="Gift suchen …" aria-label="Gift suchen"><input id="simUser" value="Lukas" style="flex:0 1 120px" aria-label="Test-Zuschauer"><input id="simN" type="number" value="1" min="1" max="50" style="flex:0 0 64px" aria-label="Combo"><button id="resetRules" class="sm">Standard</button></div>
+      <div class="tw" style="margin-top:8px"><table><thead><tr><th>An</th><th>Leg.</th><th></th><th>Gift</th><th>Coins</th><th>Aktion</th><th>Menge</th><th>HP×</th><th>Text in der Legende</th><th></th></tr></thead><tbody id="rules"></tbody></table></div>
+      <div id="builder">
+        <h2 style="margin-bottom:8px">+ Eigenes Geschenk hinzufügen</h2>
+        <div class="row"><label>Name<input id="nName" placeholder="z. B. Drache"></label><label style="flex:0 1 84px">Coins<input id="nCoins" type="number" value="50" min="1"></label><label style="flex:0 1 70px">Emoji<input id="nEmoji" value="🎁"></label><label>Icon-URL (optional)<input id="nIcon" placeholder="https://…"></label></div>
+        <div class="row"><label>Aktion<select id="nAction"></select></label><label id="nMobWrap">Mob<select id="nMob"></select></label><label style="flex:0 1 80px">Menge<input id="nAmount" type="number" value="1" min="1" max="20"></label><label style="flex:0 1 80px">HP×<input id="nHp" type="number" value="1" min="0.5" max="10" step="0.5"></label><button class="pri" id="nAdd" style="align-self:end">Hinzufügen</button></div>
+        <div class="hint">Unbekannte Gifts, die live ankommen, werden automatisch hier aufgenommen (Auto-Discovery) und lösen eine zum Coin-Wert passende Aktion aus.</div>
+      </div>
     </section>
     <section>
-      <h2>Chat-Simulator</h2>
-      <div class="row"><input id="chatTxt" placeholder="z. B. Bau ein Haus"><button id="chatBtn">Senden</button></div>
-      <div class="row grid2" id="chatQuick"></div>
+      <h2>Live-Feed (Chat · Gifts · Follows)</h2>
+      <div id="feed" aria-live="off"></div>
+      <div class="row"><input id="chatTxt" placeholder="Chat simulieren, z. B. Bau ein Haus" aria-label="Chat simulieren"><button id="chatBtn">Senden</button></div>
+      <div class="row" id="chatQuick"></div>
     </section>
     <section>
       <h2>Protokoll</h2>
@@ -117,110 +137,169 @@ td.n input { width: 64px; } td.e input { width: 44px; text-align: center; }
 'use strict'
 const $ = id => document.getElementById(id)
 const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash)
-let ws = null; let state = null; let dirtyRules = false
+let ws = null; let state = null; let rulesKey = ''
 const send = m => { if (DEMO) return demoSend(m); if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)) }
 const chip = (el, cls, text) => { el.className = 'chip ' + cls; el.lastElementChild.textContent = text }
-const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'Kampf', eat: 'Essen', sleep: 'Schlafen', explore: 'Erkunden', idle: 'Basis', recover: 'Loot holen', paused: 'Pause', offline: 'Offline' }
+const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'Kampf', eat: 'Essen', sleep: 'Schlafen', corpse: 'Corpse-Run', explore: 'Erkunden', idle: 'Basis', paused: 'Pause', offline: 'Offline' }
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e }
+
+/* ---- TikTok oben links: säubern, dauerhaft merken (localStorage + Server), automatisch verbinden ---- */
+function sanitize (input) {
+  let s = String(input || '').trim()
+  const m = /tiktok\.com\/@([^/?#\s]+)/i.exec(s)
+  if (m) s = m[1]
+  return s.replace(/^https?:\/\/\S*?\/@?/i, '').replace(/[/?#].*$/, '').replace(/^@+/, '').replace(/\s+/g, '').replace(/[^\p{L}\p{N}_.]/gu, '').slice(0, 30)
+}
+const store = { get: k => { try { return localStorage.getItem(k) } catch (_) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (_) {} } }
+function tikConnect () {
+  const name = sanitize($('tikUser').value)
+  $('tikUser').value = name
+  store.set('tiktokUsername', name)
+  send({ type: 'TIKTOK_CONNECT', username: name })
+}
+$('tikUser').addEventListener('change', () => { const n = sanitize($('tikUser').value); $('tikUser').value = n; store.set('tiktokUsername', n) })
+$('tikUser').addEventListener('keydown', e => { if (e.key === 'Enter') tikConnect() })
+$('tikBtn').onclick = () => (state && state.tiktok.phase !== 'idle' ? send({ type: 'TIKTOK_DISCONNECT' }) : tikConnect())
+let wasLive = false
+function renderTik (t) {
+  const b = $('tikBadge')
+  b.textContent = t.badge
+  b.className = t.phase === 'live' ? 'live' : t.phase === 'idle' ? '' : 'wait'
+  b.title = t.diagnostic || (t.phase === 'live' ? `Engine ${t.engine} aktiv` : 'Kein Fehler')
+  $('tikDiag').textContent = t.diagnostic ? 'Diagnose: ' + t.diagnostic : t.phase === 'live' ? `Engine ${t.engine === 'B' ? 'B (lokales Relay)' : 'A (direkt)'} · Gifts, Chat und Likes kommen in Echtzeit an.` : t.phase === 'idle' ? 'Name eingeben – er wird gespeichert und beim nächsten Start automatisch verbunden.' : ''
+  $('tikBtn').textContent = t.phase === 'idle' ? 'Verbinden' : 'Trennen'
+  if (t.phase === 'live' && !wasLive) chime()
+  wasLive = t.phase === 'live'
+}
+let actx = null
+function chime () {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)()
+    if (actx.state !== 'running') return
+    ;[660, 880, 1320].forEach((f, i) => { const o = actx.createOscillator(); const g = actx.createGain(); o.type = 'triangle'; o.frequency.value = f; const t = actx.currentTime + i * 0.1; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.15, t + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3); o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + 0.35) })
+  } catch (_) {}
+}
+addEventListener('pointerdown', () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume() } catch (_) {} }, { passive: true })
 
 function renderStatus (s) {
   if (!s) return
   chip($('cBot'), s.connected ? (s.fighting ? 'warn' : 'ok') : 'bad', s.connected ? `${s.username} · ${ACT[s.activity] || s.activity}` : 'Bot offline')
-  $('plan').textContent = s.connected ? (s.goal || ACT[s.activity] || '–') + (s.viewerGoals && s.viewerGoals.length ? `  ·  Wunsch: ${s.viewerGoals.map(g => g.label + (g.by ? ' (' + g.by + ')' : '')).join(', ')}` : '') : 'Bot ist nicht in der Welt'
+  $('plan').textContent = s.connected ? (s.goal || ACT[s.activity] || '–') + (s.viewerGoals && s.viewerGoals.length ? `  ·  Wunsch: ${s.viewerGoals.map(g => g.label + (g.by ? ' (' + g.by + ')' : '')).join(', ')}` : '') + (s.lastDeath ? `  ·  Loot despawnt in ${s.lastDeath.secondsLeft}s` : '') : 'Bot ist nicht in der Welt'
   const i = s.inv || {}
-  const cells = s.connected ? [['Herzen', (s.health / 2).toFixed(1)], ['Hunger', s.food], ['Y', s.pos.y], ['Gegner', s.threats], ['Holz', i.logs], ['Stein', i.cobble], ['Eisen', i.iron], ['Diamant', i.diamonds], ['Essen', i.food], ['Kills', s.kills], ['Tode', s.deaths], ['Level', s.xpLevel]] : []
+  const cells = s.connected ? [['Herzen', (s.health / 2).toFixed(1)], ['Hunger', s.food], ['Y', s.pos.y], ['Gegner', s.threats], ['Holz', i.logs], ['Stein', i.cobble], ['Eisen', i.iron], ['Diamant', i.diamonds], ['Essen', i.food], ['Bett', i.hasBed ? 'ja' : 'nein'], ['Kills', s.kills], ['Tode', s.deaths]] : []
   const kv = $('kv'); kv.textContent = ''
-  for (const [k, v] of cells) { const d = document.createElement('div'); const b = document.createElement('b'); b.textContent = v ?? 0; const sp = document.createElement('span'); sp.textContent = k; d.append(b, sp); kv.appendChild(d) }
+  for (const [k, v] of cells) kv.appendChild(el('div', {}, el('b', { textContent: v ?? 0 }), el('span', { textContent: k })))
   $('bPause').textContent = s.paused ? 'Weiter' : 'Pause'
 }
 
 function renderRules () {
+  const q = $('giftFilter').value.trim().toLowerCase()
   const tb = $('rules'); tb.textContent = ''
-  state.rules.forEach((r, idx) => {
-    const tr = document.createElement('tr')
-    const td = (cls, el) => { const t = document.createElement('td'); if (cls) t.className = cls; t.appendChild(el); tr.appendChild(t); return el }
-    const on = td('', Object.assign(document.createElement('input'), { type: 'checkbox', checked: r.enabled, id: 'r_on_' + idx })); on.setAttribute('aria-label', 'aktiv')
-    const em = td('e', Object.assign(document.createElement('input'), { value: r.emoji, id: 'r_em_' + idx })); em.setAttribute('aria-label', 'Emoji')
-    const nm = td('', Object.assign(document.createElement('input'), { value: r.giftName, id: 'r_nm_' + idx })); nm.setAttribute('aria-label', 'Gift-Name')
-    const co = td('n', Object.assign(document.createElement('input'), { type: 'number', value: r.coins, min: 0, id: 'r_co_' + idx })); co.setAttribute('aria-label', 'Coins')
-    const sel = document.createElement('select'); sel.id = 'r_ac_' + idx; sel.setAttribute('aria-label', 'Aktion')
-    for (const a of state.actions) { const o = document.createElement('option'); o.value = a.id; o.textContent = a.label; if (a.id === r.action) o.selected = true; sel.appendChild(o) }
-    td('', sel)
-    const lg = td('', Object.assign(document.createElement('input'), { value: r.legend, id: 'r_lg_' + idx })); lg.setAttribute('aria-label', 'Legendentext')
-    const test = td('', Object.assign(document.createElement('button'), { textContent: 'Test', className: 'sm' }))
-    test.onclick = () => send({ type: 'SIM_GIFT', ruleId: r.id, user: $('simUser').value || 'TestUser', count: Number($('simN').value) || 1 })
-    const push = () => {
-      Object.assign(r, { enabled: on.checked, emoji: em.value, giftName: nm.value, coins: Number(co.value) || 0, action: sel.value })
-      if (document.activeElement !== lg) { const a = state.actions.find(x => x.id === sel.value); if (sel === document.activeElement && a) lg.value = a.label.replace(/^\d+x /, '') }
-      r.legend = lg.value
-      if (!r.match.includes(nm.value.toLowerCase())) r.match.push(nm.value.toLowerCase())
-      dirtyRules = true
-      send({ type: 'GIFT_RULES_SET', rules: state.rules })
-    }
-    for (const el of [on, em, nm, co, sel, lg]) el.onchange = push
-    tb.appendChild(tr)
-  })
+  $('giftCount').textContent = `· ${state.rules.length} Gifts`
+  for (const r of state.rules) {
+    if (q && !r.giftName.toLowerCase().includes(q) && !String(r.coins).includes(q)) continue
+    const up = patch => { Object.assign(r, patch); send({ type: 'GIFT_UPSERT', rule: { ...r, custom: r.custom } }) }
+    const cb = (key, label) => { const c = el('input', { type: 'checkbox', checked: !!r[key] }); c.setAttribute('aria-label', label); c.onchange = () => up({ [key]: c.checked }); return c }
+    const num = (key, min, max, step, label) => { const c = el('input', { type: 'number', value: r[key], min, max, step }); c.setAttribute('aria-label', label); c.onchange = () => up({ [key]: Number(c.value) }); return c }
+    const sel = el('select'); sel.setAttribute('aria-label', 'Aktion')
+    for (const a of state.actions) sel.appendChild(el('option', { value: a.id, textContent: a.label, selected: a.id === r.action }))
+    sel.onchange = () => { const a = state.actions.find(x => x.id === sel.value); up({ action: sel.value, legend: a ? a.label.replace(/^\d+x /, '').replace(/ \(.*\)$/, '') : r.legend }) }
+    const lg = el('input', { type: 'text', value: r.legend }); lg.setAttribute('aria-label', 'Legendentext'); lg.onchange = () => up({ legend: lg.value })
+    const icon = r.icon ? el('img', { className: 'ico', src: r.icon, alt: '' }) : el('span', { className: 'emo', textContent: r.emoji })
+    if (r.icon) { icon.referrerPolicy = 'no-referrer'; icon.onerror = () => icon.replaceWith(el('span', { className: 'emo', textContent: r.emoji })) }
+    const nameCell = el('td', {}, r.giftName)
+    if (r.custom) nameCell.appendChild(el('span', { className: 'tag', textContent: 'eigen' }))
+    if (r.discovered) nameCell.appendChild(el('span', { className: 'tag', textContent: 'live entdeckt' }))
+    const test = el('button', { className: 'sm', textContent: 'Test' }); test.onclick = () => send({ type: 'SIM_GIFT', ruleId: r.id, user: $('simUser').value || 'TestUser', count: Number($('simN').value) || 1 })
+    const act = el('td', {}, test)
+    if (r.custom || r.discovered) { const del = el('button', { className: 'sm danger', textContent: '✕', title: 'Gift löschen' }); del.onclick = () => send({ type: 'GIFT_REMOVE', id: r.id }); act.append(' ', del) }
+    tb.appendChild(el('tr', {}, el('td', {}, cb('enabled', 'aktiv')), el('td', {}, cb('inLegend', 'in der Overlay-Legende')), el('td', {}, icon), nameCell, el('td', {}, num('coins', 0, 100000, 1, 'Coins')), el('td', {}, sel), el('td', {}, num('amount', 1, 20, 1, 'Menge')), el('td', {}, num('hpMult', 0.5, 10, 0.5, 'HP-Multiplikator')), el('td', {}, lg), act))
+  }
 }
+$('giftFilter').oninput = renderRules
 
 function renderState (s) {
   const first = !state
   state = s
-  renderStatus(s.status)
-  const t = s.tiktok
-  chip($('cTik'), t.connected ? 'ok' : t.connecting ? 'warn' : 'bad', t.connected ? `TikTok @${t.username}` : t.connecting ? 'TikTok verbindet …' : 'TikTok getrennt')
-  $('tikBtn').textContent = t.connected || t.connecting ? 'Trennen' : 'Verbinden'
-  $('tikHint').textContent = t.error ? 'Fehler: ' + t.error : t.connected ? 'Verbunden. Gifts und Chat kommen jetzt live an.' : '1 Klick: verbindet sich mit deinem laufenden Live-Stream.'
+  renderStatus(s.status); renderTik(s.tiktok)
   chip($('cTts'), s.tts.error ? 'warn' : 'ok', s.tts.error ? 'Stimme: offline (nur Untertitel)' : `Stimme ${s.config.voice.replace('de-DE-', '').replace('Neural', '')}`)
   $('bStart').textContent = s.botRunning ? 'Stop' : 'Start'
-  if (first || document.activeElement.tagName !== 'INPUT') {
-    if (first) { $('tikUser').value = s.config.tiktokUsername; $('mcHost').value = s.config.minecraft.host; $('mcPort').value = s.config.minecraft.port; $('mcUser').value = s.config.minecraft.username; $('mcVer').value = s.config.minecraft.version }
-    const v = $('voice'); v.textContent = ''
-    for (const n of s.config.voices) { const o = document.createElement('option'); o.value = n; o.textContent = n.replace('de-DE-', '').replace('Neural', '') + ' (männlich)'; o.selected = n === s.config.voice; v.appendChild(o) }
-    const g = $('goalSel'); const cur = g.value; g.textContent = ''
-    for (const x of s.goals) { const o = document.createElement('option'); o.value = x.id; o.textContent = x.label; g.appendChild(o) }
-    if (cur) g.value = cur
-    if (first || !dirtyRules) renderRules()
-    dirtyRules = false
+  if (first) {
+    // Server-Wert gewinnt; ist dort nichts gespeichert, wird der Browser-Wert übernommen und automatisch verbunden
+    const saved = s.config.tiktokUsername || sanitize(store.get('tiktokUsername'))
+    $('tikUser').value = saved
+    if (saved) { store.set('tiktokUsername', saved); if (!s.config.tiktokUsername && !DEMO) send({ type: 'TIKTOK_CONNECT', username: saved }) }
+    $('mcHost').value = s.config.minecraft.host; $('mcPort').value = s.config.minecraft.port; $('mcUser').value = s.config.minecraft.username; $('mcVer').value = s.config.minecraft.version; $('camPlayer').value = s.config.cameraPlayer || ''
+    const v = $('voice'); for (const n of s.config.voices) v.appendChild(el('option', { value: n, textContent: n.replace('de-DE-', '').replace('Neural', '') + ' (männlich)', selected: n === s.config.voice }))
+    for (const x of s.goals) $('goalSel').appendChild(el('option', { value: x.id, textContent: x.label }))
+    for (const a of s.actions) if (a.id !== 'none') $('nAction').appendChild(el('option', { value: a.id, textContent: a.label }))
+    for (const m of s.mobs) $('nMob').appendChild(el('option', { value: m, textContent: m }))
+    $('nAction').value = 'spawn_mob'
+    $('log').textContent = ''; for (const e of s.logs) addLog(e)
+    $('feed').textContent = ''; for (const f of s.feed || []) addFeed(f)
   }
+  const key = JSON.stringify(s.rules)
+  if (key !== rulesKey && !['INPUT', 'SELECT'].includes(document.activeElement.tagName) || first) { rulesKey = key; renderRules() }
+  for (const b of document.querySelectorAll('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
+  for (const b of document.querySelectorAll('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '16:9'))
+  $('dzBtn').classList.toggle('on', !!s.designer)
   const tn = s.tunnel
   $('qr').hidden = !tn.qr; if (tn.qr) $('qr').src = tn.qr
   $('tunUrl').textContent = tn.url || ''
   $('tunBtn').textContent = tn.active ? 'Tunnel stoppen' : tn.starting ? 'Startet …' : 'Cloud-Tunnel starten'
-  $('tunHint').textContent = tn.error ? tn.error : tn.active ? `Aktiv über ${tn.provider}. QR-Code mit dem Handy scannen.` : 'Erzeugt eine öffentliche URL mit geheimem Schlüssel. QR scannen, fertig – funktioniert über 5G.'
-  if (first) { $('log').textContent = ''; for (const e of s.logs) addLog(e) }
+  $('tunHint').textContent = tn.error ? tn.error : tn.active ? `Aktiv über ${tn.provider}. QR-Code mit dem Handy scannen.` : 'Öffentliche HTTPS-URL mit geheimem Schlüssel. QR scannen – funktioniert über 5G.'
 }
 
+function trim (box, max) { while (box.childElementCount > max) box.firstChild.remove() }
 function addLog (e) {
-  const d = document.createElement('div'); d.className = e.level
-  d.textContent = new Date(e.at).toLocaleTimeString('de-DE') + '  ' + e.message
   const box = $('log'); const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30
-  box.appendChild(d); while (box.childElementCount > 200) box.firstChild.remove()
+  box.appendChild(el('div', { className: e.level, textContent: new Date(e.at).toLocaleTimeString('de-DE') + '  ' + e.message })); trim(box, 150)
+  if (stick) box.scrollTop = box.scrollHeight
+}
+function addFeed (f) {
+  const box = $('feed'); const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30
+  const d = el('div', { className: f.kind }, f.kind === 'chat' ? '💬 ' : (f.emoji || '🎁') + ' ', el('b', { textContent: f.user }), ' ' + f.text)
+  if (f.goal) d.appendChild(el('span', { className: 'goal', textContent: '  → Ziel: ' + f.goal }))
+  box.appendChild(d); trim(box, 120)
   if (stick) box.scrollTop = box.scrollHeight
 }
 
 function onMsg (m) {
   if (m.type === 'STATE') renderState(m)
   else if (m.type === 'STATUS') { if (state) state.status = m.status; renderStatus(m.status) } else if (m.type === 'LOG') addLog(m.entry)
-  else if (m.type === 'CHAT') addLog({ at: Date.now(), level: 'info', message: `💬 ${m.user}: ${m.text}${m.goal ? '  → Ziel: ' + m.goal : ''}` })
+  else if (m.type === 'FEED') addFeed(m.item)
   else if (m.type === 'TTS') addLog({ at: Date.now(), level: 'info', message: `🎙 (${m.emotion}) ${m.text}` })
 }
 
-$('tikBtn').onclick = () => state && (state.tiktok.connected || state.tiktok.connecting) ? send({ type: 'TIKTOK_DISCONNECT' }) : send({ type: 'TIKTOK_CONNECT', username: $('tikUser').value })
 $('bStart').onclick = () => send({ type: 'BOT', cmd: state && state.botRunning ? 'stop' : 'start' })
 $('bPause').onclick = () => send({ type: 'BOT', cmd: state && state.status.paused ? 'resume' : 'pause' })
 $('bUnstuck').onclick = () => send({ type: 'BOT', cmd: 'unstuck' })
+$('bCorpse').onclick = () => send({ type: 'BOT', cmd: 'corpse' })
+$('bSleep').onclick = () => send({ type: 'BOT', cmd: 'goal', goal: 'sleep' })
 $('bRespawn').onclick = () => send({ type: 'BOT', cmd: 'respawn' })
 $('goalBtn').onclick = () => send({ type: 'BOT', cmd: 'goal', goal: $('goalSel').value })
 $('giveBtn').onclick = () => send({ type: 'BOT', cmd: 'give', item: $('giveItem').value.trim(), count: Number($('giveN').value) || 1 })
 $('sayBtn').onclick = () => { if ($('sayTxt').value.trim()) { send({ type: 'SAY', text: $('sayTxt').value, emotion: $('sayEmo').value }); $('sayTxt').value = '' } }
 $('cfgBtn').onclick = () => send({ type: 'CONFIG_SET', minecraft: { host: $('mcHost').value, port: Number($('mcPort').value), username: $('mcUser').value, version: $('mcVer').value }, voice: $('voice').value })
+$('camPlayer').onchange = () => send({ type: 'CONFIG_SET', cameraPlayer: $('camPlayer').value.trim() })
+for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => send({ type: 'CAMERA', mode: b.dataset.cam })
+for (const b of document.querySelectorAll('[data-fmt]')) b.onclick = () => send({ type: 'LAYOUT_FORMAT', format: b.dataset.fmt })
+$('dzBtn').onclick = () => send({ type: 'DESIGNER', on: !(state && state.designer) })
+$('dzReset').onclick = () => send({ type: 'LAYOUT_RESET' })
 $('tunBtn').onclick = () => send({ type: state && state.tunnel.active ? 'TUNNEL_STOP' : 'TUNNEL_START' })
-$('resetRules').onclick = () => { dirtyRules = false; send({ type: 'GIFT_RULES_RESET' }) }
+$('resetRules').onclick = () => send({ type: 'GIFT_RULES_RESET' })
+$('nAction').onchange = () => { $('nMobWrap').hidden = $('nAction').value !== 'spawn_mob' }
+$('nAdd').onclick = () => {
+  const name = $('nName').value.trim()
+  if (!name) { $('nName').focus(); return }
+  const a = state.actions.find(x => x.id === $('nAction').value)
+  send({ type: 'GIFT_UPSERT', rule: { giftName: name, coins: Number($('nCoins').value) || 1, emoji: $('nEmoji').value || '🎁', icon: $('nIcon').value.trim() || null, action: $('nAction').value, mob: $('nMob').value, amount: Number($('nAmount').value) || 1, hpMult: Number($('nHp').value) || 1, legend: $('nAction').value === 'spawn_mob' ? `${Number($('nAmount').value) || 1}× ${$('nMob').value}` : a.label, inLegend: true, enabled: true, custom: true } })
+  $('nName').value = ''; $('nIcon').value = ''
+}
 const chat = t => send({ type: 'SIM_CHAT', user: $('simUser').value || 'TestUser', text: t })
 $('chatBtn').onclick = () => { if ($('chatTxt').value.trim()) { chat($('chatTxt').value); $('chatTxt').value = '' } }
-for (const el of [$('chatTxt'), $('sayTxt')]) el.addEventListener('keydown', e => { if (e.key === 'Enter') (el === $('chatTxt') ? $('chatBtn') : $('sayBtn')).click() })
-for (const q of ['Was machst du gerade?', "Wie geht's?", 'Bau ein Haus', 'Geh mal Holz holen', 'Mach dir ein Eisenschwert', 'Geh in den Nether', 'Iss mal was']) {
-  const b = document.createElement('button'); b.className = 'sm'; b.textContent = q; b.onclick = () => chat(q); $('chatQuick').appendChild(b)
-}
+for (const x of [$('chatTxt'), $('sayTxt')]) x.addEventListener('keydown', e => { if (e.key === 'Enter') (x === $('chatTxt') ? $('chatBtn') : $('sayBtn')).click() })
+for (const q of ['Was machst du gerade?', "Wie geht's?", 'Bau ein Haus', 'Geh schlafen', 'Hol deinen Loot', 'Geh Diamanten farmen', 'Geh in den Nether']) { const b = el('button', { className: 'sm', textContent: q }); b.onclick = () => chat(q); $('chatQuick').appendChild(b) }
 
 function connect () {
   const k = new URLSearchParams(location.search).get('k')
@@ -230,34 +309,47 @@ function connect () {
   ws.onclose = () => { chip($('cWs'), 'bad', 'Server getrennt'); setTimeout(connect, 1500) }
 }
 
-/* ---- Vorschau ohne Server (#demo): Beispielzustand, Buttons schreiben nur ins Protokoll ---- */
+/* ---- Vorschau ohne Server (#demo): simuliert Watchdog, Gift-Builder und Live-Feed lokal ---- */
+let demoState = null; let demoT = null
 function demoSend (m) {
-  if (m.type === 'GIFT_RULES_SET') return
-  addLog({ at: Date.now(), level: 'info', message: 'Vorschau: ' + JSON.stringify(m) })
-  if (m.type === 'SIM_CHAT') onMsg({ type: 'CHAT', user: m.user, text: m.text, goal: /haus/i.test(m.text) ? 'house' : /nether/i.test(m.text) ? 'nether' : null })
+  const s = demoState; const tk = s.tiktok
+  const badge = () => { tk.badge = tk.phase === 'live' ? `🟢 LIVE VERBUNDEN (@${tk.username} | Zuschauer: ${tk.viewers})` : tk.phase === 'waiting' ? `🟡 Warte auf Live-Start von @${tk.username} (Prüfe alle 8s)...` : '⚪ Nicht verbunden' }
+  if (m.type === 'TIKTOK_CONNECT') {
+    clearTimeout(demoT)
+    if (!m.username) return
+    Object.assign(tk, { phase: 'waiting', username: m.username, diagnostic: 'Stream ist noch nicht live', viewers: 0 }); s.config.tiktokUsername = m.username; badge(); onMsg(s)
+    demoT = setTimeout(() => { Object.assign(tk, { phase: 'live', engine: 'A', diagnostic: null, viewers: 128 }); badge(); onMsg(s); addLog({ at: Date.now(), level: 'info', message: `TikTok LIVE verbunden: @${tk.username} (Engine A)` }); onMsg({ type: 'TTS', emotion: 'hype', text: 'So Chat, die Verbindung steht! Wir sind live drin – wehe, ihr eskaliert heute wieder mit den Rosen!' }) }, 4000)
+  } else if (m.type === 'TIKTOK_DISCONNECT') { clearTimeout(demoT); Object.assign(tk, { phase: 'idle', diagnostic: null }); badge(); onMsg(s) } else if (m.type === 'GIFT_UPSERT') {
+    const id = m.rule.id || 'custom_' + m.rule.giftName.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+    const i = s.rules.findIndex(r => r.id === id)
+    if (i >= 0) Object.assign(s.rules[i], m.rule); else s.rules.push({ ...m.rule, id, match: [m.rule.giftName.toLowerCase()] })
+    onMsg(s)
+  } else if (m.type === 'GIFT_REMOVE') { s.rules = s.rules.filter(r => r.id !== m.id); onMsg(s) } else if (m.type === 'SIM_GIFT') {
+    const r = s.rules.find(x => x.id === m.ruleId); addFeed({ kind: 'gift', user: m.user, emoji: r.emoji, text: `${r.giftName} x${m.count} (${r.coins} Coins) → ${r.legend}` })
+  } else if (m.type === 'SIM_CHAT') addFeed({ kind: 'chat', user: m.user, text: m.text, goal: /haus/i.test(m.text) ? 'house' : /nether/i.test(m.text) ? 'nether' : /schlaf/i.test(m.text) ? 'sleep' : /loot/i.test(m.text) ? 'corpse' : /diamant/i.test(m.text) ? 'diamonds' : null })
+  else if (m.type === 'CAMERA') { s.config.cameraMode = m.mode; onMsg(s) } else if (m.type === 'DESIGNER') { s.designer = m.on; onMsg(s) } else if (m.type === 'LAYOUT_FORMAT') { s.layout = { format: m.format }; onMsg(s) } else addLog({ at: Date.now(), level: 'info', message: 'Vorschau: ' + JSON.stringify(m) })
 }
 function demo () {
   chip($('cWs'), 'warn', 'Vorschau (Beispieldaten)')
-  const actions = [['zombie_fast', 'Schneller Zombie'], ['skeleton_armored', 'Gepanzerter Skelett-Schütze'], ['tnt_rain', 'TNT-Regen'], ['creeper_duo', 'Creeper-Duo'], ['baby_squad', '5x Baby-Zombie-Blitz-Squad'], ['witch_jockey', 'Hexe + Spinnenreiter'], ['hit_squad_vindicator', '10x Elite-Diener'], ['hit_squad_brute', '10x Piglin-Barbaren'], ['boss_ravager', 'Endboss: Riesen-Verwüster'], ['boss_warden', 'Endboss: Wärter'], ['support_random', 'Support-Drop (Zufall)'], ['support_golem', 'Eisengolem-Bodyguard']].map(([id, label]) => ({ id, label }))
-  const R = (id, giftName, coins, emoji, action, legend) => ({ id, giftName, match: [giftName.toLowerCase()], coins, emoji, action, legend, enabled: true })
-  onMsg({
+  const A = (id, label) => ({ id, label })
+  const R = (id, giftName, coins, emoji, action, legend, inLegend = false, amount = 1, hpMult = 1) => ({ id, giftName, match: [giftName.toLowerCase()], coins, emoji, icon: null, action, mob: null, amount, hpMult, legend, enabled: true, inLegend, custom: false })
+  demoState = {
     type: 'STATE',
-    status: { connected: true, username: 'KI_Streamer', activity: 'mine', goal: 'Eisen suchen', health: 17, food: 16, xpLevel: 7, pos: { x: 118, y: 16, z: -37 }, threats: 0, fighting: false, kills: 12, deaths: 1, paused: false, inv: { logs: 9, cobble: 71, iron: 4, diamonds: 0, food: 6 }, viewerGoals: [{ label: 'Haus bauen', by: 'Mia' }] },
+    status: { connected: true, username: 'KI_Streamer', activity: 'mine', goal: 'Eisen suchen', health: 17, food: 16, pos: { x: 118, y: 16, z: -37 }, threats: 0, fighting: false, kills: 12, deaths: 1, paused: false, inv: { logs: 9, cobble: 71, iron: 4, diamonds: 0, food: 6, hasBed: true }, viewerGoals: [{ label: 'Haus bauen', by: 'Mia' }] },
     botRunning: true,
-    tiktok: { connected: true, connecting: false, username: 'dein_kanal', error: null },
+    tiktok: { phase: 'idle', username: null, engine: null, viewers: 0, diagnostic: null, badge: '⚪ Nicht verbunden' },
     tunnel: { active: false, starting: false, url: null, qr: null, error: null },
-    config: { minecraft: { host: '127.0.0.1', port: 25565, username: 'KI_Streamer', version: '1.21.1' }, tiktokUsername: 'dein_kanal', voice: 'de-DE-ConradNeural', voices: ['de-DE-ConradNeural', 'de-DE-KillianNeural', 'de-DE-FlorianMultilingualNeural'] },
-    rules: [R('rose', 'Rose', 1, '🌹', 'zombie_fast', 'Zombie'), R('ice_cream', 'Eistüte', 1, '🍦', 'support_random', 'Heilung'), R('finger_heart', 'Fingerherz', 5, '💖', 'skeleton_armored', 'Skelett-Schütze'), R('donut', 'Donut', 30, '🍩', 'tnt_rain', 'TNT-Regen'), R('hand_heart', 'Handherz', 100, '🫶', 'baby_squad', 'Baby-Zombie-Squad'), R('money_gun', 'Money Gun', 500, '💸', 'hit_squad_vindicator', 'Hit-Squad x10'), R('galaxy', 'Galaxie', 1000, '🌌', 'boss_ravager', 'Endboss')],
-    actions,
-    goals: [['wood', 'Holz holen'], ['house', 'Haus bauen'], ['iron_sword', 'Eisenschwert schmieden'], ['diamonds', 'Diamanten suchen'], ['enchant', 'Ausrüstung verzaubern'], ['nether', 'In den Nether gehen'], ['eat', 'Essen'], ['sleep', 'Schlafen gehen']].map(([id, label]) => ({ id, label })),
-    tts: { backend: 'msedge-tts', error: null },
-    logs: [
-      { at: Date.now() - 42000, level: 'info', message: 'plan {"goal":"Eisenausrüstung & Schild","steps":["Eisen suchen","Eisen schmelzen","Eisenausrüstung craften"]}' },
-      { at: Date.now() - 30000, level: 'info', message: '🎁 lukas: Rose x3 -> Schneller Zombie' },
-      { at: Date.now() - 21000, level: 'info', message: '💬 Mia: Bau ein Haus  → Ziel: house' },
-      { at: Date.now() - 9000, level: 'info', message: '🎙 (hype) Ansage von Mia im Chat: Wir bauen ein Haus!' }
-    ]
-  })
+    config: { minecraft: { host: '127.0.0.1', port: 25565, username: 'KI_Streamer', version: '1.21.1' }, tiktokUsername: '', voice: 'de-DE-ConradNeural', voices: ['de-DE-ConradNeural', 'de-DE-KillianNeural', 'de-DE-FlorianMultilingualNeural'], cameraPlayer: '', cameraMode: 'auto' },
+    mobs: ['zombie', 'husk', 'skeleton', 'stray', 'spider', 'creeper', 'witch', 'enderman', 'phantom', 'blaze', 'vindicator', 'piglin_brute', 'wither_skeleton', 'ravager', 'warden'],
+    rules: [R('rose', 'Rose', 1, '🌹', 'zombie_fast', 'Zombie', true), R('tiktok', 'TikTok', 1, '🎵', 'zombie_fast', 'Zombie'), R('ice_cream', 'Eistüte', 1, '🍦', 'heal', 'Heilung', true), R('gg', 'GG', 1, '🎮', 'support_random', 'Support-Drop'), R('thumbs_up', 'Daumen hoch', 1, '👍', 'drop_food', 'Steaks'), R('finger_heart', 'Fingerherz', 5, '💖', 'skeleton_armored', 'Skelett-Schütze', true), R('rosa', 'Rosa-Traum', 15, '🌸', 'drop_bed', 'Bett'), R('donut', 'Donut', 30, '🍩', 'tnt_rain', 'TNT-Drop', true), R('show_heart', 'Zeig-Herz', 49, '🫰', 'lightning', 'Blitzeinschlag'), R('star', 'Stern', 99, '⭐', 'drop_weapon', 'Eisenschwert'), R('crown', 'Krone', 99, '👑', 'drop_armor', 'Eisenrüstung'), R('hand_heart', 'Handherz', 100, '🫶', 'baby_squad', 'Baby-Zombie-Squad', true), R('corgi', 'Corgi', 299, '🐕', 'spawn_mob', 'Verwüster'), R('money_gun', 'Money Gun', 500, '💸', 'hit_squad_vindicator', 'Hit-Squad x10', true), R('galaxy', 'Galaxie', 1000, '🌌', 'boss_ravager', 'Boss', true), R('lion', 'Löwe', 29999, '🦁', 'boss_warden', 'Wärter-Duo', false, 2, 2), R('tiktok_universe', 'TikTok Universe', 44999, '🌠', 'boss_warden', 'Apokalypse', false, 1, 3)],
+    actions: [A('zombie_fast', 'Schneller Zombie'), A('skeleton_armored', 'Gepanzerter Skelett-Schütze'), A('spawn_mob', 'Mob spawnen (frei wählbar)'), A('tnt_rain', 'TNT-Regen'), A('lightning', 'Blitzeinschlag'), A('creeper_duo', 'Creeper-Duo'), A('baby_squad', '5x Baby-Zombie-Blitz-Squad'), A('hit_squad_vindicator', '10x Elite-Diener'), A('boss_ravager', 'Boss: Riesen-Verwüster'), A('boss_warden', 'Boss: Wärter'), A('heal', 'Heilung'), A('speed', 'Speed II'), A('support_golem', 'Eisengolem-Bodyguard'), A('support_random', 'Support-Drop (Zufall)'), A('drop_food', 'Essen droppen'), A('drop_weapon', 'Waffe droppen (Eisenschwert)'), A('drop_armor', 'Rüstung droppen (Eisen)'), A('drop_bed', 'Bett droppen'), A('drop_diamond_gear', 'Diamant-Ausrüstung droppen')],
+    goals: [['wood', 'Holz holen'], ['house', 'Haus bauen'], ['bed', 'Bett craften'], ['sleep', 'Schlafen gehen'], ['corpse', 'Loot zurückholen'], ['iron_sword', 'Eisenschwert schmieden'], ['diamonds', 'Diamanten suchen'], ['enchant', 'Ausrüstung verzaubern'], ['nether', 'In den Nether gehen']].map(([id, label]) => ({ id, label })),
+    tts: { backend: 'msedge-tts', error: null }, layout: { format: '16:9' }, designer: false,
+    feed: [{ kind: 'gift', user: 'Lukas', emoji: '🌹', text: 'Rose x3 (1 Coins) → Zombie' }, { kind: 'chat', user: 'Mia', text: 'Bau ein Haus', goal: 'house' }, { kind: 'follow', user: 'Tom', emoji: '➕', text: 'folgt jetzt' }],
+    logs: [{ at: Date.now() - 30000, level: 'info', message: 'plan {"goal":"Eisenausrüstung & Schild","steps":["Eisen suchen","Eisen schmelzen","Eisenausrüstung craften"]}' }, { at: Date.now() - 8000, level: 'info', message: '🎙 (hype) Ansage von Mia im Chat: Wir bauen ein Haus!' }]
+  }
+  onMsg(demoState)
+  $('tikDiag').textContent = 'Vorschau: Namen oder TikTok-URL eingeben und „Verbinden“ klicken – der Watchdog wird simuliert.'
 }
 if (DEMO) demo(); else connect()
 </script>
