@@ -486,6 +486,24 @@ Object.assign(L, {
   death_analysis: []
 })
 
+// ---- Arena-Modus
+Object.assign(L, {
+  arena_enter: ['Willkommen in der Arena, Chat. Ihr schickt Zombies, ich mach sie platt, so einfach ist das. Wer traut sich zuerst?', 'Arena-Modus. Jedes Gift ist ein Zombie mit eurem Namen drauf. Schickt, was ihr habt, ich brauch die Smaragde.'],
+  arena_exit: ['Arena ist dicht für heute. {kills} Zombies erledigt, Stufe {level} erreicht. Zurück ins Survival.'],
+  arena_built: ['Die Arena steht. Tribünen voll, Flutlicht an. Fehlen nur noch Gegner, also ihr seid dran.'],
+  arena_spawn: ['Oha, {user} schickt mir einen Zombie in die Arena. Komm her, du trägst sogar seinen Namen.', '{user} will es wissen: ein Zombie mit seinem Namen. Der liegt in zehn Sekunden, {user}.', 'Ein Zombie von {user}. Einer. Das ist ja fast niedlich.'],
+  arena_wave: ['{user} schickt gleich drei auf einmal! Endlich mal jemand, der sich was traut. Kommt ruhig alle.', 'Dreier-Welle von {user}. Schön in einer Reihe aufstellen, dann geht es schneller.'],
+  arena_boss: ['Alarm! {user} hat einen Boss-Zombie entfesselt! Diamantaxt, Rüstung, das volle Programm. Okay, jetzt wird es ernst.', '{user} schickt den Boss! Chat, Ruhe auf den Rängen, das hier braucht Konzentration.', 'Ein Boss von {user}. Fünfzehn Smaragde auf zwei Beinen, danke dafür.'],
+  arena_batch: ['{count} Zombies auf einmal, von {names}. Ihr habt euch abgesprochen, gebt es zu. Macht nichts, mehr Smaragde für mich.', 'Da kommen {count} Stück von {names}. Stellt euch hinten an, ich mach das der Reihe nach.'],
+  arena_queue: ['Die Arena ist voll, {queued} Zombies warten draußen in der Schlange. Geduld, Chat, ich arbeite so schnell ich kann.'],
+  arena_upgrade: ['Genug Smaragde gefarmt, ab an den Amboss: {label}. Jetzt wird es für eure Zombies richtig peinlich.', 'Upgrade auf Stufe {level}: {label}. Danke für die Smaragde, Chat, ihr finanziert euren eigenen Untergang.', 'Stufe {level}! {label}. Schickt was Stärkeres, sonst wird das langweilig.'],
+  arena_farm: ['Alle Zombies erledigt. Ich geh hinten rechts an die Maschine Smaragde farmen, bis sich wieder einer traut.', 'Arena leer. Dann farm ich eben Smaragde, mir fehlen noch {missing} bis zum nächsten Upgrade. Ihr könnt mich jederzeit stören.', 'Keiner mehr da? Gut, dann arbeite ich an der Maschine. Schickt Zombies, wenn euch langweilig ist.'],
+  arena_heal: ['Kurz raus, Goldapfel rein. Das ist kein Rückzug, das ist Taktik.', 'Wenig Leben. Abstand, Apfel, weiter. Freut euch nicht zu früh.'],
+  arena_kill_boss: ['Boss von {user} liegt! Fünfzehn Smaragde, danke {user}. War das schon alles?', 'Und weg ist der Boss. {user}, dein Geld hat genau so lange gehalten wie sein Leben.'],
+  arena_death: ['Okay, die haben mich erwischt. Tod Nummer {deaths} in der Arena. Ausrüstung behalte ich, also gleich noch mal.', 'Gestorben. Das waren zu viele auf einmal, nicht zu wenig Skill. Weiter geht es.'],
+  arena_stuck: []
+})
+
 // Chat wird erst vorgelesen, dann kommt der Konter ("Max fragt, ob ich eine KI bin... Ja, ...")
 const QUOTE = {
   who: ['{user} fragt, ob ich eine KI bin... '],
@@ -747,6 +765,23 @@ class StreamerBrain extends EventEmitter {
   }
 
   /**
+   * Arena: Zuschauer schicken Gegner. Viele kleine Gifts in kurzer Zeit kommen als eine Sammel-Ansage.
+   * @param {{kind: 'spawn'|'wave'|'boss'|'batch'|'queue', user?: string, count?: number, names?: string[], queued?: number}} e
+   */
+  onArenaSpawn (e) {
+    this.lastExternal = Date.now()
+    const user = this.speakable(e.user || '') || 'Jemand'
+    if (e.kind === 'boss') return this.say(this.line(L.arena_boss, { user }), { emotion: 'panic', priority: 6, kind: 'gift', ttl: 20000 })
+    if (e.kind === 'queue') return this.cooldown('arena_queue', 45000) && this.say(this.line(L.arena_queue, { queued: e.queued }), { emotion: 'hype', priority: 2, kind: 'event' })
+    if (e.kind === 'batch') {
+      const names = (e.names || []).map(n => this.speakable(n)).filter(Boolean)
+      const list = names.length > 2 ? `${names.slice(0, 2).join(', ')} und ${names.length - 2} weiteren` : names.join(' und ')
+      return this.say(this.line(L.arena_batch, { count: e.count, names: list || 'euch allen' }), { emotion: 'hype', priority: 3, kind: 'gift', ttl: 12000 })
+    }
+    return this.say(this.line(e.kind === 'wave' ? L.arena_wave : L.arena_spawn, { user }), { emotion: 'hype', priority: e.kind === 'wave' ? 4 : 3, kind: 'gift', ttl: 10000 })
+  }
+
+  /**
    * Ein Zuschauer hat einen Spiel-Tipp gegeben.
    * @param {{kind: 'new'|'known'|'already'|'unknown', rule?: object, first?: string}} tip Ergebnis aus chat-wisdom.js
    */
@@ -896,6 +931,14 @@ class StreamerBrain extends EventEmitter {
       case 'tree_done': return say(L.tree_done, d, { cd: 45000 })
       case 'craft': return
       case 'station_packed': if (d.kind === 'crafting_table') say(L.station_packed, d, { cd: 120000 }); return
+      case 'arena_enter': return say(L.arena_enter, d, { cd: 10000, priority: 5, ttl: 20000 })
+      case 'arena_exit': return say(L.arena_exit, d, { cd: 10000, priority: 4, ttl: 20000 })
+      case 'arena_built': return say(L.arena_built, d, { cd: 20000, priority: 3 })
+      case 'arena_upgrade': return say(L.arena_upgrade, d, { cd: 3000, priority: 5, ttl: 20000, emotion: 'hype' })
+      case 'arena_farm': return say(L.arena_farm, { ...d, missing: Math.max(1, (d.need || 0) - (d.emeralds || 0)) }, { cd: 40000, priority: 1 })
+      case 'arena_heal': return say(L.arena_heal, d, { cd: 30000, priority: 3, emotion: 'panic' })
+      case 'arena_kill': return d.boss ? say(L.arena_kill_boss, { ...d, user: this.speakable(d.supporter) || 'jemand' }, { key: 'arena_kill_boss', cd: 4000, priority: 4, emotion: 'hype' }) : undefined
+      case 'arena_death': return say(L.arena_death, d, { cd: 15000, priority: 4, emotion: 'panic' })
       case 'lesson': return say(L.lesson, d, { key: 'lesson:' + d.id, cd: 5000, priority: 4, ttl: 20000 })
       case 'rethink_start': return say(L.rethink_start, d, { cd: 20000, priority: 3 })
       case 'rethink': return say(d.wins >= 2 ? L.rethink_proven : L.rethink, d, { cd: 5000, priority: 3, ttl: 15000 })

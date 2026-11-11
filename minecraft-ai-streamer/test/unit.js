@@ -301,6 +301,77 @@ t('Befehle: alles, was das Programm an den Server schickt, ist gültige 1.21.1-S
   assert.deepStrictEqual(validate('attribute @s minecraft:generic.max_health base set 40'), [])
 })
 
+// ---------- Arena-Modus ----------
+t('Arena: Aufbau bleibt unter dem Blocklimit, Stufen und Kosten stimmen', () => {
+  const { ArenaBuilder } = require('../modules/arena/arena-builder')
+  const { LEVELS, nextCost, upgradeCommands } = require('../modules/arena/arena-controller')
+  const ab = new ArenaBuilder({ center: { x: 400, y: 180, z: -37 }, run: () => true, botName: () => 'KI_Streamer' })
+  const cmds = ab.buildCommands()
+  assert(cmds.length > 150 && cmds.length < 320, 'Befehle: ' + cmds.length)
+  for (const c of cmds) {
+    const m = /^fill (-?\d+) (-?\d+) (-?\d+) (-?\d+) (-?\d+) (-?\d+) /.exec(c)
+    if (m) { const [x1, y1, z1, x2, y2, z2] = m.slice(1).map(Number); const vol = (Math.abs(x2 - x1) + 1) * (Math.abs(y2 - y1) + 1) * (Math.abs(z2 - z1) + 1); assert(vol <= 32768, `fill zu groß (${vol}): ${c}`) }
+    assert(!/\$\{|undefined|NaN/.test(c), 'kaputter Befehl: ' + c)
+  }
+  assert.strictEqual(cmds.filter(c => /arena_fan/.test(c) && c.startsWith('summon')).length, 108, 'Zuschauer auf drei Rängen')
+  const wp = ab.getWaypoints(); assert.strictEqual(wp.farmStandPos.x, 415.5); assert.strictEqual(wp.zombieSpawnPoints.length, 4)
+  assert.deepStrictEqual([1, 2, 3, 4, 5, 6, 7, 8, 12].map(l => nextCost(l)), [10, 25, 45, 75, 110, 160, 50, 50, 50]); assert.strictEqual(LEVELS.length, 7)
+  assert(upgradeCommands('Bot', 7, 2).some(c => /netherite_sword\[enchantments=\{levels:\{"minecraft:sharpness":5/.test(c)))
+  assert(upgradeCommands('Bot', 9, 6).some(c => /minecraft:strength 60/.test(c)) && upgradeCommands('Bot', 9, 6).some(c => /"minecraft:protection":2/.test(c)))
+  assert(/BOSS: Mia/.test(ab.spawnCommands('M"i\'a{}', true).cmds[0]), 'Namen werden gesäubert')
+})
+t('Arena: Prioritäten, Spawn-Deckel, Belohnungen, Upgrade und Wächter', async () => {
+  const EventEmitter = require('events')
+  const { Vec3 } = require('vec3')
+  const { ArenaBuilder } = require('../modules/arena/arena-builder')
+  const { ArenaController, MAX_ACTIVE } = require('../modules/arena/arena-controller')
+  const realNow = Date.now; let now = 5e6; Date.now = () => now
+  try {
+    const sent = []; const events = []
+    const bot = Object.assign(new EventEmitter(), { username: 'KI_Streamer', health: 20, quickBarSlot: 0, heldItem: { name: 'wooden_sword' }, entities: {}, keys: {}, attacks: 0, swings: 0, eaten: 0,
+      entity: { position: new Vec3(400.5, 180, -36.5), velocity: new Vec3(0, 0, 0), onGround: true, isCollidedHorizontally: false },
+      setControlState (k, v) { this.keys[k] = v }, clearControlStates () { this.keys = {} }, attack () { this.attacks++ }, swingArm () { this.swings++ }, setQuickBarSlot (n) { this.quickBarSlot = n }, consume: async function () { this.eaten++; this.health = 20 }, pathfinder: { setGoal () {} } })
+    const host = { bot, ctx: { look: { track () {}, errorTo: () => 0 } } }
+    const builder = new ArenaBuilder({ center: { x: 400, y: 180, z: -37 }, run: c => { sent.push(...c); return true }, botName: () => 'KI_Streamer' }); builder.built = true
+    const a = new ArenaController(host, builder, { run: c => { sent.push(...c); return true }, emit: (type, d) => events.push([type, d]) })
+    const wp = builder.getWaypoints()
+    const step = (ms = 100, n = 1) => { for (let i = 0; i < n; i++) { now += ms; a.tick() } }
+    a._onDead = e => a.onEntityGone(e, true); bot.on('entityDead', a._onDead)
+    // 4. leere Arena, keine Smaragde -> läuft zur Maschine
+    step(); assert.strictEqual(a.state, 'IDLE_FARMING'); assert(bot.keys.forward, 'läuft los')
+    bot.entity.position = wp.farmStandPos.clone(); step(450, 9)
+    assert.strictEqual(a.emeralds, 3, 'alle drei Schläge ein Smaragd'); assert(!bot.keys.forward); assert(events.some(e => e[0] === 'arena_farm'))
+    // 3. genug Smaragde -> Schmiede -> Stufe 2
+    a.emeralds = 12; step(); assert.strictEqual(a.state, 'AUTO_UPGRADE')
+    bot.entity.position = wp.upgradePos.clone(); step(400, 6)
+    assert.strictEqual(a.level, 2); assert.strictEqual(a.emeralds, 2); assert(sent.some(c => /hotbar\.0 with stone_sword/.test(c))); assert(events.some(e => e[0] === 'arena_upgrade' && e[1].level === 2))
+    // Spawn-Deckel: 20 angefordert -> 12 gleichzeitig, 8 warten; Boss kommt zuerst dran
+    sent.length = 0
+    a.requestSpawn('Max', { count: 20 }); assert.strictEqual(a.pending.length, MAX_ACTIVE); assert.strictEqual(a.queue.length, 8)
+    assert.strictEqual(sent.filter(c => c.startsWith('summon zombie')).length, 12)
+    a.requestSpawn('Mia', { boss: true }); assert(a.queue[a.queue.length - 1].boss || a.queue.some(q => q.boss))
+    // erster Zombie erscheint am Spawnpunkt und wird Max zugeordnet
+    const z = { id: 7, name: 'zombie', height: 1.95, position: a.pending[0].pos.clone() }
+    bot.entities[7] = z; a.onEntitySpawn(z); assert.strictEqual(a.mobs.get(7).supporter, 'Max'); assert.strictEqual(a.pending.length, 11)
+    // 2. Kampf: Zombie in Reichweite -> zuschlagen, danach W-Tap (Vorwärts kurz los)
+    bot.entity.position = z.position.offset(2.4, 0, 0); step(); assert.strictEqual(a.state, 'PRO_COMBAT')
+    step(100, 8); assert(bot.attacks >= 1, 'schlägt zu'); assert(bot.keys.left || bot.keys.right, 'strafe')
+    // 1. Notfall: wenig Leben -> Apfel
+    bot.health = 5; step(); assert.strictEqual(a.state, 'SURVIVAL_HEAL'); now += 1600; a.tick(); await new Promise(resolve => setImmediate(resolve))
+    assert.strictEqual(bot.eaten, 1); assert.strictEqual(a.apples, 1); assert.strictEqual(bot.quickBarSlot, 0)
+    // Kill: Belohnung, der nächste aus der Schlange rückt nach (der Boss zuerst)
+    const before = a.emeralds; sent.length = 0
+    delete bot.entities[7]; bot.emit('entityDead', z)
+    assert.strictEqual(a.emeralds, before + 3); assert.strictEqual(a.kills, 1); assert(sent.some(c => /BOSS: Mia/.test(c)), 'Boss rückt als Erster nach')
+    // Bestenliste
+    a.addScore('Max', 10); a.addScore('Mia', 150); assert.deepStrictEqual(a.top(2).map(x => x.name), ['Mia', 'Max']); assert(sent.some(c => /lb_rank1.*Mia \(150 Pkt\)/.test(c)))
+    // Wächter: außerhalb der Arena -> zurück in die Mitte
+    sent.length = 0; bot.entity.position = new Vec3(460, 180, -37); a.dog.lastCheck = 0; step(2100)
+    assert(sent.some(c => /^tp KI_Streamer 400\.5 180 -36\.5$/.test(c)), sent.join('|'))
+    a.clearMobs(); assert.strictEqual(a.activeCount(), 0); assert.strictEqual(a.status().queued, 0)
+  } finally { Date.now = realNow }
+})
+
 // ---------- Lernen ----------
 t('Wissen: Kampf-Zeiten, Gegner-Taktiken und Auswege', () => {
   const K = require('../modules/mc-knowledge')

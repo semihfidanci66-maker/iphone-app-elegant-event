@@ -24,6 +24,18 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
 
+## Neu in Version 11: Arena-Modus
+
+- **Zwei Spielmodi, umschaltbar im laufenden Betrieb** (Reiter *Arena*): *Survival* ist die bisherige Logik und bleibt unverändert. Im *Arena-Modus* pausiert die Survival-Schleife komplett, und ein eigener Controller übernimmt. Beim Zurückschalten kommt der Bot an seinen alten Platz zurück.
+- **Arena auf Knopfdruck:** 41×41 Kampffläche, Mauer mit unsichtbarer Barriere, vier Tribünen-Ränge mit 108 winkenden Zuschauern, Flutlicht, Smaragd-Maschine und Schmiede hinten rechts, Bestenliste als Hologramm. Sie entsteht 400 Blöcke neben dem Bot auf Höhe 180, damit im Survival-Gelände nichts zerstört wird.
+- **Kampf-KI mit vier Prioritäten (alle 100 ms):** Notfall-Heilung mit Goldapfel → Kampf (nächster Gegner, W-Tap, Sprung-Krits, Kreis-Strafe, Rückwärts-Reihe bei Übermacht) → Aufrüsten an der Schmiede → Smaragde farmen. Bewegung direkt über Blick und Tasten, ohne Pathfinder.
+- **Gifts werden zu Supporter-Zombies:** 1–9 Coins = 1 Zombie mit dem Namen des Zuschauers (10 Punkte), 10–99 = 3 Zombies (35), ab 100 = Boss mit Diamantaxt (150). Höchstens 12 gleichzeitig, der Rest wartet in der Schlange (Bosse zuerst). Auch das Like-Ziel schickt einen Zombie.
+- **Smaragde und acht Stufen:** 3 Smaragde pro Zombie, 15 pro Boss, 1 pro drei Schläge an der Maschine. Vom Holzschwert bis zum Netheritschwert mit Schärfe V, danach Bonus-Stufen.
+- **Ansagen:** Spawn mit Namen, Boss-Alarm, Upgrade, Farmen. Viele kleine Gifts innerhalb von 3 Sekunden werden zu einer Sammel-Ansage.
+- **Wächter:** hängt der Bot oder gerät er aus der Arena, wird er erst angestupst und dann in die Mitte gesetzt.
+- Alle Arena-Befehle sind gegen die Syntax von Minecraft 1.21.1 geprüft (`npm run test:commands`). **Im echten Spiel ist der Arena-Modus noch nicht gelaufen.**
+- Hinweis: Die Arena überschreibt Schwert-Platz, zweiten Hotbar-Platz und Rüstung. Beim Zurückschalten kommen die Survival-Gegenstände zurück, Verzauberungen und Abnutzung dieser sechs Plätze gehen dabei verloren.
+
 ## Neu in Version 10
 
 - **Lernt aus Fehlern:** Jeder Tod wird mit seiner Lage gespeichert (Ursache, Gegner, Ort, Tageszeit, Ausrüstung). Daraus entstehen feste Lehren, die das Verhalten ändern: früher zurückziehen, mehr Abstand zu Creepern, im engen Gang einen Block dazwischen setzen, tiefe Höhle erst mit Eisen oder Wassereimer, nachts ohne Bett einbunkern, sehr starken Gegnern ausweichen. Gespeichert in `config/mistakes_memory.json`.
@@ -119,6 +131,9 @@ modules/bot/liquid-escape.js Wasser-/Lava-Rettung in drei Stufen
 modules/tunnel.js            cloudflared / localtunnel + QR
 modules/like-goal.js         Like-Ziel: Balken, Gewinner, Steigerung
 modules/llm-brain.js         Sprachmodell (Claude API): Persona-Prompt, Kostenbremse, Filter
+modules/game-mode.js         Umschalter SURVIVAL / ARENA
+modules/arena/arena-builder.js     Arena bauen, animieren, Gegner-Befehle
+modules/arena/arena-controller.js  Kampf-KI, Smaragde, Stufen, Spawn-Schlange, Wächter
 modules/mc-knowledge.js      Wissensbasis: Kampf-Zeiten, Gegner-Taktiken, Auswege
 modules/ai-learning.js       Fehler-Gedächtnis, Lehren, Strategie-Wahl, Planer-Gewichte
 modules/chat-wisdom.js       Tipps aus dem Chat erkennen, merken, anwenden
@@ -132,7 +147,7 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 43 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 45 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
 npm run test:commands                     # alle erzeugten Server-Befehle gegen die Syntax von Minecraft 1.21.1
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server

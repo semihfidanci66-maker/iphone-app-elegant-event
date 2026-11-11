@@ -26,6 +26,7 @@ const { lanAddresses } = require('./modules/lan')
 const { LikeGoal, sanitizeLikes } = require('./modules/like-goal')
 const { LlmBrain, sanitizeLlm } = require('./modules/llm-brain')
 const { AILearning } = require('./modules/ai-learning')
+const { GameModeManager } = require('./modules/game-mode')
 const { ChatWisdom, RULES: TIP_RULES, matchRule: matchTip } = require('./modules/chat-wisdom')
 const QRCode = require('qrcode')
 
@@ -69,7 +70,7 @@ function writeLater (file, getData, delay = 250) {
   }, delay))
 }
 function saveConfig () {
-  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, likes: likes.config, remote: config.remote, llm: llm.config, anthropicKey: config.anthropicKey || undefined, world: config.world, mcRamGb: mc.ramGb }))
+  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, likes: likes.config, arena: gameMode.toJSON(), remote: config.remote, llm: llm.config, anthropicKey: config.anthropicKey || undefined, world: config.world, mcRamGb: mc.ramGb }))
 }
 function sanitizeLayout (l) {
   if (!l || typeof l !== 'object') return null
@@ -179,6 +180,16 @@ setInterval(() => {
   llmWarn = msg
 }, 5000).unref()
 
+// ---- Spielmodus: SURVIVAL (bisherige Logik) oder ARENA. Ereignisse der Arena laufen über denselben Weg wie Bot-Ereignisse.
+const gameMode = new GameModeManager(bot, {
+  run: cmds => serverCommands(cmds),
+  emit: (type, data) => bot._emit(type, data),
+  saved: config.arena,
+  onChange: () => { saveConfig(); broadcastState() },
+  // Regeln, die die Arena umstellt, beim Verlassen so zurücksetzen, wie sie in der Welt-Steuerung stehen
+  restoreRules: () => [`gamerule doDaylightCycle ${config.world.timeLock === 'off'}`, `gamerule keepInventory ${config.world.rules.keepInventory === true}`, `gamerule mobGriefing ${config.world.rules.mobGriefing !== false}`]
+})
+
 const brain = new StreamerBrain({
   llm,
   getStatus: () => bot.status(),
@@ -246,6 +257,7 @@ function fullState () {
     likes: { config: likes.config, ...likes.state(), legend: likeLegend() },
     llm: llm.publicState(),
     learning: learning.summary(),
+    arena: gameMode.status(),
     wisdom: wisdom.summary(),
     world: config.world,
     worldRules: Object.entries(RULES).map(([id, r]) => ({ id, label: r.label })),
@@ -266,7 +278,7 @@ function fullState () {
 let designerOn = false
 function pushFeed (item) { item.at = Date.now(); feed.push(item); if (feed.length > 80) feed.shift(); broadcast({ type: 'FEED', item }, isControl) }
 function broadcastState () { broadcast(fullState(), isControl) }
-function syncGiftConfig () { broadcast({ type: 'GIFT_CONFIG_SYNC', gifts: gifts.publicConfig() }) }
+function syncGiftConfig () { broadcast({ type: 'GIFT_CONFIG_SYNC', gifts: gameMode.mode === 'ARENA' ? ARENA_LEGEND : gifts.publicConfig() }) }
 const libraryMsg = () => ({ type: 'GIFT_LIBRARY', at: gifts.libraryAt, gifts: gifts.libraryList() })
 function syncLibrary () { broadcast(libraryMsg(), isControl) }
 
@@ -284,7 +296,7 @@ wss.on('connection', (ws, req) => {
   clients.add(ws)
   ws.on('close', () => clients.delete(ws))
   ws.on('error', () => clients.delete(ws))
-  send(ws, { type: 'GIFT_CONFIG_SYNC', gifts: gifts.publicConfig() })
+  send(ws, { type: 'GIFT_CONFIG_SYNC', gifts: gameMode.mode === 'ARENA' ? ARENA_LEGEND : gifts.publicConfig() })
   send(ws, likesMsg())
   if (ws.role === 'overlay') { send(ws, { type: 'STATUS', status: bot.status() }); send(ws, { type: 'LAYOUT', layout }); send(ws, { type: 'DESIGNER', on: designerOn }) }
   else { send(ws, fullState()); send(ws, libraryMsg()) }
@@ -340,6 +352,24 @@ function handle (m, ws = { isLocal: true }) {
       if (typeof p.apiKey === 'string') { config.anthropicKey = p.apiKey.trim().slice(0, 300); llm.setKey(config.anthropicKey); log('info', config.anthropicKey ? 'Sprachmodell: API-Schlüssel gespeichert' : 'Sprachmodell: API-Schlüssel entfernt') }
       config.llm = llm.setConfig({ enabled: p.enabled, model: p.model, budgetUsd: p.budgetUsd, maxPerHour: p.maxPerHour, monologues: p.monologues })
       saveConfig(); broadcastState()
+      break
+    }
+    case 'GAME_MODE': {
+      const want = m.mode === 'ARENA' ? 'ARENA' : 'SURVIVAL'
+      log('info', want === 'ARENA' ? 'Wechsel in den Arena-Modus …' : 'Zurück in den Survival-Modus …')
+      gameMode.setMode(want).then(r => { log(r.ok ? 'info' : 'warn', r.ok ? `Spielmodus: ${r.mode}` : 'Moduswechsel nicht möglich: ' + r.reason); syncGiftConfig(); broadcastState() })
+      break
+    }
+    case 'ARENA_BUILD': log('info', 'Arena wird gebaut (dauert rund 20 Sekunden) …'); gameMode.build().then(r => { log(r.ok ? 'info' : 'warn', r.ok ? `Arena steht (${r.commands} Befehle)` : 'Arena-Bau nicht möglich: ' + r.reason); broadcastState() }); break
+    case 'ARENA_TEST': {
+      if (gameMode.mode !== 'ARENA') { log('warn', 'Erst in den Arena-Modus schalten'); break }
+      const user = String(m.user || 'TestUser').slice(0, 24)
+      if (m.what === 'zombie') arenaGift({ uniqueId: user, nickname: user }, 1, 1)
+      else if (m.what === 'wave') { gameMode.arena.requestSpawn(user, { count: 5 }); gameMode.arena.addScore(user, 50); arenaSay({ kind: 'batch', count: 5, names: [user] }) } else if (m.what === 'boss') arenaGift({ uniqueId: user, nickname: user }, 100, 1)
+      else if (m.what === 'emeralds') gameMode.arena.emeralds += 25
+      else if (m.what === 'unstuck') gameMode.arena.unstuck('Dashboard')
+      else if (m.what === 'clear') gameMode.arena.clearMobs()
+      broadcastArena()
       break
     }
     case 'LEARN_RESET': learning.reset(); log('info', 'Fehler-Gedächtnis gelöscht'); broadcastState(); break
@@ -455,6 +485,41 @@ async function stopMc () {
 }
 
 // ------------------------------------------------------------------ Verdrahtung
+// ---- Arena-Modus: Gifts werden zu Supporter-Zombies, Ansagen werden gebündelt
+const arenaBatch = { names: new Map(), count: 0, timer: null }
+function arenaSay (e) {
+  // Bosse und Wellen sofort; einzelne Zombies sammeln sich 3 Sekunden lang zu einer Ansage
+  if (e.kind !== 'spawn') return brain.onArenaSpawn(e)
+  arenaBatch.names.set(e.user, true); arenaBatch.count += e.count || 1
+  if (arenaBatch.timer) return
+  arenaBatch.timer = setTimeout(() => {
+    const names = [...arenaBatch.names.keys()]; const count = arenaBatch.count
+    arenaBatch.names.clear(); arenaBatch.count = 0; arenaBatch.timer = null
+    if (count === 1) brain.onArenaSpawn({ kind: 'spawn', user: names[0] }); else brain.onArenaSpawn({ kind: 'batch', count, names })
+  }, 3000)
+}
+/** Gift im Arena-Modus: klein = 1 Zombie, mittel = 3er-Welle, groß = Boss. */
+function arenaGift (viewer, coins, count) {
+  const a = gameMode.arena
+  const name = viewer.nickname || viewer.uniqueId
+  const n = Math.max(1, Math.min(30, count || 1))
+  let legend
+  if (coins >= 100) { for (let i = 0; i < Math.min(n, 5); i++) a.requestSpawn(name, { boss: true }); a.addScore(name, 150 * n); arenaSay({ kind: 'boss', user: name }); legend = 'Boss-Zombie' } else if (coins >= 10) { a.requestSpawn(name, { count: Math.min(20, 3 * n) }); a.addScore(name, 35 * n); arenaSay({ kind: 'wave', user: name }); legend = '3 Zombies' } else { a.requestSpawn(name, { count: n }); a.addScore(name, 10 * n); arenaSay({ kind: 'spawn', user: name, count: n }); legend = 'Zombie' }
+  const st = a.status()
+  if (st.queued > 0) arenaSay({ kind: 'queue', queued: st.queued })
+  broadcastArena()
+  return { legend, kind: 'mob', tier: coins >= 100 ? 5 : coins >= 10 ? 3 : 1 }
+}
+const ARENA_LEGEND = [
+  { id: 'arena1', name: 'Rose & Co.', coins: '1–9', emoji: '🌹', legend: 'Zombie mit deinem Namen', kind: 'mob', tier: 1, icon: null },
+  { id: 'arena2', name: 'Mittleres Gift', coins: '10–99', emoji: '🍩', legend: '3 Zombies', kind: 'mob', tier: 3, icon: null },
+  { id: 'arena3', name: 'Großes Gift', coins: '100+', emoji: '👑', legend: 'Boss-Zombie', kind: 'mob', tier: 5, icon: null },
+  { id: 'arena4', name: 'Likes', coins: '❤', emoji: '❤️', legend: 'Zombie für den Letzten', kind: 'mob', tier: 1, icon: null }
+]
+let arenaT = null
+function broadcastArena () { if (!arenaT) arenaT = setTimeout(() => { arenaT = null; broadcast({ type: 'ARENA', arena: gameMode.status() }, isControl) }, 150) }
+setInterval(() => { if (gameMode.mode === 'ARENA') broadcast({ type: 'ARENA', arena: gameMode.status() }, isControl) }, 500).unref()
+
 // ---- Combo-Ansagen: die Mobs kommen sofort, vorgelesen wird erst, wenn die Combo fertig ist
 const combos = new Map() // Zuschauer|Gift -> { viewer, gift, effect, count, timer }
 const COMBO_WAIT_MS = 3500 // so lange ohne neues Gift, dann gilt eine offene Combo als beendet
@@ -468,6 +533,16 @@ function speakGift (key) {
 
 function onGift ({ viewer, gift, count, delta, streakEnd = true }) {
   if (gift.name && (gift.icon || gift.coins) && !gift.ruleId) learnGifts([{ id: gift.id, name: gift.name, coins: gift.coins, icon: gift.icon }])
+  if (gameMode.mode === 'ARENA') {
+    // Arena: jedes Gift wird nach seinem Coin-Wert zu Zombies – die Survival-Belegung bleibt unberührt
+    const rule = gifts.findRule(gift)
+    const coins = gift.coins || (rule ? rule.coins : 1)
+    const fx = arenaGift(viewer, coins, delta)
+    const giftName = rule ? rule.giftName : gift.name
+    broadcast({ type: 'GIFT_ALERT', user: viewer.nickname || viewer.uniqueId, uniqueId: viewer.uniqueId, avatar: viewer.avatar || null, gift: { name: giftName, emoji: rule ? rule.emoji : '🎁', icon: gift.icon || (rule && rule.icon) || null, coins }, count, delta, legend: fx.legend, kind: fx.kind, tier: fx.tier })
+    pushFeed({ kind: 'gift', user: viewer.nickname || viewer.uniqueId, avatar: viewer.avatar || null, text: `${giftName} x${delta} (${coins} Coins) → Arena: ${fx.legend}`, emoji: rule ? rule.emoji : '🎁' })
+    return
+  }
   const res = gifts.trigger(gift, viewer, delta)
   const rule = res.rule
   const effect = res.effect
@@ -515,6 +590,14 @@ function onLike ({ viewer, count }) {
   if (!likes.config.enabled) brain.onLike(viewer, count)
   for (const h of hits) {
     const c = likes.config
+    if (gameMode.mode === 'ARENA') {
+      // Arena: das Like-Ziel schickt einen Zombie mit dem Namen des Gewinners
+      gameMode.arena.requestSpawn(h.winner.name, { count: h.amount }); gameMode.arena.addScore(h.winner.name, 10)
+      broadcast({ type: 'LIKE_GOAL', user: h.winner.name, avatar: h.winner.avatar, level: h.level, every: c.every, legend: h.amount > 1 ? `${h.amount}× Zombie` : 'Zombie', kind: 'mob', helpers: h.helpers })
+      pushFeed({ kind: 'gift', user: h.winner.name, text: `knackt ${c.every} Likes → Arena-Zombie`, emoji: '❤️' })
+      brain.onLikeGoal(h.winner, { every: c.every, level: h.level, spawnText: h.amount > 1 ? `${h.amount} Zombies in die Arena` : 'einen Zombie in die Arena', amount: h.amount, nextAmount: h.nextAmount, helpers: h.helpers })
+      continue
+    }
     const res = gifts.fire({ id: 'likes', giftName: 'Likes', action: c.action, mob: c.mob, amount: h.amount, hpMult: 1, legend: likeLegend(h.amount) }, h.winner)
     const legend = likeLegend(h.amount)
     broadcast({ type: 'LIKE_GOAL', user: h.winner.name, avatar: h.winner.avatar, level: h.level, every: c.every, legend, kind: res.effect.kind, helpers: h.helpers })
@@ -587,11 +670,12 @@ const OVERLAY_EVENTS = new Set(['liquid_escape', 'liquid_rescue', 'camera', 'cor
 bot.on('event', e => {
   brain.onBotEvent(e.type, e.data)
   recallTips(e.type, e.data)
+  if (e.type === 'bot_spawned') gameMode.onBotBack(); else if (e.type === 'bot_disconnected' || e.type === 'bot_stopped') gameMode.onBotGone()
   if (OVERLAY_EVENTS.has(e.type)) broadcast({ type: 'BOT_EVENT', event: e.type, data: e.data })
   else if (e.type !== 'hotbar') broadcast({ type: 'BOT_EVENT', event: e.type, data: e.data }, isControl)
   if (e.type === 'log') log('info', e.data.message)
   else if (e.type === 'warn' || e.type === 'bot_error' || e.type === 'bot_kicked') log('warn', e.data.message || e.data.reason || e.type)
-  else if (['bot_spawned', 'bot_disconnected', 'plan', 'death', 'goal_pushed', 'goal_done', 'goal_failed', 'action_cooldown', 'build_done', 'enchanted', 'portal_lit', 'mode', 'cave_done', 'cave_aborted', 'liquid_rescue', 'lesson', 'death_analysis', 'rethink', 'tool_worn', 'lag_pause', 'lag_resume', 'bunker', 'avoid', 'night_shelter'].includes(e.type)) {
+  else if (['bot_spawned', 'bot_disconnected', 'plan', 'death', 'goal_pushed', 'goal_done', 'goal_failed', 'action_cooldown', 'build_done', 'enchanted', 'portal_lit', 'mode', 'cave_done', 'cave_aborted', 'liquid_rescue', 'lesson', 'death_analysis', 'rethink', 'tool_worn', 'lag_pause', 'lag_resume', 'bunker', 'avoid', 'night_shelter', 'arena_build', 'arena_built', 'arena_enter', 'arena_exit', 'arena_upgrade', 'arena_death', 'arena_stuck'].includes(e.type)) {
     log('info', `${e.type} ${JSON.stringify(e.data).slice(0, 200)}`)
     broadcastState()
   }

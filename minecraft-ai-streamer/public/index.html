@@ -190,6 +190,7 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
   <div class="wrap" style="padding-block:0">
     <nav class="tabs" role="tablist">
       <button data-tab="live" role="tab"><span>🎮</span>Live</button>
+      <button data-tab="arena" role="tab"><span>🏟️</span>Arena</button>
       <button data-tab="world" role="tab"><span>🌍</span>Welt</button>
       <button data-tab="gifts" role="tab"><span>🎁</span>Gifts</button>
       <button data-tab="stream" role="tab"><span>📡</span>Stream</button>
@@ -249,6 +250,48 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
         <h2>Testen <small>ohne echten Stream</small></h2>
         <div class="row"><input id="chatTxt" placeholder="Chat-Nachricht simulieren" aria-label="Chat simulieren"><input id="simUser" value="Lukas" style="flex:0 1 110px" aria-label="Test-Zuschauer"><button id="chatBtn">Senden</button></div>
         <div class="row" id="chatQuick"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ ARENA -->
+<div class="page" id="p-arena">
+  <div class="grid">
+    <div class="stack c7">
+      <section>
+        <h2>Spielmodus <small id="gmInfo"></small></h2>
+        <div class="btns wide">
+          <button class="tile" data-gm="SURVIVAL"><span>🌲</span><div><b>Survival-Modus</b><small>Der Bot spielt normal weiter: Holz, Haus, Höhle, Gift-Mobs</small></div></button>
+          <button class="tile" data-gm="ARENA"><span>🏟️</span><div><b>Arena-Modus</b><small>Zuschauer schicken Zombies mit ihrem Namen, der Bot kämpft und rüstet auf</small></div></button>
+        </div>
+        <div class="row" style="margin-top:10px"><button id="arBuild">🏟️ Arena jetzt bauen / neu aufbauen</button><span class="hint" id="arWhere" style="margin:0"></span></div>
+        <div class="hint">Die Arena entsteht 400 Blöcke neben dem Bot hoch in der Luft, damit im Survival-Gelände nichts kaputtgeht. Beim Umschalten merkt sich der Bot seinen Platz und kommt danach dorthin zurück.</div>
+      </section>
+      <section>
+        <h2>Arena live <small id="arState"></small></h2>
+        <div class="bars">
+          <div class="bar"><label>Herzen <b id="arHp">–</b></label><div><i id="arHpBar"></i></div></div>
+          <div class="bar food"><label>Hunger <b id="arFood">–</b></label><div><i id="arFoodBar"></i></div></div>
+        </div>
+        <div class="bar" style="margin-top:12px"><label><span id="arEm">💎 – Smaragde</span><b id="arNext"></b></label><div><i id="arEmBar" style="background:var(--lime)"></i></div></div>
+        <div class="kv" id="arKv"></div>
+      </section>
+      <section>
+        <h2>Testen <small>ohne TikTok-Stream</small></h2>
+        <div class="row"><input id="arUser" value="Lukas" aria-label="Name des Test-Supporters" style="flex:0 1 160px"><span class="hint" style="margin:0">Name, der über dem Zombie steht</span></div>
+        <div class="btns" style="margin-top:8px"><button data-ar="zombie">🧟 1× Test-Zombie</button><button data-ar="wave">🌊 5× Zombie-Welle</button><button data-ar="boss">👑 1× Boss-Zombie</button><button data-ar="emeralds">💎 +25 Smaragde</button><button data-ar="unstuck">🛠️ Zurück zur Mitte</button><button data-ar="clear" class="danger">🧹 Alle Zombies löschen</button></div>
+      </section>
+    </div>
+    <div class="stack c5">
+      <section>
+        <h2>🏆 Top-Supporter</h2>
+        <div id="arTop" class="learnList"></div>
+        <div class="hint">Kleines Gift (1–9 Coins): 1 Zombie, 10 Punkte · Mittleres (10–99): 3 Zombies, 35 Punkte · Großes (ab 100): Boss, 150 Punkte. Das Like-Ziel schickt ebenfalls einen Zombie.</div>
+      </section>
+      <section>
+        <h2>Aufrüstungs-Pfad</h2>
+        <div id="arPath" class="learnList"></div>
       </section>
     </div>
   </div>
@@ -642,6 +685,37 @@ function renderRules () {
 }
 $('giftFilter').oninput = renderRules
 
+/* ---- Arena ---- */
+const AR_STATE = { SURVIVAL_HEAL: '🩹 Notfall-Heilung', PRO_COMBAT: '⚔️ Kampf', AUTO_UPGRADE: '⚒️ Rüstet auf', IDLE_FARMING: '💎 Farmt Smaragde' }
+const AR_PATH = [[1, 0, 'Holzschwert + Lederrüstung'], [2, 10, 'Steinschwert'], [3, 25, 'Eisenschwert + Eisenbrustpanzer'], [4, 45, 'Eisenschwert (Schärfe II) + volles Eisen-Set'], [5, 75, 'Diamantschwert (Schärfe III) + Diamantbrustpanzer'], [6, 110, 'Diamantschwert (Schärfe IV, Rückstoß I) + volles Diamant-Set'], [7, 160, 'Netheritschwert (Schärfe V) + volles Netherit-Set'], [8, 50, 'je 50: +4 Goldäpfel, 60 s Stärke, mehr Schutz']]
+function renderArena (a, s) {
+  if (!a) return
+  const on = a.mode === 'ARENA'
+  for (const b of $$('[data-gm]')) { b.classList.toggle('on', b.dataset.gm === a.mode); b.disabled = !!a.busy }
+  $('gmInfo').textContent = a.busy ? 'arbeitet …' : on ? 'Arena läuft' : 'Survival läuft'
+  $('arBuild').disabled = !!a.busy
+  $('arWhere').textContent = a.built && a.center ? `Steht bei X ${a.center.x}, Y ${a.center.y}, Z ${a.center.z}` : 'Noch nicht gebaut – wird beim ersten Umschalten automatisch gebaut.'
+  $('arState').textContent = on ? (AR_STATE[a.state] || a.state || '') : 'nur im Arena-Modus'
+  const live = on && s && s.connected
+  $('arHp').textContent = live ? (s.health / 2).toFixed(1) + ' / 10' : '–'; $('arHpBar').style.width = live ? Math.min(100, s.health * 5) + '%' : '0'
+  $('arFood').textContent = live ? (s.food / 2).toFixed(1) + ' / 10' : '–'; $('arFoodBar').style.width = live ? Math.min(100, s.food * 5) + '%' : '0'
+  $('arEm').textContent = on ? `💎 ${a.emeralds} Smaragde` : '💎 – Smaragde'
+  $('arNext').textContent = on ? `noch ${Math.max(0, a.nextCost - a.emeralds)} bis: ${a.nextLabel}` : ''
+  $('arEmBar').style.width = on ? Math.min(100, a.emeralds / a.nextCost * 100) + '%' : '0'
+  const kv = $('arKv'); kv.textContent = ''
+  if (on) for (const [k, v] of [['Stufe', a.level], ['Zombies', `${a.active + a.spawning} / ${a.maxActive}`], ['Warteschlange', a.queued], ['Goldäpfel', a.apples], ['Kills', a.kills], ['Tode', a.deaths]]) kv.appendChild(el('div', {}, el('b', { textContent: v }), el('span', { textContent: k })))
+  const top = $('arTop'); top.textContent = ''
+  if (!a.top || !a.top.length) top.appendChild(el('div', { className: 'empty', textContent: 'Noch keine Punkte. Das erste Gift im Arena-Modus zählt.' }))
+  ;(a.top || []).forEach((t, i) => top.appendChild(el('div', {}, el('span', { textContent: `${['🥇', '🥈', '🥉'][i] || '#' + (i + 1)} ${t.name}` }), el('b', { textContent: t.score + ' Pkt' }))))
+  const path = $('arPath'); path.textContent = ''
+  for (const [lvl, cost, label] of AR_PATH) {
+    const reached = on && (lvl < 8 ? a.level >= lvl : a.level >= 8)
+    const row = el('div', {}, el('span', { textContent: `${lvl === 8 ? 'ab 8' : 'Stufe ' + lvl}: ${label}` }), el('b', { textContent: reached ? '✓' : cost ? '💎 ' + cost : 'Start' }))
+    if (on && a.level === lvl) row.style.borderColor = 'var(--cyan)'
+    path.appendChild(row)
+  }
+}
+
 /* ---- Gesamtzustand ---- */
 const LOCK = { off: '', day: 'Immer Tag aktiv', night: 'Immer Nacht aktiv', freeze: 'Zeit angehalten' }
 function renderMc (mc, botOn) {
@@ -688,6 +762,7 @@ function renderState (s) {
   for (const b of $$('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
   for (const b of $$('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '9:16'))
   $('dzBtn').classList.toggle('on', !!s.designer)
+  renderArena(s.arena, s.status)
   // Gelerntes
   if (s.learning) {
     const Lr = s.learning; const Wd = s.wisdom || { tips: [], unknown: [] }
@@ -796,6 +871,7 @@ function onMsg (m) {
   else if (m.type === 'STATUS') { if (state) state.status = m.status; renderStatus(m.status) } else if (m.type === 'LOG') addLog(m.entry)
   else if (m.type === 'FEED') addFeed(m.item)
   else if (m.type === 'GIFT_LIBRARY') { library = m; renderLib() }
+  else if (m.type === 'ARENA') { if (state) state.arena = m.arena; renderArena(m.arena, state && state.status) }
   else if (m.type === 'TTS') addLog({ at: Date.now(), level: 'info', message: `🎙 (${m.emotion}) ${m.text}` })
   else if (m.type === 'DENIED') { ws.onclose = null; chip($('cWs'), 'bad', 'Kein Zugriff'); $('loginTxt').textContent = m.reason + '. Den Zugangscode siehst du am PC im Dashboard (Reiter Stream).'; $('login').hidden = false; $('loginPw').focus() }
 }
@@ -855,6 +931,10 @@ const sendCmd = () => { const t = $('cmdTxt').value.trim(); if (t && send({ type
 $('cmdBtn').onclick = sendCmd
 confirmTap($('learnReset'), () => send({ type: 'LEARN_RESET' }, 'Fehler-Gedächtnis gelöscht'))
 confirmTap($('wisdomReset'), () => send({ type: 'WISDOM_RESET' }, 'Chat-Tipps gelöscht'))
+// Arena
+for (const b of $$('[data-gm]')) b.onclick = () => send({ type: 'GAME_MODE', mode: b.dataset.gm }, b.dataset.gm === 'ARENA' ? 'Wechsel in die Arena …' : 'Zurück ins Survival …')
+confirmTap($('arBuild'), () => send({ type: 'ARENA_BUILD' }, 'Arena wird gebaut (rund 20 Sekunden) …'))
+for (const b of $$('[data-ar]')) b.onclick = () => { if (!state || !state.arena || state.arena.mode !== 'ARENA') return toast('Erst auf „Arena-Modus“ schalten'); send({ type: 'ARENA_TEST', what: b.dataset.ar, user: $('arUser').value.trim() || 'TestUser' }, txt(b)) }
 // Sprachmodell
 const setLlm = (patch, label) => send({ type: 'LLM_SET', llm: patch }, label)
 for (const b of $$('[data-llmon]')) b.onclick = () => setLlm({ enabled: b.dataset.llmon === '1' }, b.dataset.llmon === '1' ? 'Sprachmodell an' : 'Sprachmodell aus')
@@ -942,6 +1022,9 @@ function demoSend (m) {
     case 'LIKES_SET': Object.assign(s.likes.config, m.likes); s.likes.every = s.likes.config.every; break
     case 'LIKES_RESET': Object.assign(s.likes, { progress: 0, total: 0, level: 0, last: null }); break
     case 'SIM_LIKE': { const k = s.likes; k.progress += m.count; k.total += m.count; k.last = m.user; if (k.progress >= k.every) { k.progress -= k.every; k.level++; addFeed({ kind: 'gift', user: m.user, emoji: '❤️', text: `knackt ${k.every} Likes → ${k.legend}` }) } break }
+    case 'GAME_MODE': Object.assign(s.arena, { mode: m.mode, built: true, state: m.mode === 'ARENA' ? 'IDLE_FARMING' : null }); break
+    case 'ARENA_BUILD': s.arena.built = true; break
+    case 'ARENA_TEST': { const a = s.arena; if (m.what === 'emeralds') a.emeralds += 25; else if (m.what === 'clear') { a.active = 0; a.queued = 0 } else if (m.what !== 'unstuck') { const n = m.what === 'wave' ? 5 : 1; const free = Math.max(0, a.maxActive - a.active); a.active += Math.min(n, free); a.queued += n - Math.min(n, free); a.state = 'PRO_COMBAT'; const e = a.top.find(x => x.name === m.user); const pts = m.what === 'boss' ? 150 : m.what === 'wave' ? 50 : 10; if (e) e.score += pts; else a.top.push({ name: m.user, score: pts }); a.top.sort((x, y) => y.score - x.score) } break }
     case 'CAMERA': s.config.cameraMode = m.mode; break
     case 'DESIGNER': s.designer = m.on; break
     case 'LAYOUT_FORMAT': s.layout = { format: m.format }; break
@@ -964,6 +1047,7 @@ function demo () {
     remote: { autoTunnel: false, notify: false, notifyTopic: 'ki-streamer-Beispiel123' },
     lan: { urls: ['http://192.168.178.20:3000/mobile.html?k=Beispiel'], qr: null },
     mc: { installed: true, phase: 'running', own: true, error: null },
+    arena: { mode: 'SURVIVAL', busy: false, built: false, center: { x: 518, y: 180, z: -37 }, state: null, emeralds: 31, level: 3, levelLabel: 'Eisenschwert + Eisenbrustpanzer', nextCost: 45, nextLabel: 'Eisenschwert (Schärfe II) + volles Eisen-Set', apples: 2, active: 0, spawning: 0, queued: 0, maxActive: 12, kills: 14, deaths: 0, top: [{ name: 'Mia', score: 185 }, { name: 'Lukas', score: 40 }] },
     learning: { deaths: 3, mistakes: 7, lessons: [{ id: 'creeper_1', text: 'Creeper: mehr Abstand halten, nur treffen und sofort zurück.' }, { id: 'night_1', text: 'Nachts draußen gestorben: Bett früher besorgen und nachts ohne Bett einbunkern.' }], recent: [], policy: { retreatHp: 12, funnelAt: 4, eatAt: 14, foodReserve: 5, creeperCaution: 1, maxDrop: 3, avoid: ['warden'], caveNeedsIron: false, caveNeedsWater: false, nightShelter: true, pillarWhenSwarmed: false, shieldFirst: false, torchStock: 6, reasons: { creeperCaution: 'aus einem Creeper-Tod gelernt', avoid: 'Tipp von Lea', nightShelter: 'nachts draußen gestorben' } }, strategies: [{ action: 'MineIron', name: 'relocate', label: 'woanders versuchen', tries: 2, wins: 1 }] },
     wisdom: { tips: [{ id: 'avoid_warden', label: 'Warden nicht bekämpfen', effect: 'Weicht einem natürlichen Wärter aus, statt zu kämpfen.', already: false, by: 'Lea', text: 'Schlag den Warden nicht', count: 2, supporters: [], enabled: true, applied: 1 }], unknown: [{ by: 'Ben', text: 'du solltest einen bogen craften' }] },
     llm: { enabled: true, hasKey: true, model: 'claude-haiku-5-5', budgetUsd: 0.5, maxPerHour: 300, monologues: true, models: [A('claude-haiku-5-5', 'Claude Haiku 5.5 (schnell, günstig)'), A('claude-sonnet-5-5', 'Claude Sonnet 5.5 (wortgewandter, ca. 20× teurer)')], calls: 142, ok: 139, failed: 3, costUsd: 0.036, avgMs: 900, lastError: null, budgetHit: false },

@@ -73,6 +73,9 @@ function checkRegistries (checks, cmd, problems) {
     if (c.type === 'minecraft:resource' && head === 'attribute' && c.name === 'attribute' && !REG['minecraft:attribute'].has(id)) problems.push(`unbekanntes Attribut "${id}"`)
     if (c.type === 'minecraft:resource' && head === 'effect' && c.name === 'effect' && !REG['minecraft:mob_effect'].has(id)) problems.push(`unbekannter Effekt "${id}"`)
     if (c.type === 'minecraft:resource' && head === 'summon' && !REG['minecraft:entity_type'].has(id)) problems.push(`unbekanntes Wesen "${id}"`)
+    if ((c.type === 'minecraft:block_state' || c.type === 'minecraft:block_predicate') && !REG['minecraft:block'].has(id)) problems.push(`unbekannter Block "${id}"`)
+    if (c.type === 'minecraft:particle' && !REG['minecraft:particle_type'].has(id)) problems.push(`unbekannter Partikel "${id}"`)
+    if (head === 'playsound' && c.name === 'sound' && !REG['minecraft:sound_event'].has(id)) problems.push(`unbekanntes Geräusch "${id}"`)
   }
 }
 
@@ -136,6 +139,18 @@ function collect () {
     'kill @e[tag=kicam]', 'spectate KI_Streamer Spieler', 'execute at KI_Streamer run summon item_display ~ ~2.5 ~ {Tags:["kicam"],teleport_duration:6}', 'spectate @e[tag=kicam,limit=1] Spieler',
     'execute at KI_Streamer rotated ~ 0 positioned ^-0.9 ^2.6 ^-4.6 run tp @e[tag=kicam,limit=1] ~ ~ ~ facing entity KI_Streamer eyes'
   ]) out.push({ src: 'fest', cmd })
+  // ---- Arena-Modus: Aufbau, Regeln, Animation, Jubel, Bestenliste, Gegner, alle Ausrüstungs-Stufen
+  const { ArenaBuilder } = require('../modules/arena/arena-builder')
+  const { upgradeCommands, LEVELS } = require('../modules/arena/arena-controller')
+  const ab = new ArenaBuilder({ center: { x: 400, y: 180, z: -37 }, run: () => true, botName: () => 'KI_Streamer' })
+  const arena = (src, list) => { for (const cmd of list) out.push({ src: 'Arena ' + src, cmd }) }
+  arena('Bau', ab.buildCommands()); arena('Betreten', ab.enterCommands()); arena('Verlassen', ab.leaveCommands())
+  arena('Animation', [...ab.animationCommands(1), ...ab.animationCommands(12)])
+  for (const t of ['kill', 'boss_spawn', 'upgrade', 'emerald', 'ambient']) arena('Jubel', ab.cheerCommands(t))
+  arena('Bestenliste', ab.leaderboardCommands([{ name: 'Max_der_Große', score: 150 }, { name: 'xX"Lukas\'}Xx', score: 35 }]))
+  arena('Zombie', ab.spawnCommands('Lukas', false).cmds); arena('Boss', ab.spawnCommands('Mia', true).cmds)
+  for (let lvl = 1; lvl <= LEVELS.length + 5; lvl++) arena('Stufe ' + lvl, upgradeCommands('KI_Streamer', lvl, 6))
+  arena('fest', ['kill @e[tag=arena_mob]', 'tp KI_Streamer 400.5 180 -36.5', 'effect give KI_Streamer minecraft:instant_health 1 1 true', 'effect give KI_Streamer minecraft:regeneration 6 1 true', 'effect give KI_Streamer minecraft:slow_falling 15 0 true', 'item replace entity KI_Streamer hotbar.0 with air'])
   return out
 }
 
@@ -146,7 +161,10 @@ function run () {
     // Zahlen und Namen vereinheitlichen, damit gleiche Befehlsformen nur einmal gemeldet werden
     const shape = cmd.replace(/-?\d+(\.\d+)?/g, '0').replace(/g0/g, 'gN')
     if (seen.has(shape)) continue
-    seen.set(shape, { src, cmd, problems: validate(cmd) })
+    const problems = validate(cmd)
+    // über den Bot geschickte Befehle sind Chat-Nachrichten: höchstens 256 Zeichen inklusive Schrägstrich
+    if (cmd.length > 255) problems.push(`zu lang für den Chat (${cmd.length} Zeichen)`)
+    seen.set(shape, { src, cmd, problems })
   }
   const bad = [...seen.values()].filter(x => x.problems.length)
   return { total: all.length, shapes: seen.size, bad }

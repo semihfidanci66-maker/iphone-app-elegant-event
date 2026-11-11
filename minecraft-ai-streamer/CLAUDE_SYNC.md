@@ -1,6 +1,6 @@
 # CLAUDE_SYNC – Arbeitsstand
 
-Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (43 Logiktests)
+Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (45 Logiktests)
 
 ## Auftrag (11.11.2026)
 
@@ -17,6 +17,15 @@ Der Bot soll selbstständig besser werden: Wissensbasis, Lernen aus Fehlern, Tip
 - `ai-streamer-brain.js` – Ansagen für Tipps, Lehren, neue Strategie, Werkzeug, Lag, Bunker
 - `llm-brain.js` – `classifyTip`: unbekannte Tipps einer festen Regel zuordnen
 - Dashboard Reiter System -> Karte „Gelerntes“
+
+## Arena-Modus (V11)
+
+- `modules/game-mode.js` (Umschalter), `modules/arena/arena-builder.js`, `modules/arena/arena-controller.js`
+- Survival pausiert über `host.gameMode` in `mc-ai-bot.js` (Hauptschleife, 250-ms-Reflexe, Tod-Behandlung)
+- `server.js`: `GAME_MODE`, `ARENA_BUILD`, `ARENA_TEST`, Gifts/Likes -> `arenaGift`, Sammel-Ansagen (`arenaSay`), Legende im Overlay
+- Dashboard: Reiter Arena. Tests: zwei Arena-Tests in `test/unit.js`, alle Arena-Befehle in `test/commands.js`
+- Der vom Nutzer gelieferte Builder-Code war nicht lauffähig (fehlende Leerzeichen, auskommentierter Tribünen-Teil, altes NBT-Format, fill über dem Blocklimit) und wurde neu geschrieben
+- **Ungetestet im echten Spiel.** Am ehesten wacklig: Zuordnung Zombie -> Supporter über den Spawnpunkt, Essen des Goldapfels unter Druck, Bau in frisch geladenen Chunks
 
 ## Befehls-Prüfung (neu)
 

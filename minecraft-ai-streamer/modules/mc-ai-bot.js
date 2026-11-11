@@ -122,6 +122,8 @@ class MinecraftAIBot extends EventEmitter {
     this.exitCaveRequested = false
     this.learning = new AILearning(null) // wird vom Server durch das gespeicherte Gedächtnis ersetzt
     this.lagPause = false
+    // Übergeordneter Spielmodus (siehe game-mode.js): im ARENA-Modus pausiert die Survival-Schleife komplett
+    this.gameMode = 'SURVIVAL'
     this.noSleep = false // Dauer-Nacht aus der Welt-Steuerung: nicht von selbst schlafen gehen
     this.camera = new CameraDirector(this)
     // ---- EIN zentraler Game-Loop: 250 ms KI-Tick (Reflexe, Watchdog, Regie, Status, externe Ticker).
@@ -144,11 +146,15 @@ class MinecraftAIBot extends EventEmitter {
     if (ctx && bot && bot.entity) {
       try {
         // Kampf-Reflex: unterbricht JEDE laufende Routine, sobald eine Bedrohung auftaucht
-        if (!this.paused && !ctx.combat.engaged && !(this.currentAction && this.currentAction.name === 'Combat') && ctx.combat.hasThreat()) this.interrupt('combat')
-        ctx.watchdog.tick()
-        ctx.autonomy.tick()
-        if (n % 20 === 0) for (const w of ctx.autonomy.checkWear()) this._emit('tool_worn', w)
-        ctx.liquid.brainTick() // 4-Sekunden-Garantie gegen Wasser/Lava
+        const survival = this.gameMode === 'SURVIVAL'
+        if (survival && !this.paused && !ctx.combat.engaged && !(this.currentAction && this.currentAction.name === 'Combat') && ctx.combat.hasThreat()) this.interrupt('combat')
+        if (survival) {
+          ctx.watchdog.tick()
+          ctx.autonomy.tick()
+          if (n % 20 === 0) for (const w of ctx.autonomy.checkWear()) this._emit('tool_worn', w)
+          ctx.liquid.brainTick()
+        }
+        // (Arena: eigener Controller mit eigenem Wächter) // 4-Sekunden-Garantie gegen Wasser/Lava
         this.camera.tick()
         this.emit('pose', { yaw: bot.entity.yaw + ctx.look.headYawOffset, pitch: bot.entity.pitch + ctx.look.headPitchOffset, moveYaw: ctx.look.yaw, blocking: !!ctx.combat.blocking, onGround: bot.entity.onGround, speed: Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z) })
         if (n % 4 === 0) this.emit('status', this.status())
@@ -263,6 +269,7 @@ class MinecraftAIBot extends EventEmitter {
     this.exploreHeading = Math.random() * Math.PI * 2
 
     bot.on('death', () => {
+      if (this.gameMode !== 'SURVIVAL') return // Arena-Tode zählt und behandelt der Arena-Controller
       this.deaths++
       // Aus dem Tod lernen: Lage festhalten, neue Lehren ansagen
       try {
@@ -348,6 +355,7 @@ class MinecraftAIBot extends EventEmitter {
           await sleep(800)
           continue
         }
+        if (this.gameMode !== 'SURVIVAL') { await sleep(300); continue }
         if (this.paused) { this.setActivity('paused'); await sleep(400); continue }
         // ---- Server laggt stark: einbunkern und abwarten, damit er nicht unfair stirbt ----
         if (this.lagPause) {
@@ -657,6 +665,7 @@ class MinecraftAIBot extends EventEmitter {
       held: bot.heldItem ? bot.heldItem.name : null,
       sleeping: !!bot.isSleeping,
       camera: { mode: this.camera.mode, applied: this.camera.applied, player: this.camera.player },
+      gameMode: this.gameMode,
       tps: ctx.autonomy ? ctx.autonomy.tps.value : 20,
       lagging: this.lagPause,
       bunkered: !!(ctx.autonomy && ctx.autonomy.bunker),
