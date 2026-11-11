@@ -1,6 +1,8 @@
 # CLAUDE_SYNC – Arbeitsstand
 
-Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (43 Logiktests)
+> **Aktueller Stand liegt jetzt auf `claude/minecraft-ai-streamer-vet79e`** (enthält alles von `claude/affectionate-cray-d9cvu6` bis `403bbad` plus die Korrekturen unten). Bitte dort weitermachen bzw. diesen Branch vorher einmischen.
+
+Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (45 Logiktests)
 
 ## Auftrag (11.11.2026)
 
@@ -38,3 +40,10 @@ Der Bot soll selbstständig besser werden: Wissensbasis, Lernen aus Fehlern, Tip
 1. Echter Servertest zu Hause: Bot sterben lassen (Creeper, Sturz, Nacht) und in „Gelerntes“ prüfen, ob Lehre und Verhalten stimmen
 2. Danach die Stellen nachziehen, die im echten Spiel haken (am ehesten Bunker-Platzierung und Hochbauen im Kampf)
 3. Offen vom Nutzer: ElevenLabs-Stimme (Kostenfrage geklärt? Schlüssel nötig), 3D-Live-Ansicht der Spielwelt im Dashboard
+
+## Korrekturen (11.11.2026, zweiter Account)
+
+- `llm-brain.js` – Nachdenk-Einstellung je Modell (`thinkingParams`): Haiku 5.5 `disabled`, Sonnet 5.5 `between_tools`, Opus 5.5 Feld weglassen. Vorher bekamen Sonnet 5.5 und Opus 5.5 auf jede Anfrage einen 400-Fehler (beide lehnen `disabled` ab), der Streamer fiel immer auf Textbausteine zurück.
+- `llm-brain.js` – `setConfig` übernimmt nur gesetzte Felder. Vorher schaltete z. B. ein Modellwechsel im Dashboard das Sprachmodell aus und setzte Budget/Limit auf die Standardwerte zurück.
+- `server.js` – `LLM_SET`: API-Schlüssel, Modell, Budget und Anfragen-Limit nur am PC selbst (wie `REMOTE_SET`). Von außen nur ein/aus und Monologe.
+- `test/unit.js` – zwei Tests dafür. Sperre von außen zusätzlich im laufenden Server geprüft.

@@ -455,6 +455,33 @@ t('Sprachmodell: Antwort wird gesäubert, Kosten gezählt, Budget und Fehler fü
   assert.strictEqual(new LlmBrain({ enabled: true }, {}).ready(), !!process.env.ANTHROPIC_API_KEY, 'ohne Schlüssel bleibt es aus')
   assert(!JSON.stringify(llm.publicState()).includes('apiKey'))
 })
+t('Sprachmodell: Nachdenk-Einstellung passt zu jedem Modell (keine 400-Fehler bei Sonnet/Opus)', async () => {
+  const { LlmBrain, thinkingParams, MODELS } = require('../modules/llm-brain')
+  assert.deepStrictEqual(thinkingParams('claude-haiku-5-5'), { thinking: { type: 'disabled' } })
+  assert.deepStrictEqual(thinkingParams('claude-sonnet-5-5'), { thinking: { type: 'between_tools' } })
+  assert.deepStrictEqual(thinkingParams('claude-opus-5-5'), {})
+  for (const model of Object.keys(MODELS)) {
+    const calls = []
+    const client = { messages: { create: async p => { calls.push(p); return { stop_reason: 'end_turn', usage: {}, content: [{ type: 'text', text: 'Mach ich direkt, Chef.' }] } } } }
+    const llm = new LlmBrain({ enabled: true, model, budgetUsd: 1 }, { client })
+    await llm.ask('x')
+    await llm.classifyTip('baue nachts einen Bunker', [{ id: 'bunker', label: 'Bunker' }])
+    for (const c of calls) {
+      assert.strictEqual(c.model, model)
+      assert.strictEqual(c.output_config.effort, 'low')
+      if (model === 'claude-sonnet-5-5') assert.deepStrictEqual(c.thinking, { type: 'between_tools' }, 'Sonnet 5.5 lehnt disabled ab')
+      else if (model === 'claude-opus-5-5') assert(!('thinking' in c), 'Opus 5.5 lässt sich nicht abschalten')
+      else assert.deepStrictEqual(c.thinking, { type: 'disabled' })
+    }
+  }
+})
+t('Sprachmodell: Einzelne Einstellung ändert nur dieses Feld', () => {
+  const { LlmBrain } = require('../modules/llm-brain')
+  const l = new LlmBrain({ enabled: true, model: 'claude-haiku-5-5', budgetUsd: 2, maxPerHour: 500 }, { client: {} })
+  l.setConfig({ enabled: undefined, model: 'claude-sonnet-5-5', budgetUsd: undefined, maxPerHour: undefined, monologues: undefined })
+  assert.deepStrictEqual(l.config, { enabled: true, model: 'claude-sonnet-5-5', budgetUsd: 2, maxPerHour: 500, monologues: true })
+  l.setConfig({ enabled: false }); assert.strictEqual(l.config.enabled, false); assert.strictEqual(l.config.budgetUsd, 2)
+})
 t('Persona: mit Sprachmodell kommt dessen Antwort, sonst der Textbaustein', async () => {
   const mk = (answer) => { const x = mkBrain(calm); x.b.deps.llm = { config: { monologues: true }, ready: () => true, chatTask: o => o, idleTask: o => o, ask: async () => answer }; return x }
   const a = mk('Ben schreibt Pizza... Schön für dich, ich zocke.')

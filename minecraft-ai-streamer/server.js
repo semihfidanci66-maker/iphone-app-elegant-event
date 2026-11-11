@@ -336,6 +336,13 @@ function handle (m, ws = { isLocal: true }) {
     case 'GIFT_ADD_LIBRARY': { const r = gifts.addFromLibrary(m.key); if (r) { log('info', `Gift hinzugefügt: ${r.giftName} (${r.coins} Coins) -> ${r.legend}`); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break }
     case 'LLM_SET': {
       const p = m.llm || {}
+      // Schlüssel, Modell und Kostengrenzen nur am PC selbst – wie die Fernzugriff-Einstellungen.
+      // Von außen (Handy, Tunnel) lässt sich das Sprachmodell nur ein- und ausschalten.
+      if (!ws.isLocal && ['apiKey', 'model', 'budgetUsd', 'maxPerHour'].some(k => p[k] !== undefined)) {
+        log('warn', 'API-Schlüssel, Modell und Budget lassen sich nur am PC selbst ändern')
+        config.llm = llm.setConfig({ enabled: p.enabled, monologues: p.monologues }); saveConfig(); broadcastState()
+        break
+      }
       // Der Schlüssel wird nur gesetzt, nie zurückgeschickt. Leerer Text = Schlüssel löschen.
       if (typeof p.apiKey === 'string') { config.anthropicKey = p.apiKey.trim().slice(0, 300); llm.setKey(config.anthropicKey); log('info', config.anthropicKey ? 'Sprachmodell: API-Schlüssel gespeichert' : 'Sprachmodell: API-Schlüssel entfernt') }
       config.llm = llm.setConfig({ enabled: p.enabled, model: p.model, budgetUsd: p.budgetUsd, maxPerHour: p.maxPerHour, monologues: p.monologues })
