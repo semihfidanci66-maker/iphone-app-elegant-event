@@ -264,6 +264,30 @@ t('Gift-Bibliothek: echte TikTok-Liste liefert Bild und Preis, Auswahl legt eine
   assert(g.publicConfig().length <= 24)
 })
 
+// ---------- Like-Ziel & Combo-Ansage ----------
+t('Like-Ziel: wer die Schwelle knackt, bekommt die Aktion; jede Runde eins mehr', () => {
+  const { LikeGoal, sanitizeLikes } = require('../modules/like-goal')
+  const g = new LikeGoal({ every: 100 })
+  const max = { uniqueId: 'max', nickname: 'Max' }; const lukas = { uniqueId: 'lukas', nickname: 'Lukas' }
+  assert.deepStrictEqual(g.add(max, 60), []); assert.deepStrictEqual(g.add(lukas, 30), []); assert.deepStrictEqual(g.add(max, 9), [])
+  const hit = g.add(lukas, 5) // 104 -> Lukas knackt die 100
+  assert.strictEqual(hit.length, 1); assert.strictEqual(hit[0].winner.name, 'Lukas'); assert.strictEqual(hit[0].amount, 1); assert.strictEqual(hit[0].nextAmount, 2); assert.deepStrictEqual(hit[0].helpers, ['Max'])
+  assert.strictEqual(g.state().progress, 4); assert.strictEqual(g.state().level, 1); assert.strictEqual(g.state().last, 'Lukas')
+  const second = g.add(max, 96); assert.strictEqual(second[0].winner.name, 'Max'); assert.strictEqual(second[0].amount, 2); assert.deepStrictEqual(second[0].helpers, ['Lukas'])
+  assert.strictEqual(g.add(max, 500).length, 3, 'ein Paket löst höchstens drei Ziele aus'); assert(g.state().progress < 100)
+  for (let i = 0; i < 20; i++) g.add(max, 100); assert.strictEqual(g.amountFor(g.level), 5, 'Steigerung ist gedeckelt')
+  g.setConfig({ enabled: false }); assert.deepStrictEqual(g.add(max, 500), [])
+  assert.deepStrictEqual(sanitizeLikes({ every: 3, action: 'hack', amount: 99, mob: 7 }, ACTIONS), { enabled: true, every: 10, action: 'zombie_fast', mob: 'zombie', amount: 10, escalate: true })
+})
+t('Persona: Combo wird am Stück angesagt, Like-Ziel nennt den Gewinner', () => {
+  const { b, q } = mkBrain(calm)
+  b.onGift({ uniqueId: 'max', nickname: 'Max' }, { id: 'rose', name: 'Rose', coins: 1 }, { kind: 'mob', tier: 1, spawnText: 'einen Zombie', mob: 'zombie' }, 10)
+  assert(/Max/.test(q()[0]) && /(zehn|10) Rosen/.test(q()[0]), q()[0])
+  const m = mkBrain(calm)
+  m.b.onLikeGoal({ uniqueId: 'lukas', nickname: 'Lukas' }, { every: 100, level: 1, spawnText: 'einen Zombie', amount: 1, nextAmount: 2, helpers: ['Max'] })
+  assert(/Lukas/.test(m.q()[0]) && /100/.test(m.q()[0]) && /Max/.test(m.q()[0]) && /(mehr|weiter)/i.test(m.q()[0]), m.q()[0])
+})
+
 // ---------- Welt-Steuerung & Handy im WLAN ----------
 t('Welt: Tag/Nacht, Wetter und Regeln werden zu festen Server-Befehlen', () => {
   const { worldCommands, sanitizeWorld, cleanCommand, clock } = require('../modules/world-control')

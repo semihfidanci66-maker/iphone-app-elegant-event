@@ -407,6 +407,16 @@ class GiftEngine {
    * Gift auslösen. Unbekannte Gifts werden automatisch in den Katalog aufgenommen.
    * @returns {{ok: boolean, rule: object, effect: object, reason?: string, discovered?: boolean}}
    */
+  /** Eine frei gebaute Regel auslösen (z. B. das Like-Ziel) – ohne Katalog-Eintrag. */
+  fire (raw, viewer) {
+    const rule = this.sanitizeRule({ ...raw, enabled: true })
+    if (!rule || rule.action === 'none') return { ok: false, rule, effect: ACTIONS.none }
+    const at = this.deps.spawnPoint()
+    const built = this.build(rule, viewer.uniqueId || viewer.nickname, 1, at, this.deps.botPos())
+    const sent = at ? this.deps.runCommands(built.cmds) : false
+    return { ok: !!sent, rule, effect: built.effect }
+  }
+
   trigger (gift, viewer, count = 1) {
     let rule = this.findRule(gift)
     let discovered = false

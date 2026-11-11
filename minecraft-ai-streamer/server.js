@@ -23,6 +23,7 @@ const { Tunnel } = require('./modules/tunnel')
 const { McServer } = require('./modules/mc-server')
 const { worldCommands, sanitizeWorld, cleanCommand, RULES } = require('./modules/world-control')
 const { lanAddresses } = require('./modules/lan')
+const { LikeGoal, sanitizeLikes } = require('./modules/like-goal')
 const QRCode = require('qrcode')
 
 const ROOT = __dirname
@@ -41,6 +42,7 @@ function loadConfig () {
   if (!cfg.remoteKey) cfg.remoteKey = crypto.randomBytes(9).toString('base64url')
   cfg.tiktokUsername = sanitizeUsername(cfg.tiktokUsername)
   cfg.world = sanitizeWorld(cfg.world)
+  cfg.likes = sanitizeLikes(cfg.likes)
   return cfg
 }
 const config = loadConfig()
@@ -59,7 +61,7 @@ function writeLater (file, getData, delay = 250) {
   }, delay))
 }
 function saveConfig () {
-  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, world: config.world, mcRamGb: mc.ramGb }))
+  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, likes: likes.config, world: config.world, mcRamGb: mc.ramGb }))
 }
 function sanitizeLayout (l) {
   if (!l || typeof l !== 'object') return null
@@ -67,7 +69,7 @@ function sanitizeLayout (l) {
   for (const f of ['16:9', '9:16', 'custom']) {
     const src = (l.formats && l.formats[f]) || {}
     const dst = out.formats[f] = {}
-    for (const id of ['cam', 'subs', 'legend', 'alerts', 'hud']) {
+    for (const id of ['cam', 'subs', 'legend', 'alerts', 'hud', 'likes']) {
       const w = src[id]
       if (!w) continue
       const num = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d }
@@ -90,6 +92,8 @@ const gifts = new GiftEngine({
   onChange: () => { saveConfig(); syncGiftConfig(); broadcastState() }
 }, config.giftRules)
 gifts.loadLibrary(readJson(LIBRARY_FILE, null))
+const likes = new LikeGoal(config.likes)
+likes.setConfig({}, ACTIONS, MOBS)
 const tunnel = new Tunnel(PORT, () => broadcastState())
 const mc = new McServer({ dir: path.join(ROOT, 'mc-server'), port: config.minecraft.port, ramGb: config.mcRamGb })
 bot.noSleep = config.world.timeLock === 'night'
@@ -181,6 +185,7 @@ function fullState () {
     tunnel: tunnel.state,
     lan,
     mc: mc.state,
+    likes: { config: likes.config, ...likes.state(), legend: likeLegend() },
     world: config.world,
     worldRules: Object.entries(RULES).map(([id, r]) => ({ id, label: r.label })),
     config: { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername || '', voice: tts.voice, voices: MALE_VOICES, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode },
@@ -217,6 +222,7 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => clients.delete(ws))
   ws.on('error', () => clients.delete(ws))
   send(ws, { type: 'GIFT_CONFIG_SYNC', gifts: gifts.publicConfig() })
+  send(ws, likesMsg())
   if (ws.role === 'overlay') { send(ws, { type: 'STATUS', status: bot.status() }); send(ws, { type: 'LAYOUT', layout }); send(ws, { type: 'DESIGNER', on: designerOn }) }
   else { send(ws, fullState()); send(ws, libraryMsg()) }
   ws.on('message', raw => {
@@ -246,6 +252,9 @@ function handle (m) {
     case 'GIFT_UPSERT': { const r = gifts.upsertRule(m.rule || {}); if (r) { log('info', `Gift gespeichert: ${r.giftName} (${r.coins}) -> ${r.legend}`); saveConfig(); syncGiftConfig(); broadcastState() } break }
     case 'GIFT_REMOVE': if (gifts.removeRule(String(m.id))) { saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break
     case 'GIFT_ADD_LIBRARY': { const r = gifts.addFromLibrary(m.key); if (r) { log('info', `Gift hinzugefügt: ${r.giftName} (${r.coins} Coins) -> ${r.legend}`); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break }
+    case 'LIKES_SET': likes.setConfig(m.likes || {}, ACTIONS, MOBS); config.likes = likes.config; saveConfig(); broadcast(likesMsg()); broadcastState(); break
+    case 'LIKES_RESET': likes.reset(); broadcast(likesMsg()); broadcastState(); break
+    case 'SIM_LIKE': onLike({ viewer: { uniqueId: String(m.user || 'TestUser').slice(0, 24), nickname: String(m.user || 'TestUser').slice(0, 24), avatar: null }, count: Math.max(1, Math.min(500, m.count | 0 || 1)) }); break
     case 'GIFT_RULES_RESET': gifts.resetRules(); gifts.learnLibrary(gifts.libraryList().map(g => ({ name: g.name, coins: g.coins, icon: g.icon })), false); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState(); break
     case 'DESIGNER': designerOn = !!m.on; broadcast({ type: 'DESIGNER', on: designerOn }); broadcastState(); break
     case 'LAYOUT_FORMAT': if (['16:9', '9:16', 'custom'].includes(m.format)) { layout = sanitizeLayout({ ...(layout || {}), format: m.format }); writeLater(LAYOUT_FILE, () => layout); broadcast({ type: 'LAYOUT', layout }); broadcastState() } break
@@ -343,7 +352,18 @@ async function stopMc () {
 }
 
 // ------------------------------------------------------------------ Verdrahtung
-function onGift ({ viewer, gift, count, delta }) {
+// ---- Combo-Ansagen: die Mobs kommen sofort, vorgelesen wird erst, wenn die Combo fertig ist
+const combos = new Map() // Zuschauer|Gift -> { viewer, gift, effect, count, timer }
+const COMBO_WAIT_MS = 3500 // so lange ohne neues Gift, dann gilt eine offene Combo als beendet
+const COMBO_SETTLE_MS = 900 // kurzes Sammelfenster nach dem Ende (schnelle Einzel-Gifts hintereinander)
+function speakGift (key) {
+  const c = combos.get(key)
+  if (!c) return
+  clearTimeout(c.timer); combos.delete(key)
+  brain.onGift(c.viewer, c.gift, c.effect, c.count)
+}
+
+function onGift ({ viewer, gift, count, delta, streakEnd = true }) {
   if (gift.name && (gift.icon || gift.coins) && !gift.ruleId) learnGifts([{ id: gift.id, name: gift.name, coins: gift.coins, icon: gift.icon }])
   const res = gifts.trigger(gift, viewer, delta)
   const rule = res.rule
@@ -356,15 +376,51 @@ function onGift ({ viewer, gift, count, delta }) {
     avatar: viewer.avatar || null,
     gift: { name: rule.giftName, emoji: rule.emoji, icon: gift.icon || rule.icon || null, coins },
     count,
+    delta,
     legend: rule.legend,
     kind: effect.kind,
     tier: effect.tier
   })
-  pushFeed({ kind: 'gift', user: viewer.nickname || viewer.uniqueId, avatar: viewer.avatar || null, text: `${rule.giftName} x${count} (${coins} Coins) → ${rule.legend}`, emoji: rule.emoji })
-  // Das Streamer-Hirn bekommt Name, Coins und Wirkung dynamisch – auch für neue und eigene Gifts
   if (res.discovered) brain.onGiftDiscovered(viewer, { name: rule.giftName })
-  if (effect.kind !== 'none') brain.onGift(viewer, { id: rule.id, name: rule.giftName, coins }, effect, delta)
   if (!res.ok && res.reason === 'bot_offline') log('warn', `Gift ${rule.giftName} von ${viewer.uniqueId}: Bot ist nicht in der Welt`)
+  if (effect.kind === 'none') { pushFeed({ kind: 'gift', user: viewer.nickname || viewer.uniqueId, avatar: viewer.avatar || null, text: `${rule.giftName} x${count} (${coins} Coins)`, emoji: rule.emoji }); return }
+  const key = `${viewer.uniqueId}|${rule.id}`
+  let c = combos.get(key)
+  if (!c) { c = { viewer, gift: { id: rule.id, name: rule.giftName, coins }, effect, count: 0, timer: null }; combos.set(key, c) }
+  c.count += delta
+  clearTimeout(c.timer)
+  const done = () => {
+    pushFeed({ kind: 'gift', user: viewer.nickname || viewer.uniqueId, avatar: viewer.avatar || null, text: `${rule.giftName} x${c.count} (${coins * c.count} Coins) → ${rule.legend}`, emoji: rule.emoji })
+    speakGift(key)
+  }
+  // Bosse sofort ansagen; alles andere erst, wenn die Combo fertig ist
+  if (effect.tier >= 5) done(); else c.timer = setTimeout(done, streakEnd ? COMBO_SETTLE_MS : COMBO_WAIT_MS)
+  if (combos.size > 200) speakGift(combos.keys().next().value)
+}
+
+// ---- Likes: gemeinsamer Balken, wer das Ziel knackt, bekommt die Aktion
+function likeLegend (amount = likes.amountFor(likes.level + 1)) {
+  const c = likes.config
+  if (c.action === 'spawn_mob') return `${amount > 1 ? amount + '× ' : ''}${(MOBS[c.mob] || MOBS.zombie)[1]}`
+  const label = { zombie_fast: 'Zombie', skeleton_armored: 'Skelett-Schütze' }[c.action] || ACTIONS[c.action].label.replace(/^\d+x /, '').replace(/ \(.*\)$/, '').replace(/^Boss: /, '')
+  return `${amount > 1 ? amount + '× ' : ''}${label}`
+}
+const likesMsg = () => ({ type: 'LIKES', ...likes.state(), legend: likeLegend(), kind: ACTIONS[likes.config.action].kind })
+let likesT = null
+function onLike ({ viewer, count }) {
+  const hits = likes.add(viewer, count)
+  if (!likes.config.enabled) brain.onLike(viewer, count)
+  for (const h of hits) {
+    const c = likes.config
+    const res = gifts.fire({ id: 'likes', giftName: 'Likes', action: c.action, mob: c.mob, amount: h.amount, hpMult: 1, legend: likeLegend(h.amount) }, h.winner)
+    const legend = likeLegend(h.amount)
+    broadcast({ type: 'LIKE_GOAL', user: h.winner.name, avatar: h.winner.avatar, level: h.level, every: c.every, legend, kind: res.effect.kind, helpers: h.helpers })
+    pushFeed({ kind: 'gift', user: h.winner.name, text: `knackt ${c.every} Likes → ${legend}`, emoji: '❤️' })
+    brain.onLikeGoal(h.winner, { every: c.every, level: h.level, spawnText: res.effect.spawnText || legend, amount: h.amount, nextAmount: h.nextAmount, helpers: h.helpers })
+    if (!res.ok) log('warn', `Like-Ziel von ${h.winner.name}: Bot ist nicht in der Welt`)
+  }
+  // Balken im Overlay höchstens alle 250 ms aktualisieren (Likes kommen im Dauerfeuer)
+  if (hits.length) { clearTimeout(likesT); likesT = null; broadcast(likesMsg()); broadcastState() } else if (!likesT) likesT = setTimeout(() => { likesT = null; broadcast(likesMsg()) }, 250)
 }
 
 function onChat ({ viewer, text }) {
@@ -376,7 +432,7 @@ tiktok.on('gift', onGift)
 tiktok.on('chat', onChat)
 tiktok.on('follow', e => brain.onFollow(e.viewer))
 tiktok.on('share', e => brain.onShare(e.viewer))
-tiktok.on('like', e => brain.onLike(e.viewer, e.count))
+tiktok.on('like', onLike)
 let lastDiag = null
 tiktok.on('state', s => { if (s.diagnostic && s.diagnostic !== lastDiag) log('warn', 'TikTok: ' + s.diagnostic); lastDiag = s.diagnostic; broadcastState() })
 tiktok.on('gift_icons', icons => { if (gifts.learnIcons(icons)) { saveConfig(); syncGiftConfig(); broadcastState() } })
@@ -387,6 +443,7 @@ function learnGifts (list) {
 }
 tiktok.on('gift_list', list => { learnGifts(list); log('info', `TikTok-Gifts geladen: ${list.length} echte Gifts mit Bild und Coin-Preis`) })
 tiktok.on('live', e => {
+  likes.reset(); broadcast(likesMsg())
   log('info', `TikTok LIVE verbunden: @${e.username} (Engine ${e.engine})`)
   broadcast({ type: 'CHIME', kind: 'live' })
   brain.onLiveConnected()

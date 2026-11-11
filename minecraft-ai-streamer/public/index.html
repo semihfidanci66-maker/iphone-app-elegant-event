@@ -295,6 +295,15 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
         <div class="hint">Jede Änderung landet sofort im Overlay. Haken bei „Overlay“ = das Gift läuft in der Gift-Leiste mit (4 pro Seite, wechselt automatisch).</div>
       </section>
       <section>
+        <h2>❤️ Like-Ziel <small id="lkInfo"></small></h2>
+        <div class="row"><div class="seg" id="lkOn"><button data-lkon="1">An</button><button data-lkon="0">Aus</button></div><span style="color:var(--dim)">Alle</span><div class="seg" id="lkEveryBtns"><button data-every="50">50</button><button data-every="100">100</button><button data-every="150">150</button><button data-every="200">200</button><button data-every="500">500</button></div><input id="lkEvery" type="number" min="10" max="100000" style="flex:0 0 90px" aria-label="Likes pro Ziel"><span style="color:var(--dim)">Likes passiert:</span></div>
+        <div class="row"><select id="lkAction" aria-label="Aktion beim Like-Ziel" style="flex:1 1 180px"></select><select id="lkMob" aria-label="Mob" style="flex:0 1 150px"></select><label style="flex:0 0 74px">Menge<input id="lkAmount" type="number" value="1" min="1" max="10"></label></div>
+        <div class="row"><label style="flex-direction:row;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)"><input type="checkbox" id="lkEsc" style="flex:none"> Jede Runde eins mehr (bis +4) – „tippt weiter, die nächsten bringen noch mehr“</label></div>
+        <div class="bar" style="margin-top:12px"><label><span id="lkState">–</span><b id="lkNext"></b></label><div><i id="lkBarFill" style="background:#ff5c93"></i></div></div>
+        <div class="row" style="margin-top:10px"><span style="color:var(--dim)">Testen:</span><button class="sm" data-simlike="Max:25">+25 von Max</button><button class="sm" data-simlike="Lukas:25">+25 von Lukas</button><button class="sm" data-simlike="Mia:60">+60 von Mia</button><button class="sm danger" id="lkReset">Zähler auf 0</button></div>
+        <div class="hint">Alle Zuschauer füllen den Balken gemeinsam. Wer den letzten Like zum Ziel schickt, bekommt die Aktion mit seinem Namen – der Streamer sagt es an.</div>
+      </section>
+      <section>
         <h2>Eigenes Geschenk (nicht in der Liste)</h2>
         <div class="row"><label>Name<input id="nName" placeholder="z. B. Drache"></label><label style="flex:0 1 84px">Coins<input id="nCoins" type="number" value="50" min="1"></label><label style="flex:0 1 70px">Emoji<input id="nEmoji" value="🎁"></label><label>Bild-Adresse (optional)<input id="nIcon" placeholder="https://…"></label></div>
         <div class="row"><label>Was passiert<select id="nAction"></select></label><label id="nMobWrap">Mob<select id="nMob"></select></label><label style="flex:0 1 80px">Menge<input id="nAmount" type="number" value="1" min="1" max="20"></label><label style="flex:0 1 80px">HP×<input id="nHp" type="number" value="1" min="0.5" max="10" step="0.5"></label><button class="pri" id="nAdd" style="align-self:end">Hinzufügen</button></div>
@@ -613,7 +622,8 @@ function renderState (s) {
     $('mcHost').value = s.config.minecraft.host; $('mcPort').value = s.config.minecraft.port; $('mcUser').value = s.config.minecraft.username; $('mcVer').value = s.config.minecraft.version; $('camPlayer').value = s.config.cameraPlayer || ''
     const v = $('voice'); for (const n of s.config.voices) v.appendChild(el('option', { value: n, textContent: n.replace('de-DE-', '').replace('Neural', ''), selected: n === s.config.voice }))
     for (const x of s.goals) $('goalSel').appendChild(el('option', { value: x.id, textContent: x.label }))
-    for (const a of s.actions) if (a.id !== 'none') $('nAction').appendChild(el('option', { value: a.id, textContent: a.label }))
+    for (const a of s.actions) if (a.id !== 'none') { $('nAction').appendChild(el('option', { value: a.id, textContent: a.label })); $('lkAction').appendChild(el('option', { value: a.id, textContent: a.label })) }
+    for (const m of s.mobs) $('lkMob').appendChild(el('option', { value: m, textContent: (s.mobNames || {})[m] || m }))
     for (const m of s.mobs) $('nMob').appendChild(el('option', { value: m, textContent: (s.mobNames || {})[m] || m }))
     $('nAction').value = 'spawn_mob'
     $('log').textContent = ''; for (const e of s.logs) addLog(e)
@@ -630,6 +640,23 @@ function renderState (s) {
   for (const b of $$('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
   for (const b of $$('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '9:16'))
   $('dzBtn').classList.toggle('on', !!s.designer)
+  // Like-Ziel
+  const L = s.likes
+  if (L) {
+    const c = L.config; const busy = id => document.activeElement === $(id)
+    for (const b of $$('[data-lkon]')) b.classList.toggle('on', (b.dataset.lkon === '1') === c.enabled)
+    for (const b of $$('[data-every]')) b.classList.toggle('on', Number(b.dataset.every) === c.every)
+    if (!busy('lkEvery')) $('lkEvery').value = c.every
+    if (!busy('lkAction')) $('lkAction').value = c.action
+    if (!busy('lkMob')) $('lkMob').value = c.mob
+    $('lkMob').hidden = c.action !== 'spawn_mob'
+    if (!busy('lkAmount')) $('lkAmount').value = c.amount
+    $('lkEsc').checked = c.escalate
+    $('lkInfo').textContent = c.enabled ? `${L.total} Likes in diesem Stream · ${L.level} Ziele geknackt` : 'ausgeschaltet'
+    $('lkState').textContent = c.enabled ? `${L.progress} / ${L.every} Likes${L.last ? ' · zuletzt: ' + L.last : ''}` : 'Like-Ziel ist aus'
+    $('lkNext').textContent = c.enabled ? '➜ ' + L.legend : ''
+    $('lkBarFill').style.width = c.enabled ? Math.min(100, L.progress / L.every * 100) + '%' : '0'
+  }
   // Welt
   const w = s.world || { timeLock: 'off', rules: {} }
   for (const b of $$('[data-lock]')) b.classList.toggle('on', b.dataset.lock === w.timeLock)
@@ -711,6 +738,17 @@ confirmTap($('mcRestart'), () => send({ type: 'MC_SERVER', cmd: 'restart' }, 'Se
 confirmTap($('mcStop'), () => send({ type: 'MC_SERVER', cmd: 'stop' }, 'Server wird gestoppt …'))
 const sendCmd = () => { const t = $('cmdTxt').value.trim(); if (t && send({ type: 'MC_COMMAND', text: t }, 'Befehl gesendet')) $('cmdTxt').value = '' }
 $('cmdBtn').onclick = sendCmd
+// Like-Ziel
+const setLikes = (patch, label) => send({ type: 'LIKES_SET', likes: patch }, label)
+for (const b of $$('[data-lkon]')) b.onclick = () => setLikes({ enabled: b.dataset.lkon === '1' }, b.dataset.lkon === '1' ? 'Like-Ziel an' : 'Like-Ziel aus')
+for (const b of $$('[data-every]')) b.onclick = () => setLikes({ every: Number(b.dataset.every) }, `Alle ${b.dataset.every} Likes`)
+$('lkEvery').onchange = () => setLikes({ every: Number($('lkEvery').value) }, 'Gespeichert')
+$('lkAction').onchange = () => setLikes({ action: $('lkAction').value }, 'Gespeichert')
+$('lkMob').onchange = () => setLikes({ mob: $('lkMob').value }, 'Gespeichert')
+$('lkAmount').onchange = () => setLikes({ amount: Number($('lkAmount').value) }, 'Gespeichert')
+$('lkEsc').onchange = () => setLikes({ escalate: $('lkEsc').checked }, 'Gespeichert')
+for (const b of $$('[data-simlike]')) b.onclick = () => { const [user, n] = b.dataset.simlike.split(':'); send({ type: 'SIM_LIKE', user, count: Number(n) }) }
+confirmTap($('lkReset'), () => send({ type: 'LIKES_RESET' }, 'Zähler zurückgesetzt'))
 // Gifts
 $('nAction').onchange = () => { $('nMobWrap').hidden = $('nAction').value !== 'spawn_mob' }
 $('nAdd').onclick = () => {
@@ -771,6 +809,9 @@ function demoSend (m) {
     case 'MC_SERVER':
       if (m.cmd === 'stop') { s.mc.phase = 'stopped'; s.mc.own = false; st.connected = false } else { s.mc.phase = 'starting'; s.mc.own = true; setTimeout(() => { s.mc.phase = 'running'; st.connected = true; onMsg(s) }, 2500) }
       break
+    case 'LIKES_SET': Object.assign(s.likes.config, m.likes); s.likes.every = s.likes.config.every; break
+    case 'LIKES_RESET': Object.assign(s.likes, { progress: 0, total: 0, level: 0, last: null }); break
+    case 'SIM_LIKE': { const k = s.likes; k.progress += m.count; k.total += m.count; k.last = m.user; if (k.progress >= k.every) { k.progress -= k.every; k.level++; addFeed({ kind: 'gift', user: m.user, emoji: '❤️', text: `knackt ${k.every} Likes → ${k.legend}` }) } break }
     case 'CAMERA': s.config.cameraMode = m.mode; break
     case 'DESIGNER': s.designer = m.on; break
     case 'LAYOUT_FORMAT': s.layout = { format: m.format }; break
@@ -791,6 +832,7 @@ function demo () {
     tunnel: { active: false, starting: false, url: null, qr: null, error: null },
     lan: { urls: ['http://192.168.178.20:3000/mobile.html?k=Beispiel'], qr: null },
     mc: { installed: true, phase: 'running', own: true, error: null },
+    likes: { config: { enabled: true, every: 100, action: 'zombie_fast', mob: 'zombie', amount: 1, escalate: true }, enabled: true, every: 100, progress: 63, total: 263, level: 2, last: 'Max', legend: '3× Zombie' },
     world: { timeLock: 'off', rules: { keepInventory: false, mobSpawning: true } },
     worldRules: [A('keepInventory', 'Inventar nach Tod behalten'), A('mobSpawning', 'Monster spawnen von selbst'), A('mobGriefing', 'Creeper zerstören Blöcke'), A('weatherCycle', 'Wetter wechselt von selbst')],
     config: { minecraft: { host: '127.0.0.1', port: 25565, username: 'KI_Streamer', version: '1.21.1' }, tiktokUsername: '', voice: 'de-DE-ConradNeural', voices: ['de-DE-ConradNeural', 'de-DE-KillianNeural', 'de-DE-FlorianMultilingualNeural'], cameraPlayer: '', cameraMode: 'auto' },

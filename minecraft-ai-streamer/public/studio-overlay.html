@@ -190,7 +190,8 @@ body.designer #dz { display: flex; }
 #legend.strip .gift.support .gfx::before { content: '💚 '; } #legend.strip .gift.boss .gfx::before { content: '☠️ '; }
 
 /* ---------- Gift-Alert ---------- */
-#alerts { width: 760px; height: 150px; pointer-events: none; }
+#alerts { width: 760px; height: 210px; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+#stage.f916 #alerts { width: 680px; align-items: flex-start; }
 /* ---------- Bot-Status-HUD ---------- */
 #hud { width: 330px; background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 16px; padding: 12px 14px; backdrop-filter: blur(10px); display: grid; gap: 8px; }
 #hudGoal { font: 700 19px var(--display); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -200,27 +201,71 @@ body.designer #dz { display: flex; }
 #hudRow span { font-size: 11px; color: var(--ink-dim); font-weight: 600; }
 #hudCam { font-size: 13px; font-weight: 700; color: var(--cyan); display: flex; justify-content: space-between; gap: 8px; }
 #hudCam em { font-style: normal; color: var(--gold); }
-.alert { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; align-items: center; gap: 16px; padding: 12px 26px 12px 12px; border-radius: 80px; background: linear-gradient(100deg, rgba(14, 22, 40, .92), rgba(30, 20, 56, .92)); border: 2px solid rgba(255, 210, 87, .7); box-shadow: 0 0 34px rgba(255, 210, 87, .4), 0 14px 40px rgba(0, 0, 0, .5); white-space: nowrap; animation: alertIn .5s cubic-bezier(.2, 1.4, .4, 1) both; }
-.alert.out { animation: alertOut .35s ease-in forwards; }
-.alert.support { border-color: rgba(157, 255, 106, .8); box-shadow: 0 0 34px rgba(157, 255, 106, .4), 0 14px 40px rgba(0, 0, 0, .5); }
-.alert.boss { border-color: rgba(177, 140, 255, .95); box-shadow: 0 0 60px rgba(177, 140, 255, .7), 0 14px 40px rgba(0, 0, 0, .5); }
-@keyframes alertIn { 0% { opacity: 0; transform: translateX(-50%) translateY(-60px) scale(.6); } 100% { opacity: 1; transform: translateX(-50%) scale(1); } }
-@keyframes alertOut { to { opacity: 0; transform: translateX(-50%) translateY(-40px) scale(.85); } }
-.ava { width: 74px; height: 74px; border-radius: 50%; border: 3px solid var(--gold); object-fit: cover; background: linear-gradient(135deg, #3558ff, #b93cff); display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 32px; flex: none; overflow: hidden; }
+.alert { position: relative; display: flex; align-items: center; height: 96px; white-space: nowrap; animation: alertIn .55s cubic-bezier(.2, 1.35, .35, 1) both; --a1: #ff2d74; --a2: #ff8a3d; }
+.alert.support { --a1: #19c37d; --a2: #b6f24a; }
+.alert.boss { --a1: #7b3dff; --a2: #ff3dd4; }
+.alert.out { animation: alertOut .4s ease-in forwards; }
+.alert .pill { display: flex; align-items: center; gap: 14px; height: 96px; padding: 0 86px 0 8px; border-radius: 99px; background: linear-gradient(90deg, var(--a1), var(--a2) 62%, rgba(0, 0, 0, 0)); box-shadow: 0 10px 30px rgba(0, 0, 0, .45), inset 0 0 0 2px rgba(255, 255, 255, .22); }
+.alert .pill::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 420px; border-radius: 99px; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .5) 50%, transparent 70%); background-size: 250% 100%; animation: shine 1.1s ease-out .25s both; pointer-events: none; mix-blend-mode: soft-light; }
+@keyframes shine { from { background-position: 120% 0; } to { background-position: -60% 0; } }
+@keyframes alertIn { 0% { opacity: 0; transform: translateX(-120%) skewX(-12deg); } 100% { opacity: 1; transform: none; } }
+@keyframes alertOut { to { opacity: 0; transform: translateY(-46px) scale(.9); } }
+.gimg { width: 124px; height: 124px; margin-left: -76px; flex: none; display: grid; place-items: center; font-size: 86px; line-height: 1; filter: drop-shadow(0 8px 12px rgba(0, 0, 0, .55)); animation: gimgIn .7s cubic-bezier(.2, 1.7, .4, 1) .12s both, gimgBob 1.5s ease-in-out .9s infinite alternate; position: relative; z-index: 2; }
+.gimg img { width: 100%; height: 100%; object-fit: contain; }
+@keyframes gimgIn { 0% { transform: scale(0) rotate(-40deg); } 100% { transform: scale(1) rotate(0); } }
+@keyframes gimgBob { to { transform: translateY(-8px) rotate(5deg) scale(1.05); } }
+.ava { width: 80px; height: 80px; border-radius: 50%; border: 3px solid #fff; object-fit: cover; background: linear-gradient(135deg, #3558ff, #b93cff); display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 32px; flex: none; overflow: hidden; }
 .ava img { width: 100%; height: 100%; object-fit: cover; }
-.atext { display: flex; flex-direction: column; gap: 2px; }
-.auser { font-family: var(--display); font-weight: 700; font-size: 28px; max-width: 330px; overflow: hidden; text-overflow: ellipsis; }
-.asub { font-size: 18px; font-weight: 600; color: var(--ink-dim); }
-.asub b { color: var(--gold); }
-.aspin { width: 78px; height: 78px; perspective: 300px; flex: none; }
-.aspin > div { width: 100%; height: 100%; display: grid; place-items: center; font-size: 54px; animation: spin3d 1.6s linear infinite; transform-style: preserve-3d; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .6)); }
-.aspin img { width: 70px; height: 70px; object-fit: contain; }
-@keyframes spin3d { from { transform: rotateY(0) translateY(0); } 50% { transform: rotateY(180deg) translateY(-5px); } to { transform: rotateY(360deg) translateY(0); } }
-.combo { font-family: var(--display); font-weight: 700; font-size: 54px; color: var(--gold); text-shadow: 0 0 18px rgba(255, 210, 87, .8), 0 3px 0 #7a4b00; min-width: 96px; text-align: center; }
-.combo.bump { animation: bump .28s cubic-bezier(.2, 1.6, .4, 1); }
-@keyframes bump { 0% { transform: scale(1.7) rotate(-6deg); } 100% { transform: scale(1) rotate(0); } }
+.atext { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.auser { font-family: var(--body); font-weight: 800; font-size: 29px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 4px rgba(0, 0, 0, .45); }
+.asub { font-size: 20px; font-weight: 700; color: rgba(255, 255, 255, .92); text-shadow: 0 1px 3px rgba(0, 0, 0, .5); }
+.asub b { color: #fff36b; font-weight: 800; }
+.combo { font-family: var(--display); font-style: italic; font-weight: 700; font-size: 76px; line-height: 1; margin-left: 10px; color: #fff; -webkit-text-stroke: 3px #ff2d74; paint-order: stroke fill; text-shadow: 0 5px 0 rgba(0, 0, 0, .35), 0 0 22px rgba(255, 255, 255, .55); min-width: 110px; }
+.combo small { font-size: 44px; margin-right: 2px; }
+.alert.support .combo { -webkit-text-stroke-color: #0f9d63; } .alert.boss .combo { -webkit-text-stroke-color: #7b3dff; }
+.combo.bump { animation: bump .32s cubic-bezier(.2, 1.7, .4, 1); }
+.combo.hot { color: #fff36b; }
+@keyframes bump { 0% { transform: scale(2.1) rotate(-8deg); } 100% { transform: scale(1) rotate(0); } }
 .spark { position: absolute; width: 10px; height: 10px; border-radius: 2px; background: var(--gold); animation: spark .8s ease-out forwards; }
 @keyframes spark { to { transform: translate(var(--dx), var(--dy)) rotate(260deg) scale(.2); opacity: 0; } }
+/* ---------- Großer Gift-Moment (teure Gifts fliegen einmal groß durchs Bild) ---------- */
+#big { position: absolute; left: 50%; top: 46%; width: 0; height: 0; z-index: 30; pointer-events: none; }
+#stage.f916 #big { top: 44%; }
+.bigGift { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 10px; animation: bigIn 3.4s cubic-bezier(.2, 1.2, .3, 1) forwards; }
+.bigGift .rays { position: absolute; left: 50%; top: 150px; width: 760px; height: 760px; margin: -380px 0 0 -380px; border-radius: 50%; background: repeating-conic-gradient(from 0deg, rgba(255, 220, 120, .5) 0 8deg, transparent 8deg 20deg); -webkit-mask: radial-gradient(circle, #000 20%, transparent 68%); mask: radial-gradient(circle, #000 20%, transparent 68%); animation: rays 6s linear infinite; }
+.bigGift .pic { position: relative; width: 300px; height: 300px; display: grid; place-items: center; font-size: 220px; line-height: 1; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .6)); animation: bigPic 1.1s ease-in-out infinite alternate; }
+.bigGift .pic img { width: 100%; height: 100%; object-fit: contain; }
+.bigGift .who { position: relative; font: 800 46px var(--body); padding: 6px 26px; border-radius: 99px; background: linear-gradient(90deg, #ff2d74, #ff8a3d); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); white-space: nowrap; max-width: 900px; overflow: hidden; text-overflow: ellipsis; }
+.bigGift .what { position: relative; font: 700 40px var(--display); letter-spacing: .04em; color: #fff36b; text-shadow: 0 4px 0 rgba(0, 0, 0, .5), 0 0 26px rgba(255, 200, 60, .8); white-space: nowrap; }
+.bigGift.boss .who { background: linear-gradient(90deg, #7b3dff, #ff3dd4); }
+.bigGift.support .who { background: linear-gradient(90deg, #19c37d, #8fd92f); }
+@keyframes bigIn { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.1) rotate(-25deg); } 14% { opacity: 1; transform: translate(-50%, -50%) scale(1.12) rotate(3deg); } 22%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -90%) scale(.6); } }
+@keyframes bigPic { to { transform: translateY(-16px) rotate(6deg) scale(1.06); } }
+
+/* ---------- Like-Ziel ---------- */
+#likes { width: 560px; padding: 12px 16px 14px; border-radius: 22px; background: var(--glass); border: 2px solid rgba(255, 90, 140, .55); backdrop-filter: blur(10px); box-shadow: 0 10px 34px rgba(0, 0, 0, .4), 0 0 26px rgba(255, 60, 120, .22); }
+#stage.f916 #likes { width: 1020px; }
+#likes.hidden { display: none; } body.designer #likes.hidden { display: block; opacity: .3; }
+#lkTop { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; white-space: nowrap; }
+#lkTitle { font: 800 26px var(--body); } #lkTitle b { font: 700 34px var(--display); color: #ff5c93; font-variant-numeric: tabular-nums; display: inline-block; }
+#lkTitle b.tick { animation: lkTick .25s ease-out; }
+@keyframes lkTick { 0% { transform: scale(1.35); color: #fff; } }
+#lkGoal { font: 800 24px var(--body); color: #0a0e14; background: var(--red); padding: 3px 14px; border-radius: 99px; overflow: hidden; text-overflow: ellipsis; }
+#lkGoal.support { background: var(--lime); }
+#lkBar { position: relative; height: 34px; margin-top: 10px; border-radius: 99px; background: rgba(0, 0, 0, .5); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .12); overflow: hidden; }
+#lkBar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 99px; background: linear-gradient(90deg, #ff2d74, #ff6fa3 60%, #ffd1e0); box-shadow: 0 0 18px rgba(255, 60, 120, .9); transition: width .35s cubic-bezier(.2, 1.2, .4, 1); }
+#lkBar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%); background-size: 220% 100%; animation: lkShine 2.2s linear infinite; }
+@keyframes lkShine { from { background-position: 130% 0; } to { background-position: -90% 0; } }
+#lkLast { position: absolute; right: 14px; top: 0; bottom: 0; display: flex; align-items: center; font: 700 19px var(--body); text-shadow: 0 1px 4px rgba(0, 0, 0, .9); max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lkLast b { color: #ffd1e0; margin-left: 6px; }
+#lkHearts { position: absolute; inset: 0; pointer-events: none; }
+#lkHearts span { position: absolute; bottom: 20px; font-size: 34px; animation: heartUp var(--d, 1.4s) ease-out forwards; }
+@keyframes heartUp { 0% { opacity: 0; transform: translate(0, 0) scale(.3); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx, 0), -210px) scale(1.3) rotate(var(--r, 10deg)); } }
+#lkWin { position: absolute; inset: -2px; border-radius: 22px; display: none; align-items: center; justify-content: center; gap: 14px; padding: 0 18px; background: linear-gradient(90deg, #ff2d74, #ff8a3d); font: 800 30px var(--body); white-space: nowrap; overflow: hidden; box-shadow: 0 0 44px rgba(255, 80, 120, .9); }
+#lkWin.on { display: flex; animation: lkWin 4.2s ease-out forwards; }
+#lkWin b { color: #fff36b; } #lkWin span { overflow: hidden; text-overflow: ellipsis; }
+#stage:not(.f916) #lkWin { font-size: 20px; } #stage:not(.f916) #lkTitle { font-size: 19px; } #stage:not(.f916) #lkTitle b { font-size: 25px; } #stage:not(.f916) #lkGoal { font-size: 17px; }
+@keyframes lkWin { 0% { opacity: 0; transform: scale(.6); } 8% { opacity: 1; transform: scale(1.06); } 14%, 88% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.02); } }
 @media (prefers-reduced-motion: reduce) { .g3d .disc, .aspin > div, #camRays { animation: none; } }
 </style>
 </head>
@@ -242,6 +287,13 @@ body.designer #dz { display: flex; }
     <div id="hudGoal">–</div>
     <div id="hudRow"><div><b id="hY">–</b><span>Ebene</span></div><div><b id="hFood">–</b><span>Hunger</span></div><div><b id="hKills">0</b><span>Kills</span></div><div><b id="hDeaths">0</b><span>Tode</span></div></div>
     <div id="hudCam"><span id="hCamTxt">👁️ Ego-Perspektive</span><em id="hLoot"></em></div>
+  </aside>
+
+  <aside id="likes" class="wg hidden" data-w="likes" data-name="Like-Ziel">
+    <div id="lkTop"><span id="lkTitle">❤️ <b id="lkNum">0</b> / <span id="lkEvery">100</span> Likes</span><span id="lkGoal">➜ Zombie</span></div>
+    <div id="lkBar"><i id="lkFill"></i><span id="lkLast"></span></div>
+    <div id="lkHearts"></div>
+    <div id="lkWin"></div>
   </aside>
 
   <aside id="legend" class="wg" data-w="legend" data-name="Gift-Legende"><div id="lgHead"><span id="lgTitle">🎁 Schick ein Gift <b>➜ das passiert</b></span><span id="lgDots"></span></div><div id="lgBar"><i></i></div><div id="legendList"></div></aside>
@@ -266,6 +318,7 @@ body.designer #dz { display: flex; }
   </section>
 
   <div id="subs" class="wg" data-w="subs" data-name="Untertitel"><div id="subBox"></div></div>
+  <div id="big"></div>
 </div>
 
 <script src="vendor/skinview3d.bundle.js"></script>
@@ -282,12 +335,12 @@ const stage = $('stage')
 const WIDGETS = [...document.querySelectorAll('.wg')]
 const FORMATS = { '16:9': [1920, 1080], '9:16': [1080, 1920], custom: [1920, 1080] }
 const DEFAULTS = {
-  '16:9': { alerts: { x: 580, y: 34, s: 1 }, hud: { x: 36, y: 36, s: 1 }, legend: { x: 1584, y: 250, s: 1 }, cam: { x: 36, y: 460, s: 1 }, subs: { x: 36, y: 932, s: 1 } },
+  '16:9': { likes: { x: 680, y: 960, s: 1 }, alerts: { x: 580, y: 34, s: 1 }, hud: { x: 36, y: 36, s: 1 }, legend: { x: 1584, y: 250, s: 1 }, cam: { x: 36, y: 460, s: 1 }, subs: { x: 36, y: 932, s: 1 } },
   // 9:16 (TikTok LIVE): oben 230 px frei für Profil/Zuschauerzahl, unten links frei für den Chat,
   // ganz unten frei für die Bedienleiste. Gift-Leiste oben, Facecam rechts über dem Herz-Knopf.
-  '9:16': { legend: { x: 30, y: 236, s: 1 }, hud: { x: 30, y: 616, s: 0.92 }, alerts: { x: 160, y: 760, s: 1 }, subs: { x: 30, y: 1030, s: 1 }, cam: { x: 690, y: 1040, s: 1 } },
+  '9:16': { legend: { x: 30, y: 236, s: 1 }, likes: { x: 30, y: 608, s: 1 }, alerts: { x: 30, y: 740, s: 1 }, hud: { x: 746, y: 744, s: 0.92 }, subs: { x: 30, y: 1030, s: 1 }, cam: { x: 690, y: 1040, s: 1 } },
   // Split: linke Spalte Streamer, rechte Spalte Gifts, Mitte komplett frei
-  custom: { alerts: { x: 580, y: 880, s: 0.9 }, hud: { x: 36, y: 30, s: 1 }, legend: { x: 1580, y: 30, s: 1.05 }, cam: { x: 36, y: 180, s: 1.1 }, subs: { x: 36, y: 700, s: 0.78 } }
+  custom: { likes: { x: 680, y: 30, s: 1 }, alerts: { x: 580, y: 880, s: 0.9 }, hud: { x: 36, y: 30, s: 1 }, legend: { x: 1580, y: 30, s: 1.05 }, cam: { x: 36, y: 180, s: 1.1 }, subs: { x: 36, y: 700, s: 0.78 } }
 }
 const QS = new URLSearchParams(location.search)
 const MUTE = QS.has('mute') // eingebettete Vorschau im Dashboard: kein Ton
@@ -831,9 +884,10 @@ function hitLegend (name) {
   if (page !== lg.page) { showPage(page, true); setTimeout(flash, 900) } else { flash(); armTimer() }
 }
 
-/* ---------------------------------------------------------------- Gift-Alerts + Combo */
+/* ---------------------------------------------------------------- Gift-Alerts im TikTok-Stil (zwei Bahnen) + Combo */
 const alertsEl = $('alerts')
-let curAlert = null; const alertQueue = []
+const LANES = 2
+const activeAlerts = []; const alertQueue = []
 function chime (tier) {
   if (!audio() || actx.state !== 'running') return
   const t0 = actx.currentTime
@@ -845,60 +899,125 @@ function chime (tier) {
     o.connect(g); g.connect(actx.destination); o.start(t0 + i * 0.09); o.stop(t0 + i * 0.09 + 0.7)
   })
 }
+const pic = (box, icon, emoji) => { if (icon) { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.alt = ''; im.onerror = () => { im.remove(); box.textContent = emoji || '🎁' }; im.src = icon; box.appendChild(im) } else box.textContent = emoji || '🎁' }
 function giftAlert (a) {
   const key = a.uniqueId + '|' + a.gift.name
   hitLegend(a.gift.name)
   // Stimmung: Monster-Gifts machen ihn sauer, Support macht ihn glücklich
   if (a.kind === 'support') { feel('joy', 0.6); feel('rage', -0.25); anim.cheer = performance.now() + 1500 } else if (a.kind !== 'none') { feel('rage', 0.14 + (a.tier || 1) * 0.07); if (a.tier >= 4) feel('fear', 0.5) }
-  if (curAlert && curAlert.key === key) { bumpCombo(curAlert, a.count); return }
+  const live = activeAlerts.find(x => x.key === key)
+  if (live) return bumpCombo(live, a.count)
   const q = alertQueue.find(x => x.key === key)
   if (q) { q.count = Math.max(q.count, a.count); return }
   alertQueue.push({ ...a, key })
-  if (!curAlert) nextAlert()
+  pumpAlerts()
+}
+function setCombo (al) {
+  al.comboEl.textContent = ''
+  const x = document.createElement('small'); x.textContent = 'x'
+  al.comboEl.append(x, String(al.count))
+  al.comboEl.classList.toggle('hot', al.count >= 10)
 }
 function bumpCombo (al, count) {
-  al.count = Math.max(al.count, count)
-  al.comboEl.textContent = 'x' + al.count
+  if (count <= al.count) return
+  al.count = count; setCombo(al)
   al.comboEl.classList.remove('bump'); void al.comboEl.offsetWidth; al.comboEl.classList.add('bump')
   clearTimeout(al.timer); al.timer = setTimeout(() => endAlert(al), 3200)
-  sparks(al.el, 6)
+  sparks(al.el, 5)
 }
 function sparks (el, n) {
   for (let i = 0; i < n; i++) {
     const s = document.createElement('i'); s.className = 'spark'
     const ang = Math.random() * Math.PI * 2; const d = 90 + Math.random() * 130
-    s.style.cssText = `left:50%;top:50%;--dx:${Math.cos(ang) * d}px;--dy:${Math.sin(ang) * d}px;background:${['#ffd257', '#46e0ff', '#ff4d5e', '#9dff6a'][i % 4]}`
+    s.style.cssText = `left:60%;top:50%;--dx:${Math.cos(ang) * d}px;--dy:${Math.sin(ang) * d}px;background:${['#ffd257', '#46e0ff', '#ff4d5e', '#9dff6a'][i % 4]}`
     el.appendChild(s); setTimeout(() => s.remove(), 850)
   }
 }
-function nextAlert () {
-  const a = alertQueue.shift()
-  if (!a) { curAlert = null; return }
+function pumpAlerts () {
+  while (activeAlerts.length < LANES && alertQueue.length) showAlert(alertQueue.shift())
+}
+function showAlert (a) {
   const el = document.createElement('div')
   el.className = 'alert' + (a.kind === 'support' ? ' support' : a.tier >= 5 ? ' boss' : '')
+  const pill = document.createElement('div'); pill.className = 'pill'
   const ava = document.createElement('div'); ava.className = 'ava'
-  if (a.avatar) { const im = new Image(); im.src = a.avatar; im.alt = ''; im.referrerPolicy = 'no-referrer'; im.onerror = () => { ava.textContent = (a.user || '?').charAt(0).toUpperCase() }; ava.appendChild(im) } else ava.textContent = (a.user || '?').charAt(0).toUpperCase()
+  if (a.avatar) { const im = new Image(); im.alt = ''; im.referrerPolicy = 'no-referrer'; im.onerror = () => { im.remove(); ava.textContent = (a.user || '?').charAt(0).toUpperCase() }; im.src = a.avatar; ava.appendChild(im) } else ava.textContent = (a.user || '?').charAt(0).toUpperCase()
   const txt = document.createElement('div'); txt.className = 'atext'
-  const u = document.createElement('div'); u.className = 'auser'; u.textContent = '@' + a.user
+  const u = document.createElement('div'); u.className = 'auser'; u.textContent = a.user
   const sub = document.createElement('div'); sub.className = 'asub'
   const b = document.createElement('b'); b.textContent = a.legend || ''
-  sub.append(`${a.gift.name} `, a.legend ? '→ ' : '', b)
-  txt.append(u, sub)
-  const spin = document.createElement('div'); spin.className = 'aspin'
-  const inner = document.createElement('div')
-  if (a.gift.icon) { const im = new Image(); im.src = a.gift.icon; im.alt = ''; im.onerror = () => { inner.textContent = a.gift.emoji }; inner.appendChild(im) } else inner.textContent = a.gift.emoji
-  spin.appendChild(inner)
-  const combo = document.createElement('div'); combo.className = 'combo bump'; combo.textContent = 'x' + a.count
-  el.append(ava, txt, spin, combo)
+  sub.append(`schickt ${a.gift.name} `, a.legend ? '➜ ' : '', b)
+  txt.append(u, sub); pill.append(ava, txt)
+  const g = document.createElement('div'); g.className = 'gimg'; pic(g, a.gift.icon, a.gift.emoji)
+  const combo = document.createElement('div'); combo.className = 'combo bump'
+  el.append(pill, g, combo)
   alertsEl.appendChild(el)
-  curAlert = { ...a, el, comboEl: combo, timer: setTimeout(() => endAlert(curAlert), a.tier >= 4 ? 5200 : 3400) }
-  sparks(el, a.tier >= 4 ? 22 : 10)
+  const al = { ...a, el, comboEl: combo, timer: null }
+  setCombo(al)
+  al.timer = setTimeout(() => endAlert(al), a.tier >= 4 ? 5200 : 3600)
+  activeAlerts.push(al)
+  sparks(el, a.tier >= 4 ? 18 : 8)
   chime(a.tier || 1)
+  if (a.tier >= 4 || (a.gift.coins || 0) >= 500) bigMoment(a)
 }
 function endAlert (al) {
-  if (!al || al !== curAlert) return
+  const i = activeAlerts.indexOf(al)
+  if (i < 0) return
   al.el.classList.add('out')
-  setTimeout(() => { al.el.remove(); curAlert = null; nextAlert() }, 340)
+  setTimeout(() => { al.el.remove(); activeAlerts.splice(activeAlerts.indexOf(al), 1); pumpAlerts() }, 380)
+}
+/** Teure Gifts: das Geschenk fliegt einmal groß in die Bildmitte. */
+let bigBusy = 0
+function bigMoment (a) {
+  const now = performance.now()
+  if (now < bigBusy) return
+  bigBusy = now + 3500
+  const el = document.createElement('div'); el.className = 'bigGift' + (a.kind === 'support' ? ' support' : a.tier >= 5 ? ' boss' : '')
+  const rays = document.createElement('div'); rays.className = 'rays'
+  const p = document.createElement('div'); p.className = 'pic'; pic(p, a.gift.icon, a.gift.emoji)
+  const who = document.createElement('div'); who.className = 'who'; who.textContent = `${a.user} schickt ${a.gift.name}!`
+  const what = document.createElement('div'); what.className = 'what'; what.textContent = (a.legend || '').toUpperCase()
+  el.append(rays, p, who, what)
+  $('big').appendChild(el); setTimeout(() => el.remove(), 3450)
+}
+
+/* ---------------------------------------------------------------- Like-Ziel */
+const lk = { progress: -1, every: 100, winUntil: 0 }
+function hearts (n, x = null) {
+  const box = $('lkHearts'); const w = $('likes').offsetWidth
+  for (let i = 0; i < n && box.childElementCount < 28; i++) {
+    const h = document.createElement('span'); h.textContent = ['❤️', '💖', '💗', '🩷', '💕'][Math.floor(Math.random() * 5)]
+    h.style.left = ((x ?? Math.random() * (w - 60)) + (Math.random() * 60 - 30)) + 'px'
+    h.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px'); h.style.setProperty('--r', (Math.random() * 50 - 25) + 'deg'); h.style.setProperty('--d', (1.1 + Math.random() * 0.8) + 's')
+    h.style.animationDelay = (i * 60) + 'ms'
+    box.appendChild(h); setTimeout(() => h.remove(), 2200 + i * 60)
+  }
+}
+function setLikes (m) {
+  $('likes').classList.toggle('hidden', !m.enabled)
+  if (!m.enabled) return
+  const grew = lk.progress >= 0 && (m.progress > lk.progress || m.every !== lk.every)
+  const pct = Math.max(0, Math.min(1, m.progress / m.every))
+  $('lkNum').textContent = m.progress; $('lkEvery').textContent = m.every
+  $('lkGoal').textContent = '➜ ' + m.legend; $('lkGoal').className = m.kind === 'support' ? 'support' : ''
+  $('lkFill').style.width = (pct * 100) + '%'
+  const last = $('lkLast'); last.textContent = ''
+  if (m.last) { const b = document.createElement('b'); b.textContent = m.last; last.append('zuletzt ❤️', b) } else last.textContent = 'Tippt auf den Bildschirm!'
+  if (grew && m.progress > lk.progress) {
+    const n = $('lkNum'); n.classList.remove('tick'); void n.offsetWidth; n.classList.add('tick')
+    hearts(Math.min(6, 1 + Math.floor((m.progress - lk.progress) / 4)), pct * ($('likes').offsetWidth - 40))
+  }
+  lk.progress = m.progress; lk.every = m.every
+}
+function likeGoal (m) {
+  const win = $('lkWin'); win.textContent = ''
+  const a = document.createElement('span'); const b = document.createElement('b'); b.textContent = m.user
+  a.append(`💥 ${m.every} LIKES!  ${m.legend} von `, b)
+  win.appendChild(a)
+  win.classList.remove('on'); void win.offsetWidth; win.classList.add('on')
+  hearts(22)
+  chime(3)
+  feel('rage', m.kind === 'support' ? -0.2 : 0.22); if (m.kind === 'support') feel('joy', 0.6)
 }
 
 /* ---------------------------------------------------------------- Nachrichten */
@@ -906,6 +1025,8 @@ function onMessage (m) {
   switch (m.type) {
     case 'GIFT_CONFIG_SYNC': renderLegend(m.gifts); break
     case 'GIFT_ALERT': giftAlert(m); break
+    case 'LIKES': setLikes(m); break
+    case 'LIKE_GOAL': likeGoal(m); break
     case 'TTS': playTTS(m); break
     case 'STATUS': setStatus(m.status); break
     case 'POSE': setPose(m.pose); break
@@ -966,6 +1087,14 @@ function demo () {
   onMessage({ type: 'GIFT_CONFIG_SYNC', gifts })
   const st = { connected: true, username: 'KI_Streamer', activity: 'build', goal: 'Haus bauen', health: 20, food: 18, kills: 12, deaths: 1, threats: 0, fighting: false, pos: { x: 120, y: 64, z: -40 }, camera: { mode: 'auto', applied: 'third' } }
   onMessage({ type: 'STATUS', status: st })
+  const likeSt = { type: 'LIKES', enabled: true, every: 100, progress: 37, total: 37, level: 0, last: 'Max', legend: 'Zombie', kind: 'mob' }
+  onMessage(likeSt)
+  setInterval(() => {
+    const user = Math.random() < 0.5 ? 'Max' : 'Lukas'
+    likeSt.progress += 3 + Math.floor(Math.random() * 9); likeSt.last = user
+    if (likeSt.progress >= likeSt.every) { likeSt.progress -= likeSt.every; likeSt.level++; onMessage({ type: 'LIKE_GOAL', user, level: likeSt.level, every: likeSt.every, legend: likeSt.legend, kind: 'mob' }); likeSt.legend = (likeSt.level + 1) + '× Zombie' }
+    onMessage({ ...likeSt })
+  }, 900)
   const alertFor = (g, user, count) => onMessage({ type: 'GIFT_ALERT', user, uniqueId: user, avatar: null, gift: { name: g.name, emoji: g.emoji, coins: g.coins, icon: null }, count, legend: g.legend, kind: g.kind, tier: g.tier })
   const status = p => { Object.assign(st, p); onMessage({ type: 'STATUS', status: st }) }
   setInterval(() => { const t = Date.now() / 1000; onMessage({ type: 'POSE', pose: { moveYaw: Math.sin(t / 3) * 2, yaw: Math.sin(t / 3) * 2 + (Math.sin(t / 2.3) > 0.8 ? 0.9 : 0), pitch: st.activity === 'mine' ? -0.5 + Math.sin(t) * 0.1 : Math.sin(t / 1.7) * 0.15, blocking: Date.now() < demoBlock, onGround: true, speed: st.activity === 'explore' ? 0.2 : 0 } }) }, 250)

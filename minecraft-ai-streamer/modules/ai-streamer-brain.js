@@ -19,6 +19,10 @@ const ord = (n, suffix = 'r') => n < ORD.length ? ORD[n] + suffix : `${n}.`
 const MOB_DE = {
   zombie: 'Zombie', skeleton: 'Skelett', creeper: 'Creeper', spider: 'Spinne', witch: 'Hexe', enderman: 'Enderman', vindicator: 'Diener', piglin_brute: 'Piglin-Barbar', ravager: 'Verwüster', warden: 'Wärter', wither_skeleton: 'Witherskelett', blaze: 'Lohe', husk: 'Wüstenzombie', stray: 'Eiswanderer', drowned: 'Ertrunkener', phantom: 'Phantom', slime: 'Schleim', cave_spider: 'Höhlenspinne', pillager: 'Plünderer', zombified_piglin: 'Zombie-Piglin', piglin: 'Piglin', ghast: 'Ghast', magma_cube: 'Magmawürfel', hoglin: 'Hoglin', tnt: 'TNT', iron_golem: 'Eisengolem'
 }
+const NUM_DE = ['null', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun', 'zehn', 'elf', 'zwölf']
+const numDe = n => (n === 1 ? 'eine' : NUM_DE[n] || String(n))
+// Mehrzahl häufiger Gifts fürs Vorlesen ("zehn Rosen"); alles andere wird zu "zehn mal <Name>"
+const GIFT_PLURAL = { rose: 'Rosen', donut: 'Donuts', 'eistüte': 'Eistüten', fingerherz: 'Fingerherzen', handherz: 'Handherzen', tiktok: 'TikToks', gg: 'GGs', rakete: 'Raketen', pfirsich: 'Pfirsiche', herzen: 'Herzen', cap: 'Caps', gitarre: 'Gitarren', galaxie: 'Galaxien', rosa: 'Rosas', 'blumenstrauß': 'Blumensträuße', konfetti: 'Konfetti', schmetterling: 'Schmetterlinge', 'luftkuss': 'Luftküsse' }
 const mobDe = n => MOB_DE[n] || (n ? n.replace(/_/g, ' ') : 'Mob')
 
 // ---------------------------------------------------------------------------- Textbausteine
@@ -71,6 +75,22 @@ const L = {
     '{user} mit der Combo! Mal {count}! Hör auf, hör auf, hör auf!',
     'Combo mal {count} von {user}! Das ist doch nicht mehr normal!',
     'Mal {count}! {user} drückt einfach den Knopf durch, Leute!'
+  ],
+  combo_done: {
+    mob: [
+      '{giftcount} von {user}! Am Stück! Das sind {count} mal {spawn} auf einmal, bist du wahnsinnig?!',
+      'Okay, Combo vorbei: {giftcount} von {user}. Ich zähl nach... ja, {count}. Ich hab dich auch lieb, {user}!',
+      '{user} ist fertig mit der Combo: {giftcount}! Chat, so sieht es aus, wenn mich jemand richtig hasst!'
+    ],
+    support: [
+      '{giftcount} von {user}! Am Stück! Du bist heute mein Schutzengel, danke dir!',
+      'Combo von {user}: {giftcount}, alles Support! Chat, nehmt euch ein Beispiel!'
+    ]
+  },
+  like_goal: [
+    '{every} Likes geknackt! {user} hat den letzten gedrückt und schickt mir damit {spawn}! {helper_part}Tippt weiter, Chat, {next_part}',
+    'Da sind die {every} Likes! {user} macht den Sack zu, und ich kriege {spawn} ab. {helper_part}Weiter tippen, {next_part}',
+    'Like-Ziel Nummer {level} ist durch! Den letzten Like hat {user} gesetzt, dafür kriege ich {spawn}. {helper_part}Nicht aufhören, {next_part}'
   ],
   follow: ['Danke fürs Folgen, {user}! Willkommen in der Community!', '{user} folgt jetzt, stark! Bleib dran, hier passiert gleich was!'],
   like_burst: ['Danke für die Likes, Chat! Lasst das Herz weiter glühen!', 'Die Likes fliegen, ihr seid stark heute!'],
@@ -458,13 +478,15 @@ class StreamerBrain extends EventEmitter {
     const kind = effect.kind === 'support' ? 'support' : 'mob'
     let text
     let emotion = 'hype'
-    if (effect.tier >= 5) { text = this.line(L.gift_boss, vars); emotion = 'panic' } else if (effect.tier >= 4 && before === 0) { text = this.line(L.gift_big, vars); emotion = 'panic' } else if (count >= 5 && before > 0) text = this.line(L.combo, vars)
-    else if (n >= 5) text = this.line(L.gift_many[kind], vars)
+    // Combo: wird erst vorgelesen, wenn sie fertig ist – mit der Gesamtzahl ("10 Rosen von Max")
+    vars.giftcount = `${numDe(count)} ${count > 1 ? GIFT_PLURAL[String(gift.name).toLowerCase()] || 'mal ' + gift.name : gift.name}`
+    if (effect.tier >= 5) { text = this.line(L.gift_boss, vars); emotion = 'panic' } else if (count >= 2) text = this.line(L.combo_done[kind], vars)
+    else if (effect.tier >= 4 && before === 0) { text = this.line(L.gift_big, vars); emotion = 'panic' } else if (n >= 5) text = this.line(L.gift_many[kind], vars)
     else if (n >= 2) text = this.line(L.gift_repeat[kind], vars)
     else text = this.line(L.gift_first[kind], vars)
     // Kleine Gifts im Dauerfeuer: nicht jedes einzelne kommentieren
     const small = effect.tier <= 1
-    if (small && !this.cooldown('gift:' + m.id, n >= 5 ? 6000 : 3500) && n !== 5) return { memory: m, spoken: false }
+    if (small && count < 2 && !this.cooldown('gift:' + m.id, n >= 5 ? 6000 : 3500) && n !== 5) return { memory: m, spoken: false }
     this.say(text, { emotion, priority: 3 + Math.min(3, effect.tier), kind: 'gift', ttl: 14000 })
     return { memory: m, spoken: true }
   }
@@ -477,6 +499,26 @@ class StreamerBrain extends EventEmitter {
   onShare (viewer) {
     const m = this.viewer(viewer)
     if (this.cooldown('share', 20000)) this.say(this.line(L.share, { user: m.name }), { emotion: 'hype', priority: 2, kind: 'share' })
+  }
+
+  /**
+   * Like-Ziel geknackt: der Zuschauer mit dem letzten Like bekommt die Aktion gutgeschrieben.
+   * @param {{uniqueId: string, nickname?: string}} viewer
+   * @param {{every: number, level: number, spawnText: string, amount: number, nextAmount: number, helpers: string[]}} g
+   */
+  onLikeGoal (viewer, g) {
+    this.lastExternal = Date.now()
+    const m = this.viewer(viewer)
+    const helpers = (g.helpers || []).map(h => this.speakable(h)).filter(Boolean)
+    const vars = {
+      user: m.name,
+      every: g.every,
+      level: g.level,
+      spawn: g.spawnText,
+      helper_part: helpers.length ? `Danke auch an ${helpers.join(' und ')} fürs Mittippen! ` : '',
+      next_part: g.nextAmount > g.amount ? `bei den nächsten ${g.every} kommt noch mehr!` : `die nächsten ${g.every} warten schon!`
+    }
+    this.say(this.line(L.like_goal, vars), { emotion: 'hype', priority: 4, kind: 'like', ttl: 14000 })
   }
 
   onLike (viewer, count = 1) {

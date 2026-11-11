@@ -24,6 +24,12 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
 
+## Neu in Version 6
+
+- **Like-Ziel:** Alle Zuschauer füllen gemeinsam einen Herz-Balken im Overlay. Im Reiter *Gifts* stellst du ein, alle wie viele Likes (50, 100, 150, 200, 500 oder frei) was passiert, z. B. ein Zombie. Wer den letzten Like zum Ziel schickt, bekommt die Aktion mit seinem Namen; der Streamer sagt es an, bedankt sich bei den Mittippern und fordert zum Weitertippen auf. Mit „Jede Runde eins mehr“ steigert sich die Menge bis +4.
+- **Combos werden am Stück vorgelesen:** Die Mobs kommen sofort, aber der Streamer wartet, bis die Combo fertig ist, und sagt dann „zehn Rosen von Max“ statt jede Rose einzeln.
+- **Gift-Banner wie bei TikTok:** farbige Banner fahren von links ein, mit Profilbild, Name, Gift-Bild und hochzählendem „x14“. Zwei Banner gleichzeitig. Teure Gifts (ab 500 Coins oder Boss) fliegen zusätzlich einmal groß durchs Bild.
+
 ## Neu in Version 5
 
 - **Overlay im TikTok-Hochformat (1080×1920) als Standard:** oben bleiben 230 px für Profil und Zuschauerzahl frei, unten links der Chat, ganz unten die Bedienleiste. In OBS die Browserquelle auf **1080 × 1920** stellen. 16:9 und Split bleiben im Reiter *Stream* wählbar.
@@ -78,6 +84,7 @@ modules/tiktok-bridge.js     Dual-Engine-Connector mit Auto-Live-Watchdog
 modules/tiktok-browser-grabber.js  eingebauter Hintergrund-Browser (Engine B)
 modules/bot/liquid-escape.js Wasser-/Lava-Rettung in drei Stufen
 modules/tunnel.js            cloudflared / localtunnel + QR
+modules/like-goal.js         Like-Ziel: Balken, Gewinner, Steigerung
 modules/lan.js               Heimnetz-Adresse für das Handy im WLAN
 modules/world-control.js     Tageszeit, Wetter, Schwierigkeit, Spielregeln -> Server-Befehle
 modules/mc-server.js         Minecraft-Server starten / stoppen / neu starten
@@ -87,7 +94,7 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 31 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 33 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)
