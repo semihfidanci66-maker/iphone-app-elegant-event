@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c1118">
+<title>KI-Streamer Remote</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KI-Streamer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+/* Layout: einhändig bedienbare Fernbedienung – große Daumen-Tasten, Status oben. */
+:root { color-scheme: dark; --bg: #0c1118; --panel: #141c27; --line: #263446; --ink: #eef3f9; --dim: #8fa1b8; --cyan: #46e0ff; --lime: #8bea5c; --gold: #ffd257; --red: #ff5a6a; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.4 Inter, 'Segoe UI', system-ui, sans-serif; padding-block: calc(12px + env(safe-area-inset-top, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 520px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.top b { font-size: 17px; }
+.dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--dim); font-weight: 600; }
+.dot i { width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+.dot.ok i { background: var(--lime); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+h2 { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+.stat { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.stat div { text-align: center; flex: 1; }
+.stat b { display: block; font-size: 20px; }
+.stat span { font-size: 11px; color: var(--dim); }
+#act { font-weight: 700; color: var(--lime); margin-bottom: 8px; min-height: 21px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid.three { grid-template-columns: 1fr 1fr 1fr; }
+button { font: inherit; font-weight: 700; color: var(--ink); background: #1c2838; border: 1px solid var(--line); border-radius: 12px; padding: 14px 8px; min-height: 52px; cursor: pointer; }
+button:active { transform: scale(.97); background: #26374d; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+button.big { background: var(--cyan); color: #04202a; border-color: transparent; }
+button.danger { background: #3a1820; border-color: #6b2a35; color: #ffb3bb; }
+button.gift { padding: 10px 4px; font-size: 13px; font-weight: 600; }
+button.gift b { display: block; font-size: 24px; }
+input, select { font: inherit; width: 100%; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+.row { display: flex; gap: 8px; margin-top: 8px; }
+.row select { flex: 0 0 104px; } .row button { flex: 0 0 96px; padding: 10px; }
+button.alarm { background: #4a1420; border-color: #a03446; color: #ffd0d6; font-weight: 800; }
+button.water { background: #10293f; border-color: #2a5f8f; }
+button.modeOn { border: 2px solid var(--cyan); background: #12303a; }
+.stack { display: grid; gap: 8px; }
+.stack button { text-align: left; padding: 14px 12px; }
+#toast { z-index: 20; position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #0a0f15; border: 1px solid var(--line); padding: 9px 16px; border-radius: 99px; font-weight: 600; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; }
+#toast.on { opacity: 1; }
+#denied { text-align: center; padding: 30px 10px; color: var(--dim); }
+.tab { display: none; } .tab.on { display: block; }
+nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; background: rgba(12, 17, 25, .96); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+nav button { flex: 1; background: none; border: 0; border-top: 2px solid transparent; border-radius: 0; min-height: 0; padding: 8px 2px 9px; font-size: 11px; font-weight: 700; color: var(--dim); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+nav button:active { background: none; transform: none; }
+nav button span { font-size: 21px; }
+nav button.on { color: var(--cyan); border-top-color: var(--cyan); }
+.bars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0 10px; }
+.bars div { height: 7px; border-radius: 99px; background: #0a0f15; overflow: hidden; }
+.bars i { display: block; height: 100%; width: 0; background: var(--red); border-radius: 99px; transition: width .3s; }
+.bars .food i { background: var(--gold); }
+h3 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin: 12px 0 6px; }
+#sky { display: flex; justify-content: space-between; align-items: center; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; background: linear-gradient(#3b8fd9, #9ed0f5); font-weight: 800; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+#sky.night { background: linear-gradient(#060a17, #1b2550); } #sky.dusk { background: linear-gradient(#35305f, #e9884f); }
+#sky b { font-size: 24px; font-variant-numeric: tabular-nums; } #sky small { display: block; font-size: 12px; font-weight: 600; } #sky span { font-size: 30px; }
+button.sel { border: 2px solid var(--cyan); background: #12303a; }
+button.sure { background: var(--red); color: #fff; border-color: transparent; }
+button:disabled { opacity: .4; }
+.sw { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.sw:last-child { border-bottom: 0; }
+.sw div { display: flex; gap: 6px; flex: none; } .sw button { min-height: 40px; padding: 6px 14px; }
+#mcTxt { font-weight: 700; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="top"><b>KI-Streamer Remote</b><span class="dot" id="conn"><i></i><span>verbinde …</span></span></div>
+<div id="denied" hidden><div class="card"><h2>Anmelden</h2><p id="deniedTxt" style="margin:0 0 10px">Bitte den Zugangscode eingeben.</p><input id="pw" type="password" placeholder="Zugangscode" autocomplete="current-password" enterkeyhint="go"><div class="row"><div style="flex:1"></div><button class="big" id="pwBtn">Anmelden</button></div></div></div>
+<div id="app">
+  <div class="card">
+    <div id="act">–</div>
+    <div class="bars"><div><i id="hpBar"></i></div><div class="food"><i id="foodBar"></i></div></div>
+    <div class="stat"><div><b id="sHp">–</b><span>Herzen</span></div><div><b id="sFood">–</b><span>Hunger</span></div><div><b id="sY">–</b><span>Ebene</span></div><div><b id="sMob">–</b><span>Gegner</span></div></div>
+  </div>
+  <div class="tab" id="t-ctl">
+  <div class="card">
+    <h2>Was soll die KI machen?</h2>
+    <div class="stack">
+      <button data-mode="surface">☀️ AN DER OBERFLÄCHE SPIELEN (Standard)</button>
+      <button data-mode="cave">⛏️ JETZT IN DIE HÖHLE GEHEN (1x Erze holen)</button>
+      <button class="alarm" data-cmd="abort_cave">🚨 HÖHLE SOFORT ABBRECHEN &amp; RAUS!</button>
+      <button class="water" data-cmd="rescue">💧 Aus Wasser/Lava/Loch befreien</button>
+    </div>
+    <div class="grid" style="margin-top:8px"><button data-goal="house">🏠 Haus bauen</button><button data-goal="sleep">🛏️ Bett &amp; Schlafen</button><button data-cmd="corpse">💀 Todes-Loot holen</button><button data-mode="fight">⚔️ Nur Kämpfen</button></div>
+  </div>
+  <div class="card">
+    <h2>Notfall</h2>
+    <div class="grid"><button class="big" id="unstuck">Unstuck</button><button id="pause">Pause</button><button id="corpse">Loot holen</button><button id="sleepBtn">Schlafen</button><button class="danger" id="respawn">Respawn</button><button id="heal">Goldapfel geben</button></div>
+  </div>
+  <div class="card">
+    <h2>KI-Ziel erzwingen</h2>
+    <div class="grid" id="goals"></div>
+  </div>
+  </div>
+  <div class="tab" id="t-world">
+  <div class="card">
+    <h2>Tageszeit</h2>
+    <div id="sky"><div><b id="clock">–:–</b><small id="phase">Bot ist nicht in der Welt</small></div><span id="orb"></span></div>
+    <div class="grid three"><button data-time="day">☀️ Tag</button><button data-time="noon">🔆 Mittag</button><button data-time="sunset">🌇 Abend</button><button data-time="night">🌙 Nacht</button><button data-time="midnight">🌑 Mitternacht</button><button data-time="sunrise">🌅 Morgen</button></div>
+    <h3>Ablauf</h3>
+    <div class="grid"><button data-lock="off">🔄 Normal</button><button data-lock="freeze">⏸️ Zeit anhalten</button><button data-lock="day">☀️ Immer Tag</button><button data-lock="night">🌙 Immer Nacht</button></div>
+  </div>
+  <div class="card">
+    <h2>Wetter</h2>
+    <div class="grid three"><button data-weather="clear">☀️ Sonne</button><button data-weather="rain">🌧️ Regen</button><button data-weather="thunder">⛈️ Gewitter</button></div>
+    <h3>Schwierigkeit</h3>
+    <div class="grid"><button data-diff="peaceful">🕊️ Friedlich</button><button data-diff="easy">🙂 Einfach</button><button data-diff="normal">😐 Normal</button><button data-diff="hard">💀 Schwer</button></div>
+    <h3>Sofort</h3>
+    <div class="grid"><button id="clearMobs">🧹 Monster weg</button><button id="saveWorld">💾 Welt speichern</button></div>
+  </div>
+  <div class="card">
+    <h2>Spielregeln</h2>
+    <div id="rulesBox"></div>
+  </div>
+  <div class="card">
+    <h2>Minecraft-Server</h2>
+    <div id="mcTxt">–</div>
+    <div class="grid three"><button class="big" id="mcStart">▶️ Start</button><button id="mcRestart">🔁 Neu</button><button class="danger" id="mcStop">⏹️ Stopp</button></div>
+  </div>
+  </div>
+  <div class="tab" id="t-give">
+  <div class="card">
+    <h2>Ausrüstung geben</h2>
+    <div class="grid" id="gearBtns"><button data-kit="iron">Eisen-Set + Schild</button><button data-kit="dia">Diamant-Set</button><button data-kit="tools">Werkzeug-Set</button><button data-kit="bed">Bett</button></div>
+  </div>
+  <div class="card">
+    <h2>Items geben</h2>
+    <div class="grid three" id="items"></div>
+  </div>
+  <div class="card">
+    <h2>Gift testen</h2>
+    <div class="grid three" id="gifts"></div>
+  </div>
+  </div>
+  <div class="tab" id="t-stream">
+  <div class="card">
+    <h2>TikTok</h2>
+    <div id="tikTxt" style="font-weight:700">–</div>
+  </div>
+  <div class="card">
+    <h2>Kamera</h2>
+    <div class="grid three" id="cams"><button data-cam="ego">👁️ Ego</button><button data-cam="third">🎥 Freecam</button><button data-cam="auto">🔄 Auto</button></div>
+  </div>
+  <div class="card">
+    <h2>Streamer sprechen lassen</h2>
+    <input id="say" placeholder="Was soll er sagen?" enterkeyhint="send">
+    <div class="row"><select id="emo" aria-label="Stimmung"><option value="chill">Chill</option><option value="hype">Hype</option><option value="panic">Panik</option></select><div style="flex:1"></div><button class="big" id="sayBtn">Sprechen</button></div>
+  </div>
+  <div class="card">
+    <h2>Live-Feed</h2>
+    <div id="feed" style="height:220px;overflow:auto;font-size:13.5px"></div>
+  </div>
+  </div>
+  <nav>
+    <button data-tab="ctl"><span>🎮</span>Steuern</button>
+    <button data-tab="world"><span>🌍</span>Welt</button>
+    <button data-tab="give"><span>🎒</span>Geben</button>
+    <button data-tab="stream"><span>📡</span>Stream</button>
+  </nav>
+</div>
+<div id="toast" role="status"></div>
+<script>
+'use strict'
+const $ = id => document.getElementById(id)
+const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash)
+let key = new URLSearchParams(location.search).get('k')
+try { if (key) localStorage.setItem('remoteKey', key); else key = localStorage.getItem('remoteKey') } catch (_) {}
+let ws = null; let st = { paused: false }; let built = false
+const toast = t => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1600) }
+const send = (m, label) => {
+  if (DEMO) return toast('Vorschau: ' + label)
+  if (!ws || ws.readyState !== 1) return toast('Nicht verbunden')
+  ws.send(JSON.stringify(m)); if (navigator.vibrate) navigator.vibrate(12); toast(label + ' gesendet')
+}
+const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'Kampf!', eat: 'Essen', sleep: 'Schlafen', explore: 'Erkunden', idle: 'Basis', recover: 'Loot holen', paused: 'Pause', offline: 'Offline' }
+function status (s) {
+  if (!s) return
+  st = s
+  $('act').textContent = s.connected ? (s.goal || ACT[s.activity] || s.activity) : 'Bot ist nicht in der Welt'
+  $('act').style.color = s.fighting ? 'var(--red)' : ''
+  $('sHp').textContent = s.connected ? (s.health / 2).toFixed(1) : '–'
+  $('sFood').textContent = s.connected ? s.food : '–'
+  $('sY').textContent = s.connected ? s.pos.y : '–'
+  $('sMob').textContent = s.connected ? s.threats : '–'
+  $('pause').textContent = s.paused ? 'Weiter' : 'Pause'
+  $('hpBar').style.width = s.connected ? Math.max(0, Math.min(100, s.health * 5)) + '%' : '0'
+  $('foodBar').style.width = s.connected ? Math.max(0, Math.min(100, s.food * 5)) + '%' : '0'
+  sky(s)
+  for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('modeOn', b.dataset.mode === (s.mode || 'surface'))
+}
+function sky (s) {
+  const w = s.connected && s.world
+  if (!w) { $('clock').textContent = '–:–'; $('phase').textContent = 'Bot ist nicht in der Welt'; $('orb').textContent = ''; $('sky').className = ''; return }
+  const t = ((w.time % 24000) + 24000) % 24000
+  const mins = Math.floor(((t + 6000) % 24000) * 0.06)
+  $('clock').textContent = String(Math.floor(mins / 60) % 24).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0')
+  const night = t >= 13000 && t < 23000
+  const dusk = !night && (t >= 11500 || t < 500)
+  $('sky').className = night ? 'night' : dusk ? 'dusk' : ''
+  $('phase').textContent = night ? 'Nacht · Monster unterwegs' : t >= 23000 || t < 500 ? 'Sonnenaufgang' : t >= 11500 ? 'Sonnenuntergang' : 'Tag'
+  $('orb').textContent = w.thunder ? '⛈️' : w.raining ? '🌧️' : night ? '🌙' : '☀️'
+  for (const b of document.querySelectorAll('[data-weather]')) b.classList.toggle('sel', b.dataset.weather === (w.thunder ? 'thunder' : w.raining ? 'rain' : 'clear'))
+  for (const b of document.querySelectorAll('[data-diff]')) b.classList.toggle('sel', b.dataset.diff === w.difficulty)
+}
+/** Zustand, der nur mit STATE kommt: Welt-Schalter, Minecraft-Server, TikTok. */
+function world (m) {
+  const w = m.world || { timeLock: 'off', rules: {} }
+  for (const b of document.querySelectorAll('[data-lock]')) b.classList.toggle('sel', b.dataset.lock === w.timeLock)
+  const rb = $('rulesBox')
+  if (!rb.childElementCount) {
+    for (const r of m.worldRules || []) {
+      const row = document.createElement('div'); row.className = 'sw'
+      const name = document.createElement('span'); name.textContent = r.label
+      const seg = document.createElement('div')
+      for (const [val, label] of [[true, 'An'], [false, 'Aus']]) { const b = document.createElement('button'); b.textContent = label; b.dataset.rule = r.id; b.dataset.val = val; b.onclick = () => { send({ type: 'WORLD', op: 'rule', name: r.id, value: val }, r.label + ': ' + label); if (DEMO) { w.rules[r.id] = val; world(m) } }; seg.appendChild(b) }
+      row.append(name, seg); rb.appendChild(row)
+    }
+  }
+  for (const b of document.querySelectorAll('[data-rule]')) b.classList.toggle('sel', String(w.rules[b.dataset.rule]) === b.dataset.val)
+  const mc = m.mc || { phase: 'stopped', installed: false }
+  const botOn = m.status && m.status.connected
+  const run = mc.phase === 'running'
+  $('mcTxt').textContent = mc.error || (mc.phase === 'starting' ? '🟡 Startet …' : mc.phase === 'stopping' ? '🟡 Fährt herunter …' : run ? '🟢 Läuft' + (mc.own ? '' : ' (eigenes Fenster)') : botOn ? '🟢 Läuft (anderer PC)' : mc.installed ? '🔴 Aus' : '⚪ Auf dem PC ist kein Server eingerichtet')
+  $('mcStart').disabled = mc.phase !== 'stopped' || !mc.installed
+  $('mcStop').disabled = !(run || botOn)
+  $('mcRestart').disabled = !(run && mc.own)
+  const t = m.tiktok || {}
+  $('tikTxt').textContent = t.badge || '⚪ Nicht verbunden'
+}
+function feed (f) {
+  const box = $('feed'); const d = document.createElement('div'); const u = document.createElement('b')
+  u.textContent = f.user; u.style.color = f.kind === 'gift' ? 'var(--gold)' : 'var(--cyan)'
+  d.append((f.kind === 'chat' ? '💬 ' : (f.emoji || '🎁') + ' '), u, ' ' + f.text); d.style.padding = '2px 0'
+  box.appendChild(d); while (box.childElementCount > 60) box.firstChild.remove()
+  box.scrollTop = box.scrollHeight
+}
+function confirmTap (btn, fn) {
+  let t = null; let label = ''
+  btn.addEventListener('click', () => {
+    if (t) { clearTimeout(t); t = null; btn.classList.remove('sure'); btn.textContent = label; fn(); return }
+    label = btn.textContent; btn.textContent = 'Sicher?'; btn.classList.add('sure')
+    t = setTimeout(() => { t = null; btn.classList.remove('sure'); btn.textContent = label }, 3000)
+  })
+}
+function showTab (id) {
+  if (!$('t-' + id)) id = 'ctl'
+  for (const p of document.querySelectorAll('.tab')) p.classList.toggle('on', p.id === 't-' + id)
+  for (const b of document.querySelectorAll('nav button')) b.classList.toggle('on', b.dataset.tab === id)
+  try { localStorage.setItem('remoteTab', id) } catch (_) {}
+}
+for (const b of document.querySelectorAll('nav button')) b.onclick = () => { showTab(b.dataset.tab); scrollTo(0, 0) }
+{ let t = null; try { t = localStorage.getItem('remoteTab') } catch (_) {} showTab(t || 'ctl') }
+for (const b of document.querySelectorAll('[data-time]')) b.onclick = () => send({ type: 'WORLD', op: 'time', value: b.dataset.time }, b.textContent)
+for (const b of document.querySelectorAll('[data-lock]')) b.onclick = () => send({ type: 'WORLD', op: 'timelock', value: b.dataset.lock }, b.textContent)
+for (const b of document.querySelectorAll('[data-weather]')) b.onclick = () => send({ type: 'WORLD', op: 'weather', value: b.dataset.weather }, b.textContent)
+for (const b of document.querySelectorAll('[data-diff]')) b.onclick = () => send({ type: 'WORLD', op: 'difficulty', value: b.dataset.diff }, b.textContent)
+$('clearMobs').onclick = () => send({ type: 'WORLD', op: 'clear_mobs' }, 'Monster entfernen')
+$('saveWorld').onclick = () => send({ type: 'WORLD', op: 'save' }, 'Welt speichern')
+$('mcStart').onclick = () => send({ type: 'MC_SERVER', cmd: 'start' }, 'Server-Start')
+confirmTap($('mcRestart'), () => send({ type: 'MC_SERVER', cmd: 'restart' }, 'Neustart'))
+confirmTap($('mcStop'), () => send({ type: 'MC_SERVER', cmd: 'stop' }, 'Server-Stopp'))
+
+function build (goals, rules) {
+  const g = $('goals'); g.textContent = ''
+  for (const x of goals) { const b = document.createElement('button'); b.textContent = x.label; b.onclick = () => send({ type: 'BOT', cmd: 'goal', goal: x.id }, x.label); g.appendChild(b) }
+  const gf = $('gifts'); gf.textContent = ''
+  for (const r of rules.filter(r => r.enabled)) { const b = document.createElement('button'); b.className = 'gift'; const e = document.createElement('b'); e.textContent = r.emoji; b.append(e, r.giftName); b.onclick = () => send({ type: 'SIM_GIFT', ruleId: r.id, user: 'Regie', count: 1 }, r.giftName); gf.appendChild(b) }
+}
+const ITEMS = [['cooked_beef', 'Steak', 8], ['golden_apple', 'Goldapfel', 2], ['cobblestone', 'Bruchstein', 64], ['torch', 'Fackeln', 16], ['iron_ingot', 'Eisen', 8], ['diamond', 'Diamant', 3], ['shield', 'Schild', 1], ['water_bucket', 'Wasser', 1], ['oak_log', 'Holz', 16]]
+for (const [id, label, n] of ITEMS) { const b = document.createElement('button'); b.textContent = `${label} ×${n}`; b.onclick = () => send({ type: 'BOT', cmd: 'give', item: id, count: n }, label); $('items').appendChild(b) }
+for (const b of document.querySelectorAll('[data-mode]')) b.onclick = () => { send({ type: 'MODE', mode: b.dataset.mode }, b.textContent.trim().slice(0, 28)); if (DEMO) status({ ...st, mode: b.dataset.mode }) }
+for (const b of document.querySelectorAll('.stack [data-cmd], .card [data-cmd="corpse"]')) b.onclick = () => { send({ type: 'BOT', cmd: b.dataset.cmd }, b.textContent.trim().slice(0, 28)); if (DEMO && b.dataset.cmd === 'abort_cave') status({ ...st, mode: 'surface' }) }
+for (const b of document.querySelectorAll('[data-goal]')) b.onclick = () => send({ type: 'BOT', cmd: 'goal', goal: b.dataset.goal }, b.textContent.trim())
+$('unstuck').onclick = () => send({ type: 'BOT', cmd: 'unstuck' }, 'Unstuck')
+confirmTap($('respawn'), () => send({ type: 'BOT', cmd: 'respawn' }, 'Respawn'))
+$('pause').onclick = () => send({ type: 'BOT', cmd: st.paused ? 'resume' : 'pause' }, st.paused ? 'Weiter' : 'Pause')
+$('corpse').onclick = () => send({ type: 'BOT', cmd: 'corpse' }, 'Corpse-Run')
+$('sleepBtn').onclick = () => send({ type: 'BOT', cmd: 'goal', goal: 'sleep' }, 'Schlafen')
+const KITS = { iron: ['iron_sword', 'iron_helmet', 'iron_chestplate', 'iron_leggings', 'iron_boots', 'shield'], dia: ['diamond_sword', 'diamond_pickaxe', 'diamond_chestplate'], tools: ['iron_pickaxe', 'iron_axe', 'iron_shovel'], bed: ['red_bed'] }
+for (const b of document.querySelectorAll('[data-kit]')) b.onclick = () => { if (DEMO) return toast('Vorschau: ' + b.textContent); for (const it of KITS[b.dataset.kit]) ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: 'BOT', cmd: 'give', item: it, count: 1 })); send({ type: 'BOT', cmd: 'goal', goal: 'gear' }, b.textContent) }
+for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => { send({ type: 'CAMERA', mode: b.dataset.cam }, b.textContent); markCam(b.dataset.cam) }
+const markCam = m => { for (const b of document.querySelectorAll('[data-cam]')) b.classList.toggle('big', b.dataset.cam === m) }
+$('heal').onclick = () => send({ type: 'BOT', cmd: 'give', item: 'golden_apple', count: 1 }, 'Goldapfel')
+const say = () => { const t = $('say').value.trim(); if (!t) return; send({ type: 'SAY', text: t, emotion: $('emo').value }, 'Sprachzeile'); $('say').value = '' }
+$('sayBtn').onclick = say
+$('say').addEventListener('keydown', e => { if (e.key === 'Enter') say() })
+
+function connect () {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=mobile${key ? '&k=' + encodeURIComponent(key) : ''}`)
+  ws.onopen = () => { $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'verbunden' }
+  ws.onmessage = e => {
+    let m; try { m = JSON.parse(e.data) } catch (_) { return }
+    if (m.type === 'DENIED') { $('denied').hidden = false; $('app').hidden = true; $('deniedTxt').textContent = m.reason + '. Den Zugangscode siehst du am PC im Dashboard (Reiter Stream).'; ws.onclose = null; $('conn').lastElementChild.textContent = 'kein Zugriff' } else if (m.type === 'FEED') feed(m.item); else if (m.type === 'STATE') { status(m.status); world(m); markCam(m.config.cameraMode); if (!built) for (const f of m.feed || []) feed(f); if (!built) { built = true; build(m.goals, m.rules.filter(r => r.inLegend || r.custom)) } } else if (m.type === 'STATUS') status(m.status)
+  }
+  ws.onclose = () => { $('conn').className = 'dot'; $('conn').lastElementChild.textContent = 'getrennt'; setTimeout(connect, 1500) }
+}
+const login = () => { const v = $('pw').value.trim(); if (!v) return; key = v; try { localStorage.setItem('remoteKey', v) } catch (_) {} $('denied').hidden = true; $('app').hidden = false; $('pw').value = ''; connect() }
+$('pwBtn').onclick = login
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') login() })
+if (DEMO) {
+  $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'Vorschau'
+  markCam('auto')
+  const demoStatus = { connected: true, activity: 'combat', goal: 'Kampf: 3 Gegner', fighting: true, health: 11, food: 15, pos: { y: 64 }, threats: 3, paused: false, world: { time: 14500, raining: false, thunder: false, difficulty: 'normal' } }
+  status(demoStatus)
+  world({ status: demoStatus, world: { timeLock: 'off', rules: { keepInventory: false, mobSpawning: true } }, worldRules: [['keepInventory', 'Inventar nach Tod behalten'], ['mobSpawning', 'Monster spawnen von selbst'], ['mobGriefing', 'Creeper zerstören Blöcke'], ['weatherCycle', 'Wetter wechselt von selbst']].map(([id, label]) => ({ id, label })), mc: { installed: true, phase: 'running', own: true }, tiktok: { badge: '🟢 LIVE VERBUNDEN! (@beispiel | Zuschauer: 128)' } })
+  feed({ kind: 'gift', user: 'Lukas', emoji: '🌹', text: 'Rose x3 → Zombie' }); feed({ kind: 'chat', user: 'Mia', text: 'Bau ein Haus' })
+  build([['wood', 'Holz holen'], ['house', 'Haus bauen'], ['bed', 'Bett craften'], ['iron_sword', 'Eisenschwert'], ['diamonds', 'Diamanten'], ['nether', 'Nether'], ['eat', 'Essen'], ['mine', 'Minen gehen']].map(([id, label]) => ({ id, label })),
+    [['🌹', 'Rose'], ['🍦', 'Eistüte'], ['💖', 'Fingerherz'], ['🍩', 'Donut'], ['🫶', 'Handherz'], ['🌌', 'Galaxie']].map(([emoji, giftName], i) => ({ id: 'g' + i, emoji, giftName, enabled: true })))
+} else connect()
+</script>
+</body>
+</html>

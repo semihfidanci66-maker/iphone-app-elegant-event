@@ -1,0 +1,32 @@
+{
+  "name": "minecraft-ai-streamer",
+  "version": "1.0.0",
+  "description": "Autonomer Minecraft-Survival-Bot mit deutscher Streamer-Persona, TikTok-Gifts und Studio-Overlay",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/unit.js",
+    "test:live": "node test/live-scenarios.js",
+    "test:commands": "node test/commands.js",
+    "setup:mc": "node scripts/setup-mc-server.js"
+  },
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "express": "^5.3.0",
+    "localtunnel": "^2.0.2",
+    "mineflayer": "^4.39.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "msedge-tts": "^2.1.1",
+    "puppeteer-core": "^25.17.0",
+    "qrcode": "^1.5.4",
+    "skinview3d": "^3.4.2",
+    "tiktok-live-connector": "^2.5.0",
+    "ws": "^8.22.2"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}
