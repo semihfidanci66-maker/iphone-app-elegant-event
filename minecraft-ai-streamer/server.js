@@ -20,6 +20,10 @@ const { TTSEngine, MALE_VOICES } = require('./modules/tts-engine')
 const { TikTokBridge, sanitizeUsername } = require('./modules/tiktok-bridge')
 const { GiftEngine, ACTIONS, MOBS } = require('./modules/gift-engine')
 const { Tunnel } = require('./modules/tunnel')
+const { McServer } = require('./modules/mc-server')
+const { worldCommands, sanitizeWorld, cleanCommand, RULES } = require('./modules/world-control')
+const { lanAddresses } = require('./modules/lan')
+const QRCode = require('qrcode')
 
 const ROOT = __dirname
 const PORT = Number(process.env.PORT || 3000)
@@ -35,6 +39,7 @@ function loadConfig () {
   const cfg = { ...base, ...local, minecraft: { ...base.minecraft, ...(local.minecraft || {}) } }
   if (!cfg.remoteKey) cfg.remoteKey = crypto.randomBytes(9).toString('base64url')
   cfg.tiktokUsername = sanitizeUsername(cfg.tiktokUsername)
+  cfg.world = sanitizeWorld(cfg.world)
   return cfg
 }
 const config = loadConfig()
@@ -53,7 +58,7 @@ function writeLater (file, getData, delay = 250) {
   }, delay))
 }
 function saveConfig () {
-  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules }))
+  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, world: config.world, mcRamGb: mc.ramGb }))
 }
 function sanitizeLayout (l) {
   if (!l || typeof l !== 'object') return null
@@ -84,6 +89,28 @@ const gifts = new GiftEngine({
   onChange: () => { saveConfig(); syncGiftConfig(); broadcastState() }
 }, config.giftRules)
 const tunnel = new Tunnel(PORT, () => broadcastState())
+const mc = new McServer({ dir: path.join(ROOT, 'mc-server'), port: config.minecraft.port, ramGb: config.mcRamGb })
+bot.noSleep = config.world.timeLock === 'night'
+mc.on('state', () => broadcastState())
+mc.on('line', l => { if (l.important) log(/ERROR|FAILED/.test(l.text) ? 'warn' : 'info', '[MC] ' + l.text) })
+
+// ---- Handy im selben WLAN: feste Adresse + QR-Code, ganz ohne Tunnel
+const lan = { urls: [], qr: null }
+async function refreshLan () {
+  const urls = lanAddresses().map(a => `http://${a}:${PORT}/mobile.html?k=${encodeURIComponent(config.remoteKey)}`)
+  if (urls.join() === lan.urls.join()) return
+  lan.urls = urls
+  lan.qr = urls[0] ? await QRCode.toDataURL(urls[0], { margin: 1, width: 360, color: { dark: '#0b0f14', light: '#ffffff' } }).catch(() => null) : null
+  broadcastState()
+}
+setInterval(refreshLan, 30000).unref()
+
+/** Server-Befehle: über die Konsole, wenn das Programm den Server selbst gestartet hat, sonst über den Bot (OP). */
+function serverCommands (cmds) {
+  if (mc.own && mc.state.phase === 'running') { for (const c of cmds) mc.command(c); return true }
+  if (bot.connected) return bot.runCommands(cmds)
+  return false
+}
 const logs = []
 const feed = [] // Live-Feed (Chat + Gifts) für das Dashboard, hart begrenzt
 let ttsWarnAt = 0
@@ -122,6 +149,12 @@ function isLocal (req) {
   return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1'
 }
 
+function safeEqual (a, b) {
+  const x = crypto.createHash('sha256').update(String(a)).digest()
+  const y = crypto.createHash('sha256').update(String(b)).digest()
+  return crypto.timingSafeEqual(x, y)
+}
+
 function send (ws, msg) { if (ws.readyState === 1) ws.send(JSON.stringify(msg)) }
 function broadcast (msg, filter) {
   const s = JSON.stringify(msg)
@@ -144,6 +177,10 @@ function fullState () {
     botRunning: bot.running,
     tiktok: tiktok.state,
     tunnel: tunnel.state,
+    lan,
+    mc: mc.state,
+    world: config.world,
+    worldRules: Object.entries(RULES).map(([id, r]) => ({ id, label: r.label })),
     config: { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername || '', voice: tts.voice, voices: MALE_VOICES, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode },
     mobs: Object.keys(MOBS),
     layout,
@@ -165,7 +202,7 @@ function syncGiftConfig () { broadcast({ type: 'GIFT_CONFIG_SYNC', gifts: gifts.
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x')
   const local = isLocal(req)
-  const keyOk = url.searchParams.get('k') === config.remoteKey
+  const keyOk = safeEqual(url.searchParams.get('k') || '', config.remoteKey)
   ws.role = url.searchParams.get('role') === 'overlay' ? 'overlay' : (url.searchParams.get('role') || 'dashboard')
   // Steuerung von außerhalb (Tunnel) nur mit Schlüssel; das Overlay empfängt nur
   ws.canControl = ws.role !== 'overlay' && (local || keyOk)
@@ -236,6 +273,39 @@ function handle (m) {
       saveConfig()
       broadcastState()
       break
+    case 'WORLD': {
+      if (m.op === 'clear_mobs') {
+        // Alle Monster verschwinden lassen: kurz auf Friedlich, dann zurück auf die alte Schwierigkeit
+        const back = ['easy', 'normal', 'hard'].includes(bot.status().world && bot.status().world.difficulty) ? bot.status().world.difficulty : 'normal'
+        if (!serverCommands(['difficulty peaceful'])) { log('warn', 'Welt-Steuerung: Server ist nicht erreichbar'); break }
+        setTimeout(() => serverCommands([`difficulty ${back}`]), 1500)
+        log('info', 'Welt: alle Monster entfernt')
+        break
+      }
+      const r = worldCommands(m, config.world)
+      if (!r) break
+      if (!serverCommands(r.cmds)) { log('warn', 'Welt-Steuerung: Server ist nicht erreichbar (Bot offline?)'); break }
+      bot.noSleep = config.world.timeLock === 'night'
+      log('info', 'Welt: ' + r.label)
+      saveConfig()
+      broadcastState()
+      setTimeout(broadcastState, 600)
+      break
+    }
+    case 'MC_COMMAND': {
+      const cmd = cleanCommand(m.text)
+      if (!cmd) break
+      log(serverCommands([cmd]) ? 'info' : 'warn', (bot.connected || mc.own ? 'Server-Befehl: /' : 'Server nicht erreichbar, Befehl verworfen: /') + cmd)
+      break
+    }
+    case 'MC_SERVER':
+      switch (m.cmd) {
+        case 'start': mc.start().then(r => { if (r.ok) { log('info', 'Minecraft-Server startet …'); if (!bot.running) bot.start() } else log('warn', 'Minecraft-Server: ' + r.reason) }); break
+        case 'stop': stopMc(); break
+        case 'restart': stopMc().then(ok => { if (ok) setTimeout(() => mc.start(), 1500); else log('warn', 'Neustart geht nur, wenn der Server über das Dashboard gestartet wurde.') }); break
+        case 'ram': mc.ramGb = Math.max(1, Math.min(32, Number(m.gb) || 4)); saveConfig(); break
+      }
+      break
     case 'TUNNEL_START': tunnel.start(config.remoteKey); break
     case 'TUNNEL_STOP': tunnel.stop(); break
     case 'BOT':
@@ -257,6 +327,13 @@ function handle (m) {
       setTimeout(broadcastState, 150)
       break
   }
+}
+
+/** Minecraft-Server sauber stoppen. true = eigener Prozess wurde beendet. */
+async function stopMc () {
+  if (mc.own) { log('info', 'Minecraft-Server wird gestoppt (Welt wird gespeichert) …'); return mc.stop() }
+  if (bot.connected && bot.runCommands(['stop'])) { log('info', 'Stop-Befehl an den Minecraft-Server geschickt'); mc.markStopping() } else log('warn', 'Minecraft-Server ist nicht erreichbar')
+  return false
 }
 
 // ------------------------------------------------------------------ Verdrahtung
@@ -323,8 +400,9 @@ server.listen(PORT, () => {
   console.log('  Minecraft-KI-Streamer läuft')
   console.log(`  Dashboard:       http://localhost:${PORT}/`)
   console.log(`  Studio-Overlay:  http://localhost:${PORT}/studio-overlay.html   (OBS-Browserquelle, 1920x1080)`)
-  console.log(`  Handy:           Tunnel im Dashboard starten und QR-Code scannen`)
+  console.log('  Handy:           QR-Code im Dashboard scannen (gleiches WLAN) oder Tunnel für unterwegs starten')
   console.log('')
+  refreshLan()
   if (config.autoStartBot) bot.start()
   // Gespeicherter TikTok-Name: Watchdog startet ohne einen einzigen Klick
   if (config.tiktokUsername) tiktok.start(config.tiktokUsername)
@@ -334,10 +412,15 @@ server.listen(PORT, () => {
   }
 })
 
-function shutdown () {
+let closing = false
+async function shutdown () {
+  if (closing) return
+  closing = true
   try { tiktok.stop() } catch (_) {}
   try { bot.dispose() } catch (_) {}
   try { tunnel.stop() } catch (_) {}
+  // Selbst gestarteten Minecraft-Server sauber beenden, damit die Welt gespeichert wird
+  if (mc.own) { console.log('  Minecraft-Server wird gestoppt …'); await Promise.race([mc.stop(), new Promise(resolve => setTimeout(resolve, 20000))]) }
   process.exit(0)
 }
 process.on('SIGINT', shutdown)

@@ -19,10 +19,18 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 |---|---|
 | Dashboard | http://localhost:3000/ |
 | Studio-Overlay (OBS-Browserquelle, 1920×1080, transparent) | http://localhost:3000/studio-overlay.html |
-| Handy-Fernbedienung | im Dashboard „Cloud-Tunnel starten“, QR-Code scannen |
+| Handy-Fernbedienung | Dashboard → Reiter „Stream“ → QR-Code scannen (WLAN) oder Internet-Zugang starten |
 | Vorschau mit Beispieldaten | http://localhost:3000/preview.html |
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
+
+## Neu in Version 4
+
+- **Neues Dashboard:** fünf Reiter statt einer langen Seite – *Live* (Status, Bot-Steuerung, Live-Feed), *Welt*, *Gifts*, *Stream* (TikTok, Kamera, Overlay, Handy, Stimme) und *System* (Verbindung, Protokoll). Auf dem Handy liegen die Reiter als Leiste unten. Gefährliche Knöpfe (Respawn, Server stoppen, Zurücksetzen) lösen erst beim zweiten Tippen aus.
+- **Welt-Steuerung:** Tageszeit (Morgen bis Mitternacht), „Immer Tag“ / „Immer Nacht“ / Zeit anhalten, Wetter, Schwierigkeit, Spielregeln (Inventar behalten, Monster-Spawn, Creeper-Schaden, Wetterwechsel), alle Monster entfernen, Welt speichern und ein Feld für eigene Server-Befehle. Bei „Immer Nacht“ geht der Bot nicht von selbst schlafen.
+- **Minecraft-Server starten, stoppen, neu starten** direkt im Dashboard oder vom Handy. Ein Server, der im eigenen Fenster läuft, wird erkannt und lässt sich von dort stoppen.
+- **Handy im WLAN ohne Tunnel:** Reiter *Stream* zeigt einen QR-Code mit der Heimnetz-Adresse des PCs. Scannen, fertig – der Link enthält den geheimen Schlüssel. Der Internet-Tunnel bleibt für unterwegs. Über „Zum Home-Bildschirm“ startet die Fernbedienung wie eine App.
+- **Handy-Fernbedienung** mit vier Reitern: Steuern, Welt, Geben, Stream (inklusive Live-Feed).
 
 ## Neu in Version 3
 
@@ -62,13 +70,16 @@ modules/tiktok-bridge.js     Dual-Engine-Connector mit Auto-Live-Watchdog
 modules/tiktok-browser-grabber.js  eingebauter Hintergrund-Browser (Engine B)
 modules/bot/liquid-escape.js Wasser-/Lava-Rettung in drei Stufen
 modules/tunnel.js            cloudflared / localtunnel + QR
+modules/lan.js               Heimnetz-Adresse für das Handy im WLAN
+modules/world-control.js     Tageszeit, Wetter, Schwierigkeit, Spielregeln -> Server-Befehle
+modules/mc-server.js         Minecraft-Server starten / stoppen / neu starten
 public/                      studio-overlay.html · index.html · mobile.html
 ```
 
 ## Tests
 
 ```
-npm test                                  # 27 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 29 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)

@@ -237,4 +237,24 @@ t('Stimme: nur männliche Neural-Stimmen, nie ein Browser-Fallback', () => {
   const files = [...walk(path.join(__dirname, '..', 'public')), ...walk(path.join(__dirname, '..', 'modules')), path.join(__dirname, '..', 'server.js')]
   for (const f of files) if (/\.(js|html)$/.test(f)) assert(!/speechSynthesis\s*[.(]|SpeechSynthesisUtterance\s*\(/.test(fs.readFileSync(f, 'utf8')), 'speechSynthesis-Aufruf in ' + f)
 })
+// ---------- Welt-Steuerung & Handy im WLAN ----------
+t('Welt: Tag/Nacht, Wetter und Regeln werden zu festen Server-Befehlen', () => {
+  const { worldCommands, sanitizeWorld, cleanCommand, clock } = require('../modules/world-control')
+  const w = sanitizeWorld(null)
+  assert.deepStrictEqual(worldCommands({ op: 'time', value: 'night' }, w).cmds, ['time set 13000'])
+  assert.deepStrictEqual(worldCommands({ op: 'timelock', value: 'night' }, w).cmds, ['time set 18000', 'gamerule doDaylightCycle false']); assert.strictEqual(w.timeLock, 'night')
+  assert.deepStrictEqual(worldCommands({ op: 'timelock', value: 'off' }, w).cmds, ['gamerule doDaylightCycle true'])
+  assert.deepStrictEqual(worldCommands({ op: 'weather', value: 'thunder' }, w).cmds, ['weather thunder'])
+  assert.deepStrictEqual(worldCommands({ op: 'rule', name: 'keepInventory', value: true }, w).cmds, ['gamerule keepInventory true']); assert.strictEqual(w.rules.keepInventory, true)
+  // freier Text darf nie in einem Befehl landen
+  for (const bad of [{ op: 'time', value: '0\nop x' }, { op: 'weather', value: 'clear; stop' }, { op: 'rule', name: 'constructor', value: true }, { op: 'difficulty', value: 'toString' }, { op: 'nope' }, null]) assert.strictEqual(worldCommands(bad, w), null)
+  assert.deepStrictEqual(sanitizeWorld({ timeLock: 'x', rules: { keepInventory: 'ja', mobSpawning: false, hack: true } }), { timeLock: 'off', rules: { mobSpawning: false } })
+  assert.strictEqual(cleanCommand('/say hallo\nstop'), 'say hallo stop'); assert.strictEqual(cleanCommand('  '), null); assert.strictEqual(cleanCommand('x'.repeat(400)).length, 255)
+  assert.strictEqual(clock(0), '06:00'); assert.strictEqual(clock(6000), '12:00'); assert.strictEqual(clock(18000), '00:00')
+})
+t('Handy im WLAN: nur private Adressen, WLAN vor virtuellen Adaptern', () => {
+  const { lanAddresses } = require('../modules/lan')
+  const got = lanAddresses({ lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }], 'vEthernet (WSL)': [{ address: '172.20.0.1', family: 'IPv4', internal: false }], WLAN: [{ address: '192.168.178.20', family: 'IPv4', internal: false }, { address: 'fe80::1', family: 'IPv6', internal: false }], Mobil: [{ address: '8.8.8.8', family: 'IPv4', internal: false }] })
+  assert.deepStrictEqual(got, ['192.168.178.20', '172.20.0.1'])
+})
 console.log(`\n${n} Tests bestanden`)

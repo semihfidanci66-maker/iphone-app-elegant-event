@@ -118,6 +118,7 @@ class MinecraftAIBot extends EventEmitter {
     // Bot-Modus: 'surface' (Standard, kein Höhlen-Graben) · 'cave' (1 Trip freigegeben) · 'fight' (nur kämpfen)
     this.mode = 'surface'
     this.exitCaveRequested = false
+    this.noSleep = false // Dauer-Nacht aus der Welt-Steuerung: nicht von selbst schlafen gehen
     this.camera = new CameraDirector(this)
     // ---- EIN zentraler Game-Loop: 250 ms KI-Tick (Reflexe, Watchdog, Regie, Status, externe Ticker).
     //      Die 50-ms-Ebene ist der Physik-Tick von mineflayer (Blicksteuerung, Tasten-Sperre).
@@ -359,7 +360,7 @@ class MinecraftAIBot extends EventEmitter {
           continue
         }
         // ---- STATE_SLEEP_NIGHT: Nacht oder Gewitter -> Bett ----
-        if (ctx.building.shouldSleep() && !ctx.endgame.inNether() && ctx.building.hasBedAvailable() && Date.now() > (this._sleepRetryAt || 0)) {
+        if (!this.noSleep && ctx.building.shouldSleep() && !ctx.endgame.inNether() && ctx.building.hasBedAvailable() && Date.now() > (this._sleepRetryAt || 0)) {
           this.setActivity('sleep')
           const r = await this._run({ name: 'Sleep', label: 'Schlafen', activity: 'sleep' }, t => ctx.building.sleepInBed(t))
           // Monster in der Nähe / Bett blockiert: in 20 s noch einmal versuchen
@@ -590,6 +591,7 @@ class MinecraftAIBot extends EventEmitter {
       pos: { x: Math.floor(p.x), y: Math.floor(p.y), z: Math.floor(p.z) },
       dimension: /nether/.test(bot.game.dimension || '') ? 'nether' : /end/.test(bot.game.dimension || '') ? 'end' : 'overworld',
       night: ctx.building.isNight(),
+      world: { time: bot.time ? bot.time.timeOfDay : 0, raining: !!bot.isRaining, thunder: (bot.thunderState || 0) > 0.2, difficulty: bot.game.difficulty || null },
       threats: threats.length,
       threatNames: threats.slice(0, 6).map(t => t.e.name),
       fighting: ctx.combat.engaged,
