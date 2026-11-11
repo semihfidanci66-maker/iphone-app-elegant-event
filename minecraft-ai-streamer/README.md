@@ -2,7 +2,11 @@
 
 Autonomer Minecraft-Survival-Bot (1.21.1) mit deutscher Streamer-Persona, TikTok-Gift-Mobs und einem einzigen Studio-Overlay für OBS / TikTok Live Studio.
 
-## Start am PC (einmalig)
+## Schnellstart: ein Doppelklick
+
+**`ALLES-STARTEN.bat`** installiert fehlende Programme (Node.js, Java), richtet den Minecraft-Server ein, startet Server und KI und öffnet das Dashboard. Beim ersten Mal wirst du einmal nach der Minecraft-EULA und deinem Namen gefragt. Wurde ein Programm neu installiert, startest du die Datei danach noch einmal.
+
+## Start am PC (einzeln, einmalig)
 
 1. `git clone` dieses Repos (Branch `claude/minecraft-ai-streamer-vet79e`), dann in den Ordner `minecraft-ai-streamer`.
 2. **`MC-SERVER-EINRICHTEN.bat`** – lädt den offiziellen 1.21.1-Server, trägt Bot und dich als OP ein (Java 21 nötig, EULA bestätigst du selbst).
