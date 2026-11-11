@@ -7,6 +7,7 @@
     "start": "node server.js",
     "test": "node test/unit.js",
     "test:live": "node test/live-scenarios.js",
+    "test:commands": "node test/commands.js",
     "setup:mc": "node scripts/setup-mc-server.js"
   },
   "author": "",

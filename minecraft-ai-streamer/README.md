@@ -132,7 +132,8 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 42 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 43 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm run test:commands                     # alle erzeugten Server-Befehle gegen die Syntax von Minecraft 1.21.1
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)

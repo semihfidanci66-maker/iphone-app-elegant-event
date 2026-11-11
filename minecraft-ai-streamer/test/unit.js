@@ -289,6 +289,18 @@ t('Persona: Combo wird am Stück angesagt, Like-Ziel nennt den Gewinner', () => 
   assert(/Lukas/.test(m.q()[0]) && /100/.test(m.q()[0]) && /Max/.test(m.q()[0]) && /(mehr|weiter)/i.test(m.q()[0]), m.q()[0])
 })
 
+// ---------- Server-Befehle gegen Minecraft 1.21.1 ----------
+t('Befehle: alles, was das Programm an den Server schickt, ist gültige 1.21.1-Syntax', () => {
+  const { run, validate } = require('./commands')
+  const r = run()
+  assert(r.shapes > 80, 'zu wenige Befehle eingesammelt: ' + r.shapes)
+  assert.deepStrictEqual(r.bad.map(b => `${b.cmd} -> ${b.problems.join('; ')}`), [])
+  // der Prüfer erkennt echte Fehler
+  assert(validate('gamerule gibtEsNicht true').length); assert(validate('summon minecraft:drache 1 2 3').length); assert(validate('give @s kein_item 1').length)
+  assert(validate('attribute @s minecraft:max_health base set 40').length, 'ab 1.21.2 heißt es max_health, in 1.21.1 noch generic.max_health')
+  assert.deepStrictEqual(validate('attribute @s minecraft:generic.max_health base set 40'), [])
+})
+
 // ---------- Lernen ----------
 t('Wissen: Kampf-Zeiten, Gegner-Taktiken und Auswege', () => {
   const K = require('../modules/mc-knowledge')

@@ -1,6 +1,6 @@
 # CLAUDE_SYNC – Arbeitsstand
 
-Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (42 Logiktests)
+Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (43 Logiktests)
 
 ## Auftrag (11.11.2026)
 
@@ -17,6 +17,10 @@ Der Bot soll selbstständig besser werden: Wissensbasis, Lernen aus Fehlern, Tip
 - `ai-streamer-brain.js` – Ansagen für Tipps, Lehren, neue Strategie, Werkzeug, Lag, Bunker
 - `llm-brain.js` – `classifyTip`: unbekannte Tipps einer festen Regel zuordnen
 - Dashboard Reiter System -> Karte „Gelerntes“
+
+## Befehls-Prüfung (neu)
+
+- `test/commands.js` prüft alle 104 Befehlsformen (Gifts, Welt-Steuerung, Kamera, Rettung) gegen Syntax und Register von Minecraft 1.21.1. Daten in `test/fixtures/` aus github.com/sya-ri/minecraft-skills (MIT). Ergebnis: 0 Fehler. Prüft die Schreibweise, nicht die Ausführung.
 
 ## Nicht getestet
 
