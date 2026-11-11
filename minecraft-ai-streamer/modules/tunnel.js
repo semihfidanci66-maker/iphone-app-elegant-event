@@ -7,8 +7,10 @@ const { spawn } = require('child_process')
 const QRCode = require('qrcode')
 
 class Tunnel {
-  constructor (port, onChange = () => {}) {
+  constructor (port, onChange = () => {}, opts = {}) {
     this.port = port
+    this.subdomain = opts.subdomain || null // feste Adresse beim localtunnel-Weg
+    this.onUrl = opts.onUrl || (() => {})
     this.onChange = onChange
     this.state = { active: false, starting: false, provider: null, url: null, qr: null, error: null }
     this.proc = null
@@ -30,7 +32,8 @@ class Tunnel {
     }
     const full = `${url}/mobile.html?k=${encodeURIComponent(key)}`
     const qr = await QRCode.toDataURL(full, { margin: 1, width: 360, color: { dark: '#0b0f14', light: '#ffffff' } })
-    this._set({ active: true, starting: false, provider, url: full, qr })
+    this._set({ active: true, starting: false, provider, url: full, qr, fixed: provider === 'localtunnel' && !!this.subdomain && full.includes(this.subdomain) })
+    try { this.onUrl(full, provider) } catch (_) {}
     return this.state
   }
 
@@ -53,7 +56,7 @@ class Tunnel {
 
   async _localtunnel () {
     const localtunnel = require('localtunnel')
-    const t = await Promise.race([localtunnel({ port: this.port }), new Promise((resolve, reject) => setTimeout(() => reject(new Error('Timeout')), 20000))])
+    const t = await Promise.race([localtunnel(this.subdomain ? { port: this.port, subdomain: this.subdomain } : { port: this.port }), new Promise((resolve, reject) => setTimeout(() => reject(new Error('Timeout')), 20000))])
     this.lt = t
     t.on('close', () => { if (this.lt === t) { this.lt = null; this._set({ active: false, url: null, qr: null }) } })
     t.on('error', () => {})

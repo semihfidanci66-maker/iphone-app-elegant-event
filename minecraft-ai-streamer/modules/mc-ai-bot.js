@@ -673,6 +673,34 @@ class MinecraftAIBot extends EventEmitter {
 
   say (text) { if (this.bot && text) this.bot.chat(String(text).slice(0, 250)) }
 
+  /** Komplettes Inventar als kurze Liste (für Dashboard/Handy). */
+  inventory () {
+    if (!this.bot || !this.bot.inventory) return []
+    const map = new Map()
+    for (const it of this.bot.inventory.items()) map.set(it.name, (map.get(it.name) || 0) + it.count)
+    const hot = []
+    for (let i = 0; i < 9; i++) { const it = this.bot.inventory.slots[36 + i]; hot.push(it ? { name: it.name, count: it.count } : null) }
+    const armor = [5, 6, 7, 8, 45].map(s => this.bot.inventory.slots[s]).filter(Boolean).map(it => it.name)
+    return { items: [...map].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 40), hotbar: hot, armor }
+  }
+
+  /** Welt-Schnellbefehle (Bot ist OP): Tageszeit, Wetter, Schwierigkeit, Aufräumen. */
+  worldCommand (preset) {
+    const name = this.bot ? this.bot.username : ''
+    const map = {
+      day: ['time set day'], night: ['time set night'], clear: ['weather clear'], thunder: ['weather thunder'],
+      peaceful: ['difficulty peaceful'], easy: ['difficulty easy'], normal: ['difficulty normal'], hard: ['difficulty hard'],
+      keep_on: ['gamerule keepInventory true'], keep_off: ['gamerule keepInventory false'],
+      kill_gift: ['kill @e[tag=giftmob]', 'kill @e[type=tnt]'], kill_hostile: ['kill @e[type=!player,type=!item,type=!item_display,distance=..48,tag=!giftfriend,tag=!kicam]'],
+      heal: [`effect give ${name} minecraft:instant_health 1 3`, `effect give ${name} minecraft:saturation 3 2`],
+      clear_drops: ['kill @e[type=item,distance=..64]']
+    }
+    const cmds = map[preset]
+    if (!cmds || !this.bot) return false
+    if (preset === 'kill_hostile') return this.runCommands([`execute at ${name} run ${cmds[0]}`])
+    return this.runCommands(cmds)
+  }
+
   /** Zuschauer wird angesprochen: in ruhigen Momenten schaut sich der Bot ausdrucksvoll um. */
   expressiveLook () {
     if (!this.ctx || this.ctx.combat.engaged) return
