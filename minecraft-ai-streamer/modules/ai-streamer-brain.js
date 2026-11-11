@@ -806,7 +806,33 @@ class StreamerBrain extends EventEmitter {
     const low = intent === 'generic' || intent === 'laugh' || intent === 'greet'
     if (low && (this.queue.length >= 2 || !this.cooldown('chat:low', fighting ? 9000 : 3500))) return { intent, replied: false }
     if (!this.cooldown(`chat:${m.id}:${intent}`, 12000)) return { intent, replied: false }
+    // Sprachmodell: formuliert die Antwort frei. Kommt nichts Brauchbares zurück (zu langsam, Budget, Fehler),
+    // spricht er den Textbaustein. Im Kampf bleibt es bei den schnellen Bausteinen.
+    const llm = this.deps.llm
+    if (llm && !fighting && llm.ready()) {
+      const state = this.llmState(s, vars)
+      const who = `${m.chats}. Nachricht in diesem Stream, ${m.totalGifts || 0} Gifts geschickt`
+      llm.ask(llm.chatTask({ name: m.name, msg: quotable(text), state, viewer: who }))
+        .then(t => reply(t || out, { priority: low ? 1 : 2 }), () => reply(out, { priority: low ? 1 : 2 }))
+      return { intent, replied: true, llm: true }
+    }
     return { intent, replied: reply(out, { priority: low ? 1 : 2 }) }
+  }
+
+  /** Spielstand als kurzer Text für das Sprachmodell. */
+  llmState (s, vars) {
+    if (!s.connected) return 'nicht in der Welt (Verbindung wird neu aufgebaut)'
+    const i = s.inv || {}
+    return [
+      `Tätigkeit: ${vars.activity_short || s.activity}`,
+      `Herzen ${Math.round((s.health ?? 20) / 2)} von 10, Hunger ${Math.round((s.food ?? 20) / 2)} von 10`,
+      s.fighting ? `im Kampf gegen ${s.threats} Gegner` : 'kein Kampf',
+      s.night ? 'es ist Nacht' : 'es ist Tag',
+      s.dimension === 'nether' ? 'im Nether' : s.underground ? `unter Tage auf Ebene ${s.pos ? s.pos.y : '?'}` : 'an der Oberfläche',
+      `Inventar: ${i.logs || 0} Holz, ${i.iron || 0} Eisen, ${i.diamonds || 0} Diamanten`,
+      `${s.kills || 0} Kills, ${s.deaths || 0} Tode`,
+      s.base && s.base.done ? 'Haus steht' : 'noch kein fertiges Haus'
+    ].join('; ')
   }
 
   // ---------------------------------------------------------------- Bot-Ereignisse
@@ -945,7 +971,14 @@ class StreamerBrain extends EventEmitter {
     if (!s.connected || s.fighting) return
     if (!this.cooldown('monologue', 14000)) return
     const pool = Math.random() < 0.25 ? L.idle.generic : (L.idle[s.activity] || L.idle.generic)
-    this.say(this.line(pool, this.stateVars()), { emotion: 'chill', priority: 0, kind: 'monologue', ttl: 6000 })
+    const fallback = this.line(pool, this.stateVars())
+    const llm = this.deps.llm
+    // jeder zweite Leerlauf-Spruch kommt frisch vom Sprachmodell (wenn es an ist)
+    if (llm && llm.config.monologues && Math.random() < 0.5 && llm.ready()) {
+      llm.ask(llm.idleTask({ state: this.llmState(s, this.stateVars()) })).then(t => { if (t && now - this.lastExternal >= 0) this.say(t, { emotion: 'chill', priority: 0, kind: 'monologue', ttl: 8000 }) }, () => {})
+      return
+    }
+    this.say(fallback, { emotion: 'chill', priority: 0, kind: 'monologue', ttl: 6000 })
   }
 
   /** Operator-Sprachzeile (Dashboard/Handy). */

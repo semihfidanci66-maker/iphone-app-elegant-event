@@ -10,7 +10,8 @@ const DEFAULT_RULES = buildDefaultRules()
 const { TTSEngine } = require('../modules/tts-engine')
 const { cooldownFor } = require('../modules/bot/combat')
 let n = 0
-const t = (name, fn) => { fn(); n++; console.log('PASS ', name) }
+const pending = [] // asynchrone Tests werden am Ende abgewartet
+const t = (name, fn) => { const r = fn(); const ok = () => { n++; console.log('PASS ', name) }; if (r && typeof r.then === 'function') pending.push(r.then(ok)); else ok() }
 
 // ---------- GOAP ----------
 const fakeCtx = () => ({ actions: {}, emit () {}, memory: {}, mcData: {}, bot: {}, caveAllowed: () => false })
@@ -288,6 +289,41 @@ t('Persona: Combo wird am Stück angesagt, Like-Ziel nennt den Gewinner', () => 
   assert(/Lukas/.test(m.q()[0]) && /100/.test(m.q()[0]) && /Max/.test(m.q()[0]) && /(mehr|weiter)/i.test(m.q()[0]), m.q()[0])
 })
 
+// ---------- Sprachmodell ----------
+t('Sprachmodell: Antwort wird gesäubert, Kosten gezählt, Budget und Fehler führen zum Textbaustein', async () => {
+  const { LlmBrain, cleanReply, sanitizeLlm } = require('../modules/llm-brain')
+  assert.strictEqual(cleanReply('**Max** fragt… "Ja!" 😂 #noob\nKlar bin ich das.'), 'Max fragt… Ja! noob Klar bin ich das.')
+  assert.strictEqual(cleanReply('schau auf www.spam.de vorbei'), null); assert.strictEqual(cleanReply('ok'), null)
+  assert(cleanReply('Wort '.repeat(200)).length <= 321)
+  assert.deepStrictEqual(sanitizeLlm({ enabled: 1, model: 'gpt', budgetUsd: 999, maxPerHour: 1 }), { enabled: true, model: 'claude-haiku-5-5', budgetUsd: 50, maxPerHour: 20, monologues: true })
+  const calls = []
+  let next = { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'Max fragt, ob ich eine KI bin... Ja. Und besser als du.' }], usage: { input_tokens: 200, cache_read_input_tokens: 600, output_tokens: 40 } }
+  const client = { messages: { create: async req => { calls.push(req); if (next instanceof Error) throw next; return next } } }
+  const llm = new LlmBrain({ enabled: true, budgetUsd: 0.05 }, { client })
+  const out = await llm.ask(llm.chatTask({ name: 'Max', msg: 'Bist du eine KI', state: 'Holz hacken', viewer: '1. Nachricht' }))
+  assert.strictEqual(out, 'Max fragt, ob ich eine KI bin... Ja. Und besser als du.')
+  const req = calls[0]
+  assert.strictEqual(req.model, 'claude-haiku-5-5'); assert.strictEqual(req.system[0].cache_control.type, 'ephemeral'); assert(/NACHRICHT: Bist du eine KI/.test(req.messages[0].content))
+  assert(!('temperature' in req) && !('top_p' in req), 'keine Sampling-Parameter (würden abgelehnt)')
+  assert(Math.abs(llm.stats.costUsd - (200 * 0.10 + 600 * 0.01 + 40 * 0.50) / 1e6) < 1e-12)
+  await llm.ask('x'); assert(/letzten Sätze|LETZTEN SÄTZE/.test(calls[1].messages[0].content), 'letzte Sätze gegen Wiederholung')
+  next = { stop_reason: 'refusal', content: [], usage: { input_tokens: 10, output_tokens: 0 } }
+  assert.strictEqual(await llm.ask('x'), null)
+  next = new Error('Netz weg'); assert.strictEqual(await llm.ask('x'), null); assert.strictEqual(llm.stats.lastError, 'Netz weg')
+  llm.stats.costUsd = 0.06; assert.strictEqual(llm.ready(), false); assert.strictEqual(await llm.ask('x'), null); assert(llm.stats.budgetHit)
+  assert.strictEqual(new LlmBrain({ enabled: true }, {}).ready(), !!process.env.ANTHROPIC_API_KEY, 'ohne Schlüssel bleibt es aus')
+  assert(!JSON.stringify(llm.publicState()).includes('apiKey'))
+})
+t('Persona: mit Sprachmodell kommt dessen Antwort, sonst der Textbaustein', async () => {
+  const mk = (answer) => { const x = mkBrain(calm); x.b.deps.llm = { config: { monologues: true }, ready: () => true, chatTask: o => o, idleTask: o => o, ask: async () => answer }; return x }
+  const a = mk('Ben schreibt Pizza... Schön für dich, ich zocke.')
+  const r = a.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'ich mag pizza'); assert(r.llm)
+  await new Promise(resolve => setImmediate(resolve)); assert.strictEqual(a.q()[0], 'Ben schreibt Pizza... Schön für dich, ich zocke.')
+  const f = mk(null); f.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'bist du eine ki?')
+  await new Promise(resolve => setImmediate(resolve)); assert(/Ben fragt, ob ich eine KI bin/.test(f.q()[0]), f.q()[0])
+  const g = mk('egal'); g.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'Bau ein Haus'); assert(!/egal/.test(g.q()[0] || ''), 'Spielwünsche bleiben beim schnellen Baustein')
+})
+
 // ---------- Welt-Steuerung & Handy im WLAN ----------
 t('Welt: Tag/Nacht, Wetter und Regeln werden zu festen Server-Befehlen', () => {
   const { worldCommands, sanitizeWorld, cleanCommand, clock } = require('../modules/world-control')
@@ -308,4 +344,4 @@ t('Handy im WLAN: nur private Adressen, WLAN vor virtuellen Adaptern', () => {
   const got = lanAddresses({ lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }], 'vEthernet (WSL)': [{ address: '172.20.0.1', family: 'IPv4', internal: false }], WLAN: [{ address: '192.168.178.20', family: 'IPv4', internal: false }, { address: 'fe80::1', family: 'IPv6', internal: false }], Mobil: [{ address: '8.8.8.8', family: 'IPv4', internal: false }] })
   assert.deepStrictEqual(got, ['192.168.178.20', '172.20.0.1'])
 })
-console.log(`\n${n} Tests bestanden`)
+Promise.all(pending).then(() => console.log(`\n${n} Tests bestanden`), e => { console.error(e); process.exit(1) })

@@ -24,6 +24,7 @@ const { McServer } = require('./modules/mc-server')
 const { worldCommands, sanitizeWorld, cleanCommand, RULES } = require('./modules/world-control')
 const { lanAddresses } = require('./modules/lan')
 const { LikeGoal, sanitizeLikes } = require('./modules/like-goal')
+const { LlmBrain, sanitizeLlm } = require('./modules/llm-brain')
 const QRCode = require('qrcode')
 
 const ROOT = __dirname
@@ -43,6 +44,7 @@ function loadConfig () {
   cfg.tiktokUsername = sanitizeUsername(cfg.tiktokUsername)
   cfg.world = sanitizeWorld(cfg.world)
   cfg.likes = sanitizeLikes(cfg.likes)
+  cfg.llm = sanitizeLlm(cfg.llm)
   return cfg
 }
 const config = loadConfig()
@@ -61,7 +63,7 @@ function writeLater (file, getData, delay = 250) {
   }, delay))
 }
 function saveConfig () {
-  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, likes: likes.config, world: config.world, mcRamGb: mc.ramGb }))
+  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, likes: likes.config, llm: llm.config, anthropicKey: config.anthropicKey || undefined, world: config.world, mcRamGb: mc.ramGb }))
 }
 function sanitizeLayout (l) {
   if (!l || typeof l !== 'object') return null
@@ -123,7 +125,18 @@ let ttsWarnAt = 0
 // Zentrale Ticker statt eigener Timer: Streamer-Hirn alle 250 ms, Bossbars alle 1,5 s
 setImmediate(() => { bot.addTicker(() => brain.tick()); bot.addTicker(() => gifts.tick(), 6) })
 
+// Sprachmodell für frei formulierte Chat-Antworten (optional; der Schlüssel bleibt lokal in config/settings.json)
+const llm = new LlmBrain(config.llm, { apiKey: config.anthropicKey })
+let llmWarn = ''
+setInterval(() => {
+  // Probleme einmal ins Protokoll schreiben, nicht bei jeder Anfrage
+  const msg = llm.stats.budgetHit ? `Sprachmodell: Budget von ${llm.config.budgetUsd} $ erreicht – ab jetzt wieder feste Texte` : llm.stats.lastError ? 'Sprachmodell: ' + llm.stats.lastError : ''
+  if (msg && msg !== llmWarn) log('warn', msg)
+  llmWarn = msg
+}, 5000).unref()
+
 const brain = new StreamerBrain({
+  llm,
   getStatus: () => bot.status(),
   pushGoal: (id, by) => bot.pushGoal(id, by),
   onAddress: () => bot.expressiveLook(),
@@ -186,6 +199,7 @@ function fullState () {
     lan,
     mc: mc.state,
     likes: { config: likes.config, ...likes.state(), legend: likeLegend() },
+    llm: llm.publicState(),
     world: config.world,
     worldRules: Object.entries(RULES).map(([id, r]) => ({ id, label: r.label })),
     config: { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername || '', voice: tts.voice, voices: MALE_VOICES, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode },
@@ -252,6 +266,23 @@ function handle (m) {
     case 'GIFT_UPSERT': { const r = gifts.upsertRule(m.rule || {}); if (r) { log('info', `Gift gespeichert: ${r.giftName} (${r.coins}) -> ${r.legend}`); saveConfig(); syncGiftConfig(); broadcastState() } break }
     case 'GIFT_REMOVE': if (gifts.removeRule(String(m.id))) { saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break
     case 'GIFT_ADD_LIBRARY': { const r = gifts.addFromLibrary(m.key); if (r) { log('info', `Gift hinzugefügt: ${r.giftName} (${r.coins} Coins) -> ${r.legend}`); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break }
+    case 'LLM_SET': {
+      const p = m.llm || {}
+      // Der Schlüssel wird nur gesetzt, nie zurückgeschickt. Leerer Text = Schlüssel löschen.
+      if (typeof p.apiKey === 'string') { config.anthropicKey = p.apiKey.trim().slice(0, 300); llm.setKey(config.anthropicKey); log('info', config.anthropicKey ? 'Sprachmodell: API-Schlüssel gespeichert' : 'Sprachmodell: API-Schlüssel entfernt') }
+      config.llm = llm.setConfig({ enabled: p.enabled, model: p.model, budgetUsd: p.budgetUsd, maxPerHour: p.maxPerHour, monologues: p.monologues })
+      saveConfig(); broadcastState()
+      break
+    }
+    case 'LLM_RESET': llm.resetStats(); broadcastState(); break
+    case 'LLM_TEST':
+      if (!llm.ready()) { log('warn', 'Sprachmodell-Test: ' + (!llm.hasKey ? 'kein API-Schlüssel hinterlegt' : !llm.config.enabled ? 'ist ausgeschaltet' : llm.stats.budgetHit ? 'Budget erreicht' : 'gerade beschäftigt')); break }
+      llm.ask(llm.chatTask({ name: 'Max', msg: 'Bist du eine KI', state: brain.llmState(bot.status(), brain.stateVars()), viewer: 'Test aus dem Dashboard' })).then(t => {
+        log(t ? 'info' : 'warn', t ? `Sprachmodell-Test (${llm.stats.avgMs} ms): ${t}` : 'Sprachmodell-Test fehlgeschlagen: ' + (llm.stats.lastError || 'keine brauchbare Antwort'))
+        if (t) brain.sayCustom(t, 'chill')
+        broadcastState()
+      })
+      break
     case 'LIKES_SET': likes.setConfig(m.likes || {}, ACTIONS, MOBS); config.likes = likes.config; saveConfig(); broadcast(likesMsg()); broadcastState(); break
     case 'LIKES_RESET': likes.reset(); broadcast(likesMsg()); broadcastState(); break
     case 'SIM_LIKE': onLike({ viewer: { uniqueId: String(m.user || 'TestUser').slice(0, 24), nickname: String(m.user || 'TestUser').slice(0, 24), avatar: null }, count: Math.max(1, Math.min(500, m.count | 0 || 1)) }); break
@@ -444,6 +475,7 @@ function learnGifts (list) {
 tiktok.on('gift_list', list => { learnGifts(list); log('info', `TikTok-Gifts geladen: ${list.length} echte Gifts mit Bild und Coin-Preis`) })
 tiktok.on('live', e => {
   likes.reset(); broadcast(likesMsg())
+  llm.resetStats() // Budget gilt pro Stream
   log('info', `TikTok LIVE verbunden: @${e.username} (Engine ${e.engine})`)
   broadcast({ type: 'CHIME', kind: 'live' })
   brain.onLiveConnected()

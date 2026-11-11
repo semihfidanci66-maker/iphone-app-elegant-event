@@ -379,6 +379,16 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
         <div class="hint">Nach dem Speichern den Bot einmal stoppen und starten.</div>
       </section>
       <section>
+        <h2>🧠 Sprachmodell <small id="llmInfo"></small></h2>
+        <div class="row"><div class="seg"><button data-llmon="1">An</button><button data-llmon="0">Aus</button></div><select id="llmModel" aria-label="Modell" style="flex:1 1 180px"></select></div>
+        <div class="row"><input id="llmKey" type="password" placeholder="API-Schlüssel (sk-ant-…)" autocomplete="off" spellcheck="false" aria-label="Anthropic API-Schlüssel"><button id="llmKeyBtn">Speichern</button><button id="llmKeyDel" class="sm danger" hidden>Löschen</button></div>
+        <div class="row"><label style="flex:0 1 150px">Höchstens pro Stream ($)<input id="llmBudget" type="number" min="0.05" max="50" step="0.05"></label><label style="flex:0 1 150px">Antworten pro Stunde<input id="llmRate" type="number" min="20" max="2000" step="10"></label></div>
+        <div class="row"><label style="flex-direction:row;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)"><input type="checkbox" id="llmMono" style="flex:none"> Auch spontane Sprüche, wenn der Chat still ist</label></div>
+        <div class="bar" style="margin-top:12px"><label><span id="llmState">–</span><b id="llmCost"></b></label><div><i id="llmBar" style="background:var(--violet)"></i></div></div>
+        <div class="row" style="margin-top:10px"><button id="llmTest">Testen</button><button id="llmReset" class="sm">Zähler auf 0</button></div>
+        <div class="hint">Mit Schlüssel formuliert der Streamer Chat-Antworten frei. Ist das Budget erreicht oder die Antwort zu langsam, spricht er seine festen Texte. Den Schlüssel bekommst du unter console.anthropic.com; er bleibt auf diesem PC (config/settings.json).</div>
+      </section>
+      <section>
         <h2>Seiten</h2>
         <div class="row"><a class="mono" href="studio-overlay.html" target="_blank" rel="noopener">Studio-Overlay</a></div>
         <div class="row"><a class="mono" href="mobile.html" target="_blank" rel="noopener">Handy-Fernbedienung</a></div>
@@ -640,6 +650,23 @@ function renderState (s) {
   for (const b of $$('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
   for (const b of $$('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '9:16'))
   $('dzBtn').classList.toggle('on', !!s.designer)
+  // Sprachmodell
+  const G = s.llm
+  if (G) {
+    const sel = $('llmModel')
+    if (!sel.childElementCount) for (const m of G.models) sel.appendChild(el('option', { value: m.id, textContent: m.label }))
+    if (document.activeElement !== sel) sel.value = G.model
+    for (const b of $$('[data-llmon]')) b.classList.toggle('on', (b.dataset.llmon === '1') === G.enabled)
+    if (document.activeElement !== $('llmBudget')) $('llmBudget').value = G.budgetUsd
+    if (document.activeElement !== $('llmRate')) $('llmRate').value = G.maxPerHour
+    $('llmMono').checked = G.monologues
+    $('llmKey').placeholder = G.hasKey ? 'Schlüssel ist hinterlegt (zum Ändern neu eingeben)' : 'API-Schlüssel (sk-ant-…)'
+    $('llmKeyDel').hidden = !G.hasKey
+    $('llmInfo').textContent = !G.hasKey ? 'kein Schlüssel' : !G.enabled ? 'aus' : G.budgetHit ? 'Budget erreicht' : 'aktiv'
+    $('llmState').textContent = G.lastError ? 'Problem: ' + G.lastError : `${G.ok} Antworten${G.failed ? ', ' + G.failed + ' mit festem Text' : ''}${G.avgMs ? ' · Ø ' + (G.avgMs / 1000).toFixed(1) + ' s' : ''}`
+    $('llmCost').textContent = `${G.costUsd.toFixed(3)} $ von ${G.budgetUsd} $`
+    $('llmBar').style.width = Math.min(100, G.costUsd / G.budgetUsd * 100) + '%'
+  }
   // Like-Ziel
   const L = s.likes
   if (L) {
@@ -738,6 +765,17 @@ confirmTap($('mcRestart'), () => send({ type: 'MC_SERVER', cmd: 'restart' }, 'Se
 confirmTap($('mcStop'), () => send({ type: 'MC_SERVER', cmd: 'stop' }, 'Server wird gestoppt …'))
 const sendCmd = () => { const t = $('cmdTxt').value.trim(); if (t && send({ type: 'MC_COMMAND', text: t }, 'Befehl gesendet')) $('cmdTxt').value = '' }
 $('cmdBtn').onclick = sendCmd
+// Sprachmodell
+const setLlm = (patch, label) => send({ type: 'LLM_SET', llm: patch }, label)
+for (const b of $$('[data-llmon]')) b.onclick = () => setLlm({ enabled: b.dataset.llmon === '1' }, b.dataset.llmon === '1' ? 'Sprachmodell an' : 'Sprachmodell aus')
+$('llmModel').onchange = () => setLlm({ model: $('llmModel').value }, 'Modell gewechselt')
+$('llmBudget').onchange = () => setLlm({ budgetUsd: Number($('llmBudget').value) }, 'Gespeichert')
+$('llmRate').onchange = () => setLlm({ maxPerHour: Number($('llmRate').value) }, 'Gespeichert')
+$('llmMono').onchange = () => setLlm({ monologues: $('llmMono').checked }, 'Gespeichert')
+$('llmKeyBtn').onclick = () => { const k = $('llmKey').value.trim(); if (!k) return $('llmKey').focus(); setLlm({ apiKey: k, enabled: true }, 'Schlüssel gespeichert'); $('llmKey').value = '' }
+confirmTap($('llmKeyDel'), () => setLlm({ apiKey: '', enabled: false }, 'Schlüssel gelöscht'))
+$('llmTest').onclick = () => send({ type: 'LLM_TEST' }, 'Test läuft – Ergebnis im Protokoll')
+$('llmReset').onclick = () => send({ type: 'LLM_RESET' }, 'Zähler zurückgesetzt')
 // Like-Ziel
 const setLikes = (patch, label) => send({ type: 'LIKES_SET', likes: patch }, label)
 for (const b of $$('[data-lkon]')) b.onclick = () => setLikes({ enabled: b.dataset.lkon === '1' }, b.dataset.lkon === '1' ? 'Like-Ziel an' : 'Like-Ziel aus')
@@ -809,6 +847,7 @@ function demoSend (m) {
     case 'MC_SERVER':
       if (m.cmd === 'stop') { s.mc.phase = 'stopped'; s.mc.own = false; st.connected = false } else { s.mc.phase = 'starting'; s.mc.own = true; setTimeout(() => { s.mc.phase = 'running'; st.connected = true; onMsg(s) }, 2500) }
       break
+    case 'LLM_SET': { const { apiKey, ...rest } = m.llm; Object.assign(s.llm, Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined))); if (typeof apiKey === 'string') s.llm.hasKey = !!apiKey; break }
     case 'LIKES_SET': Object.assign(s.likes.config, m.likes); s.likes.every = s.likes.config.every; break
     case 'LIKES_RESET': Object.assign(s.likes, { progress: 0, total: 0, level: 0, last: null }); break
     case 'SIM_LIKE': { const k = s.likes; k.progress += m.count; k.total += m.count; k.last = m.user; if (k.progress >= k.every) { k.progress -= k.every; k.level++; addFeed({ kind: 'gift', user: m.user, emoji: '❤️', text: `knackt ${k.every} Likes → ${k.legend}` }) } break }
@@ -832,6 +871,7 @@ function demo () {
     tunnel: { active: false, starting: false, url: null, qr: null, error: null },
     lan: { urls: ['http://192.168.178.20:3000/mobile.html?k=Beispiel'], qr: null },
     mc: { installed: true, phase: 'running', own: true, error: null },
+    llm: { enabled: true, hasKey: true, model: 'claude-haiku-5-5', budgetUsd: 0.5, maxPerHour: 300, monologues: true, models: [A('claude-haiku-5-5', 'Claude Haiku 5.5 (schnell, günstig)'), A('claude-sonnet-5-5', 'Claude Sonnet 5.5 (wortgewandter, ca. 20× teurer)')], calls: 142, ok: 139, failed: 3, costUsd: 0.036, avgMs: 900, lastError: null, budgetHit: false },
     likes: { config: { enabled: true, every: 100, action: 'zombie_fast', mob: 'zombie', amount: 1, escalate: true }, enabled: true, every: 100, progress: 63, total: 263, level: 2, last: 'Max', legend: '3× Zombie' },
     world: { timeLock: 'off', rules: { keepInventory: false, mobSpawning: true } },
     worldRules: [A('keepInventory', 'Inventar nach Tod behalten'), A('mobSpawning', 'Monster spawnen von selbst'), A('mobGriefing', 'Creeper zerstören Blöcke'), A('weatherCycle', 'Wetter wechselt von selbst')],

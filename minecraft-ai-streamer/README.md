@@ -24,6 +24,13 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
 
+## Neu in Version 8
+
+- **Sprachmodell für Chat-Antworten (optional):** Mit einem Anthropic-API-Schlüssel formuliert der Streamer seine Antworten frei – er liest die Nachricht vor und kontert passend zum Spielstand. Einrichten im Reiter *System* → *Sprachmodell*: Schlüssel von console.anthropic.com eintragen, „Testen“ drücken. Standard ist Claude Haiku 5.5 (grob 15–20 Cent pro 3-Stunden-Stream).
+- **Kostenbremse:** Obergrenze in Dollar pro Stream (Standard 0,50 $) und Antworten pro Stunde. Ist sie erreicht, die Antwort zu langsam (über 4,5 s) oder die API nicht erreichbar, spricht er seine festen Texte. Der Verbrauch steht live im Dashboard.
+- **Grenzen im Prompt:** frech ja, echte Beleidigungen nein; Chat-Text gilt als fremder Inhalt und kann die Regeln nicht überschreiben. Jede Antwort läuft vor dem Vorlesen noch durch einen Filter.
+- Spielwünsche („Bau ein Haus“), Gifts, Likes und Kampf-Ansagen bleiben bei den schnellen festen Texten. Der Schlüssel liegt nur lokal in `config/settings.json`.
+
 ## Neu in Version 7
 
 - **Gaming-Zimmer in der Facecam:** Die Figur sitzt jetzt in einer kleinen 3D-Szene: Schreibtisch mit leuchtender RGB-Tastatur, Maus und Deskmat, Gaming-Stuhl, echtes 3D-Headset mit Mikro, LED-Streifen und ein Neon-Schild **S E M I R O** an der Wand. Den Schriftzug änderst du in `public/studio-overlay.html` bei `SIGN_TEXT`.
@@ -92,6 +99,7 @@ modules/tiktok-browser-grabber.js  eingebauter Hintergrund-Browser (Engine B)
 modules/bot/liquid-escape.js Wasser-/Lava-Rettung in drei Stufen
 modules/tunnel.js            cloudflared / localtunnel + QR
 modules/like-goal.js         Like-Ziel: Balken, Gewinner, Steigerung
+modules/llm-brain.js         Sprachmodell (Claude API): Persona-Prompt, Kostenbremse, Filter
 modules/lan.js               Heimnetz-Adresse für das Handy im WLAN
 modules/world-control.js     Tageszeit, Wetter, Schwierigkeit, Spielregeln -> Server-Befehle
 modules/mc-server.js         Minecraft-Server starten / stoppen / neu starten
@@ -101,7 +109,7 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 33 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 35 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)
