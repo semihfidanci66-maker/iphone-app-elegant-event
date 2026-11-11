@@ -29,6 +29,8 @@ const { FoodPhase } = require('./bot/survival-food')
 const { BuildingPhase } = require('./bot/survival-building')
 const { EndgamePhase } = require('./bot/survival-endgame')
 const { Planner } = require('./bot/planner')
+const { Autonomy } = require('./bot/autonomy')
+const { AILearning } = require('./ai-learning')
 const { CameraDirector } = require('./bot/camera-director')
 const { LiquidEscape } = require('./bot/liquid-escape')
 const { UNDERGROUND } = require('./bot/planner')
@@ -118,6 +120,8 @@ class MinecraftAIBot extends EventEmitter {
     // Bot-Modus: 'surface' (Standard, kein Höhlen-Graben) · 'cave' (1 Trip freigegeben) · 'fight' (nur kämpfen)
     this.mode = 'surface'
     this.exitCaveRequested = false
+    this.learning = new AILearning(null) // wird vom Server durch das gespeicherte Gedächtnis ersetzt
+    this.lagPause = false
     this.noSleep = false // Dauer-Nacht aus der Welt-Steuerung: nicht von selbst schlafen gehen
     this.camera = new CameraDirector(this)
     // ---- EIN zentraler Game-Loop: 250 ms KI-Tick (Reflexe, Watchdog, Regie, Status, externe Ticker).
@@ -126,6 +130,9 @@ class MinecraftAIBot extends EventEmitter {
     this.tickCount = 0
     this.master = setInterval(() => this._brainTick(), 250)
   }
+
+  /** Gespeichertes Lern-Gedächtnis einhängen (überlebt Neustarts und Reconnects). */
+  attachLearning (learning) { this.learning = learning; if (this.ctx) this.ctx.learn = learning }
 
   /** Externe Module (Streamer-Hirn, Gift-Engine) hängen sich in den zentralen Loop statt eigene Timer zu starten. */
   addTicker (fn, every = 1) { this.tickers.push({ fn, every: Math.max(1, every | 0) }) }
@@ -139,6 +146,8 @@ class MinecraftAIBot extends EventEmitter {
         // Kampf-Reflex: unterbricht JEDE laufende Routine, sobald eine Bedrohung auftaucht
         if (!this.paused && !ctx.combat.engaged && !(this.currentAction && this.currentAction.name === 'Combat') && ctx.combat.hasThreat()) this.interrupt('combat')
         ctx.watchdog.tick()
+        ctx.autonomy.tick()
+        if (n % 20 === 0) for (const w of ctx.autonomy.checkWear()) this._emit('tool_worn', w)
         ctx.liquid.brainTick() // 4-Sekunden-Garantie gegen Wasser/Lava
         this.camera.tick()
         this.emit('pose', { yaw: bot.entity.yaw + ctx.look.headYawOffset, pitch: bot.entity.pitch + ctx.look.headPitchOffset, moveYaw: ctx.look.yaw, blocking: !!ctx.combat.blocking, onGround: bot.entity.onGround, speed: Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z) })
@@ -230,7 +239,9 @@ class MinecraftAIBot extends EventEmitter {
       isBaseBlock: pos => !!ctx.building && ctx.building.isBaseBlock(pos),
       corpseRun: (t, forced) => this._corpseRun(t, forced),
       caveAllowed: () => this.mode === 'cave' || !!this.memory.caveTripActive,
-      isPortalBlock: pos => !!ctx.endgame && ctx.endgame.isPortalBlock(pos)
+      isPortalBlock: pos => !!ctx.endgame && ctx.endgame.isPortalBlock(pos),
+      learn: this.learning,
+      policy: () => this.learning.policy()
     }
     ctx.look = new HumanLookController(bot)
     ctx.actions = new HumanActions(ctx)
@@ -246,12 +257,21 @@ class MinecraftAIBot extends EventEmitter {
     ctx.watchdog = new StuckWatchdog(ctx)
     ctx.planner = new Planner(ctx)
     ctx.liquid = new LiquidEscape(ctx, this)
+    ctx.autonomy = new Autonomy(ctx, this)
     this.ctx = ctx
     this.connected = true
     this.exploreHeading = Math.random() * Math.PI * 2
 
     bot.on('death', () => {
       this.deaths++
+      // Aus dem Tod lernen: Lage festhalten, neue Lehren ansagen
+      try {
+        const c = ctx.autonomy.deathContext()
+        const r = this.learning.recordDeath(c)
+        this._emit('death_analysis', { text: r.mistake.text, sig: r.mistake.sig })
+        for (const l of r.lessons) this._emit('lesson', { id: l.id, text: l.text })
+      } catch (e) { this._emit('log', { message: 'Lernen (Tod): ' + e.message }) }
+      ctx.autonomy.bunker = null
       // lastDeath überlebt Respawn und Reconnect; der Corpse-Run startet beim nächsten Spawn
       this.lastDeath = { pos: bot.entity.position.clone(), dimension: bot.game.dimension, time: Date.now(), tried: false }
       this.memory.mineEntrance = null
@@ -277,6 +297,9 @@ class MinecraftAIBot extends EventEmitter {
       }
     })
     bot.on('time', () => {
+      // Server-Lag: unter 10 Ticks pro Sekunde wird alles angehalten
+      const lag = ctx.autonomy.onServerTime()
+      if (lag === 'lag') { this.lagPause = true; this.interrupt('lag'); this._emit('lag_pause', { tps: ctx.autonomy.tps.value }) } else if (lag === 'ok') { this.lagPause = false; this._emit('lag_resume', { tps: ctx.autonomy.tps.value }) }
       const night = ctx.building.isNight()
       if (night !== this._wasNight) {
         this._wasNight = night
@@ -326,6 +349,18 @@ class MinecraftAIBot extends EventEmitter {
           continue
         }
         if (this.paused) { this.setActivity('paused'); await sleep(400); continue }
+        // ---- Server laggt stark: einbunkern und abwarten, damit er nicht unfair stirbt ----
+        if (this.lagPause) {
+          this.setActivity('paused', { lag: true })
+          await this._run({ name: 'LagPause', label: 'Server laggt – warte im Bunker', activity: 'paused' }, async t => {
+            await ctx.autonomy.buildBunker(t)
+            await ctx.autonomy.waitInBunker(t, () => !this.lagPause, 120000)
+            await ctx.autonomy.leaveBunker(t)
+            return true
+          })
+          continue
+        }
+        if (ctx.autonomy.bunker && !ctx.combat.hasThreat()) await this._run({ name: 'LeaveBunker', label: 'Bunker verlassen' }, t => ctx.autonomy.leaveBunker(t))
 
         // ---- Reflex 0: Wasser/Lava – sofort ans Ufer (Stufe 2; Stufe 3 läuft im 250-ms-Loop) ----
         if (ctx.liquid.inLiquid()) {
@@ -365,6 +400,19 @@ class MinecraftAIBot extends EventEmitter {
           const r = await this._run({ name: 'Sleep', label: 'Schlafen', activity: 'sleep' }, t => ctx.building.sleepInBed(t))
           // Monster in der Nähe / Bett blockiert: in 20 s noch einmal versuchen
           if (r !== true) this._sleepRetryAt = Date.now() + 20000
+          continue
+        }
+        // ---- Gelernt: nachts ohne Bett draußen wird eingebunkert statt herumgelaufen ----
+        if (ctx.policy().nightShelter && ctx.building.isNight() && !this.noSleep && !ctx.building.hasBedAvailable() && !this.isUnderground() && !ctx.endgame.inNether() && this.mode !== 'fight' && ctx.autonomy.blocksAvailable() >= 9 && Date.now() > (this._shelterRetryAt || 0)) {
+          this.setActivity('sleep', { shelter: true })
+          this._emit('night_shelter', {})
+          const r = await this._run({ name: 'NightShelter', label: 'Nacht im Bunker abwarten', activity: 'sleep' }, async t => {
+            if (!(await ctx.autonomy.buildBunker(t))) { await ctx.autonomy.leaveBunker(t); return false }
+            await ctx.autonomy.waitInBunker(t, () => !ctx.building.isNight(), 600000)
+            await ctx.autonomy.leaveBunker(t)
+            return true
+          })
+          if (r !== true) this._shelterRetryAt = Date.now() + 45000
           continue
         }
         // ---- Aufräumen: Hotbar, liegen gelassene Stationen, offener Ofen-Job ----
@@ -420,6 +468,16 @@ class MinecraftAIBot extends EventEmitter {
         if (result === 'interrupted') continue
         ctx.planner.report(step.action, step.goal, !!result)
         this._emit('action_end', { action: step.action.name, label: step.action.label, ok: !!result })
+        // ---- Lernen: Ergebnis verbuchen; nach drei Fehlschlägen hintereinander neu überlegen ----
+        if (!step.action.oneShot) {
+          const lr = this.learning.taskResult(step.action.name, !!result)
+          if (!result) this.learning.recordFailure('task', `${step.action.label} gescheitert`, { action: step.action.name })
+          if (lr.rethink) {
+            this.setActivity('idle', { rethink: true })
+            await this._run({ name: 'Rethink', label: 'Neue Strategie überlegen', activity: 'idle' }, t => ctx.autonomy.rethink(step, t))
+            continue
+          }
+        }
         if (!result) await sleep(600)
       } catch (e) {
         if (!(e && e.isInterrupt)) this._emit('log', { message: 'Loop: ' + (e.stack || e.message) })
@@ -599,6 +657,9 @@ class MinecraftAIBot extends EventEmitter {
       held: bot.heldItem ? bot.heldItem.name : null,
       sleeping: !!bot.isSleeping,
       camera: { mode: this.camera.mode, applied: this.camera.applied, player: this.camera.player },
+      tps: ctx.autonomy ? ctx.autonomy.tps.value : 20,
+      lagging: this.lagPause,
+      bunkered: !!(ctx.autonomy && ctx.autonomy.bunker),
       lastDeath: this.lastDeath ? { secondsLeft: Math.max(0, Math.round((300000 - (Date.now() - this.lastDeath.time)) / 1000)) } : null,
       kills: ctx.combat.kills,
       deaths: this.deaths,

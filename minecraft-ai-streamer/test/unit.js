@@ -289,6 +289,135 @@ t('Persona: Combo wird am Stück angesagt, Like-Ziel nennt den Gewinner', () => 
   assert(/Lukas/.test(m.q()[0]) && /100/.test(m.q()[0]) && /Max/.test(m.q()[0]) && /(mehr|weiter)/i.test(m.q()[0]), m.q()[0])
 })
 
+// ---------- Lernen ----------
+t('Wissen: Kampf-Zeiten, Gegner-Taktiken und Auswege', () => {
+  const K = require('../modules/mc-knowledge')
+  assert.strictEqual(K.cooldownFor('iron_sword'), 625); assert.strictEqual(K.cooldownFor('stone_axe'), 1250); assert.strictEqual(K.cooldownFor('diamond_axe'), 1000); assert.strictEqual(K.cooldownFor(''), 250)
+  assert.strictEqual(K.threatInfo('creeper').blast, 3); assert(K.creeperSafe(3.5) && !K.creeperSafe(2.5)); assert.strictEqual(K.threatInfo('unbekannt').danger, 2)
+  assert.strictEqual(K.fallDamage(3), 0); assert.strictEqual(K.fallDamage(10), 7)
+  for (const list of Object.values(K.REMEDIES)) for (const s of list) assert(K.STRATEGIES[s], 'Ausweg ohne Beschreibung: ' + s)
+  assert(K.remediesFor('gibt_es_nicht').includes('relocate'))
+})
+t('Lernen: Tode werden zu Lehren, Lehren ändern das Verhalten', () => {
+  const { AILearning } = require('../modules/ai-learning')
+  let saves = 0
+  const L1 = new AILearning(null, { onChange: () => saves++ })
+  assert.strictEqual(L1.policy().retreatHp, 12); assert.strictEqual(L1.policy().creeperCaution, 0)
+  const r = L1.recordDeath({ killer: 'creeper', explosion: true, mobs: ['creeper'], threats: 1, underground: true, tunnel: true, pickTier: 2 })
+  assert.strictEqual(r.mistake.sig, 'death:creeper:tunnel'); assert(/Creeper/.test(r.mistake.text) && /engen Gang/.test(r.mistake.text))
+  assert.deepStrictEqual(r.lessons.map(l => l.id).sort(), ['cave_iron', 'creeper_1', 'creeper_tunnel'])
+  assert.strictEqual(L1.policy().creeperCaution, 2); assert(L1.policy().caveNeedsIron)
+  assert.deepStrictEqual(L1.extraPreconditions('MineDiamonds'), ['ironKit']); assert.deepStrictEqual(L1.extraPreconditions('GatherWood'), [])
+  assert.strictEqual(L1.recordDeath({ killer: 'creeper', explosion: true, underground: true, tunnel: true, pickTier: 2 }).lessons.map(l => l.id).join(), 'creeper_2', 'gleicher Fehler -> nur die nächste Stufe, keine Wiederholung')
+  // Zombies: Vorsicht steigt, Rückzug früher – aber nur wenn Zombies dabei sind
+  const L2 = new AILearning(null)
+  L2.recordDeath({ killer: 'zombie', mobs: ['zombie', 'zombie', 'zombie'], threats: 4, night: true, pickTier: 3 })
+  assert.strictEqual(L2.retreatHpFor(['zombie']), 13); assert.strictEqual(L2.retreatHpFor(['spider']), 12); assert.strictEqual(L2.policy().funnelAt, 3); assert(L2.policy().nightShelter)
+  assert.deepStrictEqual(L2.progression(['woodKit', 'stoneKit', 'food', 'bed', 'ironKit']), ['woodKit', 'bed', 'stoneKit', 'food', 'ironKit'])
+  // Wärter: natürlichem ausweichen, Gift-Wärter nicht
+  const L3 = new AILearning(null); L3.recordDeath({ killer: 'warden', threats: 1, giftMob: true }); assert.deepStrictEqual(L3.policy().avoid, [])
+  L3.recordDeath({ killer: 'warden', threats: 1 }); assert.deepStrictEqual(L3.policy().avoid, ['warden'])
+  const L4 = new AILearning(null); L4.recordDeath({ inLava: true, underground: true, pickTier: 3 }); L4.recordDeath({ fell: true }); L4.recordDeath({ starving: true })
+  const p = L4.policy(); assert(p.caveNeedsWater); assert.strictEqual(p.maxDrop, 2); assert.strictEqual(p.eatAt, 17); assert.strictEqual(p.foodReserve, 10)
+  // Speichern und wieder laden
+  const again = new AILearning(JSON.parse(JSON.stringify(L1.toJSON())))
+  assert.strictEqual(again.policy().creeperCaution, 2); assert.strictEqual(again.summary().deaths, 2); assert(saves > 0)
+  again.reset(); assert.strictEqual(again.policy().creeperCaution, 0)
+})
+t('Lernen: nach drei Fehlschlägen neuer Ausweg, bewährte Auswege werden bevorzugt', () => {
+  const { AILearning } = require('../modules/ai-learning')
+  const L1 = new AILearning(null, { random: () => 0.9 })
+  assert.strictEqual(L1.taskResult('MineIron', false).rethink, false); assert.strictEqual(L1.taskResult('MineIron', false).rethink, false)
+  assert.strictEqual(L1.taskResult('MineIron', false).rethink, true, 'dritter Fehlschlag')
+  const first = L1.chooseStrategy('MineIron', 'mine'); assert.strictEqual(first.name, 'relocate', 'unversuchte zuerst, in der Reihenfolge der Wissensbasis')
+  L1.taskResult('MineIron', false) // relocate hat nicht geholfen
+  const second = L1.chooseStrategy('MineIron', 'mine', n => n !== 'surface_first'); assert.strictEqual(second.name, 'better_tools')
+  L1.taskResult('MineIron', true) // better_tools hat geholfen
+  assert.strictEqual(L1.strategies['MineIron|better_tools'].wins, 1); assert.strictEqual(L1.strategies['MineIron|relocate'].wins, 0)
+  for (const s of ['surface_first', 'more_food']) { L1.chooseStrategy('MineIron', 'mine', n => n === s); L1.taskResult('MineIron', false) }
+  assert.strictEqual(L1.chooseStrategy('MineIron', 'mine').name, 'better_tools', 'alle versucht -> der mit der besten Quote')
+  assert(L1.costPenalty('MineIron') >= 8, 'oft gescheitert -> für den Planer teurer'); assert.strictEqual(L1.costPenalty('GatherWood'), 0)
+  assert.strictEqual(L1.taskResult('MineIron', true).streak, 0)
+})
+t('Chat-Tipps: erkennen, merken, anwenden – und nichts Schädliches annehmen', () => {
+  const { ChatWisdom, matchRule, looksLikeAdvice } = require('../modules/chat-wisdom')
+  const { AILearning } = require('../modules/ai-learning')
+  const cases = { 'Pack Wasser in die Off-Hand': 'water_bucket', 'Schlag den Warden nicht, schleich lieber!': 'avoid_warden', 'Nutz Goldrüstung im Nether': 'gold_nether', 'beim creeper musst du abstand halten': 'creeper_distance', 'bau dich hoch wenn zu viele kommen': 'pillar_up', 'lauf weg wenn du wenig leben hast': 'retreat_early', 'erst eisen rüstung dann in die höhle': 'iron_first', 'nie gerade nach unten graben': 'no_dig_down' }
+  for (const [text, id] of Object.entries(cases)) assert.strictEqual((matchRule(text) || {}).id, id, text)
+  for (const text of ['Bau ein Haus', 'Geh schlafen', 'Was machst du gerade?', 'Hol deinen Loot', 'Geh in den Nether', 'bist du eine ki', 'kämpf ohne rüstung gegen den warden du noob', 'spring in die lava']) assert.strictEqual(matchRule(text), null, text)
+  assert(looksLikeAdvice('du solltest einen bogen craften gegen die skelette')); assert(!looksLikeAdvice('hallo wie gehts'))
+  let t = 1000
+  const w = new ChatWisdom(null, { now: () => t })
+  const a = w.consider('Mia', 'Nutz Goldrüstung im Nether'); assert.strictEqual(a.kind, 'new'); assert.strictEqual(a.rule.id, 'gold_nether')
+  const b = w.consider('Tom', 'im nether brauchst du gold stiefel'); assert.strictEqual(b.kind, 'known'); assert.strictEqual(b.first, 'Mia')
+  assert.strictEqual(w.consider('Ben', 'nie gerade nach unten graben').kind, 'already')
+  assert.strictEqual(w.consider('Ben', 'du solltest einen bogen craften gegen die skelette').kind, 'unknown'); assert.strictEqual(w.consider('Ben', 'lol'), null)
+  w.consider('Lea', 'Schlag den Warden nicht, schleich lieber!'); w.consider('Lea', 'iss mal früher was')
+  // Tipps wirken über die Policy
+  const L1 = new AILearning(null); L1.setTips(w.active())
+  assert.deepStrictEqual(L1.policy().avoid, ['warden']); assert.strictEqual(L1.policy().eatAt, 17); assert(/Lea/.test(L1.policy().reasons.avoid))
+  assert(!('no_dig_down' in w.active()), 'schon befolgte Tipps ändern nichts')
+  // Anwenden im passenden Moment, höchstens alle 10 Minuten
+  assert.deepStrictEqual(w.recall('nether').map(x => x.by), ['Mia']); assert.deepStrictEqual(w.recall('nether'), []); t += 601000; assert.strictEqual(w.recall('nether').length, 1)
+  assert.strictEqual(w.summary().tips.find(x => x.id === 'gold_nether').applied, 2)
+  w.setEnabled('avoid_warden', false); L1.setTips(w.active()); assert.deepStrictEqual(L1.policy().avoid, [])
+  const again = new ChatWisdom(JSON.parse(JSON.stringify(w.toJSON()))); assert.strictEqual(again.summary().tips.length, 4); assert.strictEqual(again.learn('gibt_es_nicht', 'x', 'y'), null)
+})
+t('Persona: Tipps und Lehren werden angesagt', () => {
+  const { RULES } = require('../modules/chat-wisdom')
+  const rule = RULES.find(r => r.id === 'avoid_warden')
+  const { b, q } = mkBrain(calm)
+  b.onTip({ uniqueId: 'm', nickname: 'Mia' }, { kind: 'new', rule }); assert(/Mia/.test(q()[0]) && /schleichen/.test(q()[0]), q()[0])
+  b.queue = []; b.onTipRecall('Mia', rule); assert(/Mia/.test(b.queue[0].text) && /Wärter/.test(b.queue[0].text))
+  b.queue = []; b.onBotEvent('lesson', { id: 'creeper_1', text: 'Creeper: mehr Abstand halten.' }); assert(/Creeper: mehr Abstand/.test(b.queue[0].text))
+  b.queue = []; b.onBotEvent('rethink', { label: 'Eisen suchen', say: 'Hier wird das nichts.', wins: 0 }); assert(/Hier wird das nichts/.test(b.queue[0].text))
+})
+t('Planer: gelernte Vorbedingungen und Kosten fließen in den Plan ein', () => {
+  const { AILearning } = require('../modules/ai-learning')
+  const p = P(); const learn = new AILearning(null); p.ctx.learn = learn
+  const facts = { ...none(), woodKit: true, woodPick: true, wood: true, cobble: true, stoneKit: true, ironKit: true, rawIron: true, ironIngots: true }
+  assert.deepStrictEqual(p.planFor(['diamonds'], facts).steps.map(s => s.name), ['MineDiamonds'])
+  learn.recordDeath({ inLava: true, underground: true, pickTier: 3 }) // -> tief unten nur noch mit Wassereimer
+  assert.deepStrictEqual(p.planFor(['diamonds'], facts).steps.map(s => s.name), ['FillBucket', 'MineDiamonds'])
+  const before = p.planFor(['diamonds'], facts).cost
+  for (let i = 0; i < 4; i++) learn.taskResult('MineDiamonds', false)
+  assert(p.planFor(['diamonds'], facts).cost > before, 'gescheiterte Aktion wird teurer')
+})
+
+t('Selbstständigkeit: Lag-Erkennung, Haltbarkeit, Todes-Lage, mögliche Auswege', () => {
+  const { Vec3 } = require('vec3')
+  const { Autonomy } = require('../modules/bot/autonomy')
+  const realNow = Date.now; let now = 1e6; Date.now = () => now
+  try {
+    const bot = { time: { age: 0 }, food: 20, oxygenLevel: 20, game: { dimension: 'overworld' }, entity: { position: new Vec3(0, 64, 0), onGround: true, isInWater: false, isInLava: false }, blockAt: () => ({ name: 'air' }) }
+    const tools = { pickaxe: { name: 'iron_pickaxe', slot: 36, maxDurability: 250, durabilityUsed: 230 }, sword: { name: 'iron_sword', slot: 37, maxDurability: 250, durabilityUsed: 10 } }
+    const ctx = {
+      bot,
+      actions: { bestTool: k => tools[k] || null, pickTier: () => 3, feet: () => new Vec3(0, 64, 0), isSolid: b => !!b && b.name !== 'air', count: n => (n === 'dirt' ? 12 : 0), findFirst: () => null },
+      combat: { scan: () => [], hasShield: () => false }, liquid: { inLava: () => false }, building: { isNight: () => true, hasBedAvailable: () => false },
+      food: { cookedCount: () => 2 }, crafting: { woodValue: () => 40 }
+    }
+    const au = new Autonomy(ctx, { isUnderground: () => false, activity: { key: 'wood' } })
+    // 20 Ticks pro Sekunde -> kein Lag; dann 5 Ticks pro Sekunde -> nach rund 5 s Lag; danach Erholung
+    let ev = []
+    for (let i = 0; i < 8; i++) { now += 1000; bot.time.age += 20; ev.push(au.onServerTime()) }
+    assert(ev.every(x => x === null)); assert.strictEqual(au.tps.value, 20)
+    ev = []; for (let i = 0; i < 14; i++) { now += 1000; bot.time.age += 5; ev.push(au.onServerTime()) }
+    assert.strictEqual(ev.filter(x => x === 'lag').length, 1); assert(au.tps.value < 10)
+    ev = []; for (let i = 0; i < 10; i++) { now += 1000; bot.time.age += 20; ev.push(au.onServerTime()) }
+    assert.strictEqual(ev.filter(x => x === 'ok').length, 1)
+    // Haltbarkeit: 8 % übrig -> einmal melden
+    assert.strictEqual(Autonomy.durabilityLeft(tools.pickaxe), 0.08000000000000007 > 0 ? Autonomy.durabilityLeft(tools.pickaxe) : 0); assert(Autonomy.durabilityLeft(tools.pickaxe) < 0.1); assert.strictEqual(Autonomy.durabilityLeft({ name: 'dirt' }), null)
+    now += 20000; const worn = au.checkWear(); assert.deepStrictEqual(worn.map(w => w.item), ['iron_pickaxe']); now += 20000; assert.deepStrictEqual(au.checkWear(), [])
+    // Todes-Lage: Sturz ohne Gegner
+    bot.entity.onGround = false; bot.entity.position = new Vec3(0, 90, 0); au.tick(); bot.entity.position = new Vec3(0, 70, 0); au.tick()
+    const c = au.deathContext(); assert(c.fell && !c.killer && c.night && !c.underground); assert.strictEqual(c.pickTier, 3)
+    // Auswege: tagsüber kein "auf den Tag warten", an der Oberfläche kein "erst hoch"
+    assert(au.strategyPossible('wait_for_day') && !au.strategyPossible('surface_first') && au.strategyPossible('more_food') && !au.strategyPossible('more_wood') && !au.strategyPossible('better_tools'))
+    assert.strictEqual(au.blocksAvailable(), 12)
+  } finally { Date.now = realNow }
+})
+
 // ---------- Sprachmodell ----------
 t('Sprachmodell: Antwort wird gesäubert, Kosten gezählt, Budget und Fehler führen zum Textbaustein', async () => {
   const { LlmBrain, cleanReply, sanitizeLlm } = require('../modules/llm-brain')

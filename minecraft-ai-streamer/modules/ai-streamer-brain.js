@@ -460,6 +460,32 @@ Object.assign(L, {
   }
 })
 
+// ---- Lernen: Tipps aus dem Chat, Lehren aus Fehlern, neue Strategien
+Object.assign(L, {
+  tip_new: [
+    'Warte, {user} sagt, ich soll {ack}? Okay, ausnahmsweise ein brauchbarer Tipp aus diesem Chat. Ist gespeichert, danke.',
+    '{user} meint: {ack}. Hm. Klingt sinnvoll, auch wenn es von einem Noob kommt. Ich merk mir das.',
+    'Moment, {user} hat einen Tipp: {ack}. Abgespeichert. Wenn es nicht klappt, bist du schuld, {user}.'
+  ],
+  tip_known: ['{user} sagt auch: {ack}. Hat mir {first} schon erzählt, ich vergesse nichts. Aber gut, doppelt hält besser.', 'Schon gespeichert, {user}. Den Tipp hatte {first} vor dir. Trotzdem danke.'],
+  tip_already: ['{user} sagt, ich soll {ack}. Mach ich längst, {user}. Ich bin dir wie immer einen Schritt voraus.', '{ack}? Das ist Grundwissen, {user}. Läuft bei mir schon die ganze Zeit.'],
+  tip_unknown: ['{user} gibt mir einen Tipp, den ich so noch nicht umsetzen kann. Ich schreib ihn mir trotzdem auf.'],
+  tip_recall: ['{user} hat mir vorhin gesagt: {recall}', 'Tipp von {user}, schon vergessen, Chat? Ich nicht: {recall}', 'Jetzt kommt der Tipp von {user} zum Einsatz: {recall}'],
+  lesson: ['Okay, daraus hab ich was gelernt. {text}', 'Notiert, damit mir das nicht noch mal passiert. {text}', 'Das passiert mir kein zweites Mal. {text}'],
+  rethink_start: ['Dreimal versucht, dreimal gescheitert: {label}. Stopp. Ich denk kurz nach, statt denselben Fehler ein viertes Mal zu machen.', '{label} klappt so nicht. Kurze Pause, ich überleg mir was Besseres.'],
+  rethink: ['{say}', 'Neuer Plan für {label}: {say}'],
+  rethink_proven: ['{say} Das hat bei {label} schon {wins} mal funktioniert.'],
+  tool_worn: ['Mein Werkzeug ist fast durch, {item_de} hält nicht mehr lange. Ich besorg Ersatz, bevor es bricht.', '{item_de} hat nur noch {left} Prozent. Ersatz steht ab jetzt auf der Liste.'],
+  lag_pause: ['Der Server laggt gerade heftig. Ich mauer mich ein und warte, sterben wegen Lag gibt es bei mir nicht.'],
+  lag_resume: ['Server läuft wieder rund. Weiter geht es.'],
+  night_shelter: ['Nacht und kein Bett. Ich hab gelernt, wie das endet, also bunker ich mich ein, bis es hell wird.'],
+  bunker: ['Kurz einmauern, sicher ist sicher.'],
+  avoid: ['Ein {mob}. Nein danke, das hab ich gelernt. Ich bin dann mal weg.', '{mob} voraus. Gegen den kämpf ich nicht freiwillig, Abflug.'],
+  wall_off: ['Creeper im Gang? Block dazwischen und fertig. Hab ich auf die harte Tour gelernt.'],
+  pillar_escape: ['Zu viele auf einmal. Ich bau mich hoch und regel das von oben.'],
+  death_analysis: []
+})
+
 // Chat wird erst vorgelesen, dann kommt der Konter ("Max fragt, ob ich eine KI bin... Ja, ...")
 const QUOTE = {
   who: ['{user} fragt, ob ich eine KI bin... '],
@@ -720,6 +746,25 @@ class StreamerBrain extends EventEmitter {
     this.say(this.line(L.like_goal, vars), { emotion: 'hype', priority: 4, kind: 'like', ttl: 14000 })
   }
 
+  /**
+   * Ein Zuschauer hat einen Spiel-Tipp gegeben.
+   * @param {{kind: 'new'|'known'|'already'|'unknown', rule?: object, first?: string}} tip Ergebnis aus chat-wisdom.js
+   */
+  onTip (viewer, tip) {
+    this.lastExternal = Date.now()
+    const m = this.viewer(viewer)
+    const pool = { new: L.tip_new, known: L.tip_known, already: L.tip_already, unknown: L.tip_unknown }[tip.kind]
+    if (!pool) return false
+    if (tip.kind !== 'new' && !this.cooldown('tip:' + tip.kind, 15000)) return false
+    return this.say(this.line(pool, { user: m.name, ack: tip.rule ? tip.rule.ack : '', first: this.speakable(tip.first || '') || 'jemand' }), { emotion: 'chill', priority: tip.kind === 'new' ? 4 : 2, kind: 'chat', ttl: 15000 })
+  }
+
+  /** Ein gemerkter Tipp wird gerade angewandt (z. B. Nether betreten -> Goldrüstung). */
+  onTipRecall (by, rule) {
+    if (!this.cooldown('recall:' + rule.id, 600000)) return false
+    return this.say(this.line(L.tip_recall, { user: this.speakable(by) || 'Jemand', recall: rule.recall }), { emotion: 'chill', priority: 3, kind: 'event', ttl: 15000 })
+  }
+
   onLike (viewer, count = 1) {
     this.likeCount += count
     if (this.likeCount >= 150 && this.cooldown('likes', 45000)) { this.likeCount = 0; this.say(this.line(L.like_burst), { emotion: 'hype', priority: 1, kind: 'like' }) }
@@ -851,6 +896,16 @@ class StreamerBrain extends EventEmitter {
       case 'tree_done': return say(L.tree_done, d, { cd: 45000 })
       case 'craft': return
       case 'station_packed': if (d.kind === 'crafting_table') say(L.station_packed, d, { cd: 120000 }); return
+      case 'lesson': return say(L.lesson, d, { key: 'lesson:' + d.id, cd: 5000, priority: 4, ttl: 20000 })
+      case 'rethink_start': return say(L.rethink_start, d, { cd: 20000, priority: 3 })
+      case 'rethink': return say(d.wins >= 2 ? L.rethink_proven : L.rethink, d, { cd: 5000, priority: 3, ttl: 15000 })
+      case 'tool_worn': return say(L.tool_worn, { ...d, item_de: itemDe(d.item) }, { key: 'worn:' + d.item, cd: 120000 })
+      case 'lag_pause': return say(L.lag_pause, d, { cd: 60000, priority: 4 })
+      case 'lag_resume': return say(L.lag_resume, d, { cd: 60000 })
+      case 'night_shelter': return say(L.night_shelter, d, { cd: 300000, priority: 2 })
+      case 'avoid': return say(L.avoid, { mob: mobDe(d.mob) }, { cd: 30000, priority: 3 })
+      case 'wall_off': return say(L.wall_off, d, { cd: 60000, priority: 3 })
+      case 'pillar_escape': return say(L.pillar_escape, d, { cd: 45000, priority: 3, emotion: 'panic' })
       case 'mine_start': return say(L.mine_start, d, { cd: 60000 })
       case 'ore_found': return say(L.ore_found[d.ore] || L.ore_found.other, d, { key: 'ore:' + d.ore, cd: d.ore === 'diamond' ? 15000 : 50000, emotion: d.ore === 'diamond' ? 'hype' : 'chill', priority: d.ore === 'diamond' ? 3 : 1 })
       case 'vein_done': if (d.count >= 3) say(L.vein_done, d, { cd: 40000 }); return

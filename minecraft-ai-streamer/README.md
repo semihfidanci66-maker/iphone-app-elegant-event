@@ -24,6 +24,16 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
 
+## Neu in Version 10
+
+- **Lernt aus Fehlern:** Jeder Tod wird mit seiner Lage gespeichert (Ursache, Gegner, Ort, Tageszeit, Ausrüstung). Daraus entstehen feste Lehren, die das Verhalten ändern: früher zurückziehen, mehr Abstand zu Creepern, im engen Gang einen Block dazwischen setzen, tiefe Höhle erst mit Eisen oder Wassereimer, nachts ohne Bett einbunkern, sehr starken Gegnern ausweichen. Gespeichert in `config/mistakes_memory.json`.
+- **Neu überlegen statt wiederholen:** Scheitert eine Aufgabe dreimal hintereinander, hält der Bot an, mauert sich bei Gefahr ein und wählt einen Ausweg (woanders versuchen, erst hoch an die Oberfläche, erst besseres Werkzeug, auf den Tag warten …). Er merkt sich, welcher Ausweg bei welcher Aufgabe geholfen hat, und nimmt beim nächsten Mal den bewährten.
+- **Tipps aus dem Chat:** 15 feste Tipp-Arten werden erkannt („Nutz Goldrüstung im Nether“, „Schlag den Warden nicht“, „Pack Wasser ein“ …), bestätigt, in `config/chat_wisdom.json` gespeichert und im passenden Moment angewandt und angesagt. Der Chat kann den Bot nicht umprogrammieren: Nur diese Regeln wirken, und jede macht ihn vorsichtiger. Mit Sprachmodell werden auch frei formulierte Tipps einer Regel zugeordnet.
+- **Selbstständiger:** Werkzeug unter 10 % Haltbarkeit zählt für die Planung als verbraucht, Ersatz wird rechtzeitig eingeplant. Bei starkem Server-Lag (unter 10 Ticks pro Sekunde) mauert er sich ein und wartet.
+- **Wissensbasis** in `modules/mc-knowledge.js`: Kampf-Zeiten, Taktiken gegen 25 Gegner, Auswege.
+- Reiter *System* → *Gelerntes* zeigt Lehren, geändertes Verhalten, Tipps (einzeln abschaltbar) und ausprobierte Auswege.
+- Noch nicht gegen einen echten Server erprobt – siehe `CLAUDE_SYNC.md`.
+
 ## Neu in Version 9
 
 - **Fernzugriff von überall:** Das komplette Dashboard (nicht nur die Handy-Fernbedienung) ist über den Internet-Zugang erreichbar. Von außen fragt die Seite nach dem **Zugangscode**; am PC selbst nicht. Einstellen im Reiter *Stream* → *Fernzugriff*.
@@ -109,6 +119,10 @@ modules/bot/liquid-escape.js Wasser-/Lava-Rettung in drei Stufen
 modules/tunnel.js            cloudflared / localtunnel + QR
 modules/like-goal.js         Like-Ziel: Balken, Gewinner, Steigerung
 modules/llm-brain.js         Sprachmodell (Claude API): Persona-Prompt, Kostenbremse, Filter
+modules/mc-knowledge.js      Wissensbasis: Kampf-Zeiten, Gegner-Taktiken, Auswege
+modules/ai-learning.js       Fehler-Gedächtnis, Lehren, Strategie-Wahl, Planer-Gewichte
+modules/chat-wisdom.js       Tipps aus dem Chat erkennen, merken, anwenden
+modules/bot/autonomy.js      Bunker, Auswege ausführen, Lag-Messung, Haltbarkeit
 modules/lan.js               Heimnetz-Adresse für das Handy im WLAN
 modules/world-control.js     Tageszeit, Wetter, Schwierigkeit, Spielregeln -> Server-Befehle
 modules/mc-server.js         Minecraft-Server starten / stoppen / neu starten
@@ -118,7 +132,7 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 35 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 42 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)

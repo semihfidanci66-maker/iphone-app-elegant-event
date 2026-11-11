@@ -16,8 +16,9 @@ class Gear {
   wearing (re) { return [5, 6, 7, 8, 45].some(s => this.bot.inventory.slots[s] && re.test(this.bot.inventory.slots[s].name)) }
   owns (n) { return this.has(n) || this.wearing(new RegExp('^' + n + '$')) }
 
+  /** Stufe des besten Werkzeugs. Fast verbrauchte (unter 10 % Haltbarkeit) zählen nicht – so wird rechtzeitig Ersatz geplant. */
   tierOf (kind) {
-    const it = this.ctx.actions.bestTool(kind)
+    const it = this.ctx.actions.bestTool(kind, { healthy: true })
     if (!it) return 0
     return { wooden: 1, golden: 1, stone: 2, iron: 3, diamond: 4, netherite: 5 }[it.name.split('_')[0]] || 0
   }
@@ -37,8 +38,10 @@ class Gear {
     if (this.tierOf('sword') < 4 && take(dia - reserveTable, 2)) { list.push(['diamond_sword', 1]); dia -= 2 }
     if (!this.owns('diamond_chestplate') && take(dia - reserveTable, 8)) { list.push(['diamond_chestplate', 1]); dia -= 8 }
     // --- Eisen ---
+    const shieldFirst = this.ctx.policy && this.ctx.policy().shieldFirst
+    if (shieldFirst && !this.owns('shield') && take(iron, 1)) { list.push(['shield', 1]); iron -= 1 }
     if (this.tierOf('pickaxe') < 3 && take(iron, 3)) { list.push(['iron_pickaxe', 1]); iron -= 3 }
-    if (!this.owns('shield') && take(iron, 1)) { list.push(['shield', 1]); iron -= 1 }
+    if (!shieldFirst && !this.owns('shield') && take(iron, 1)) { list.push(['shield', 1]); iron -= 1 }
     if (this.tierOf('sword') < 3 && take(iron, 2)) { list.push(['iron_sword', 1]); iron -= 2 }
     if (!this.has('bucket') && !this.has('water_bucket') && !this.has('lava_bucket') && take(iron, 3)) { list.push(['bucket', 1]); iron -= 3 }
     if (!this.owns('flint_and_steel') && this.has('flint') && take(iron, 1) && this.tierOf('pickaxe') >= 4) { list.push(['flint_and_steel', 1]); iron -= 1 }

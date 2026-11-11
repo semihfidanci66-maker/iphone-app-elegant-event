@@ -8,22 +8,14 @@ const { goals } = require('mineflayer-pathfinder')
 const { sleep, rand, Interrupt } = require('./actions')
 const { FOOD_PRIORITY } = require('./hotbar')
 
+const KNOW = require('../mc-knowledge')
 const NEUTRAL = new Set(['enderman', 'zombified_piglin', 'piglin', 'iron_golem', 'wolf', 'bee', 'llama', 'trader_llama', 'polar_bear', 'panda', 'dolphin', 'goat', 'snow_golem', 'axolotl', 'villager', 'wandering_trader'])
 const RANGED = new Set(['skeleton', 'stray', 'bogged', 'pillager', 'blaze', 'ghast', 'witch', 'drowned', 'shulker', 'breeze'])
 const BOSSES = new Set(['warden', 'ravager', 'wither', 'ender_dragon', 'elder_guardian', 'iron_golem', 'piglin_brute', 'wither_skeleton'])
 const PASSIVE_FOOD = new Set(['cow', 'pig', 'sheep', 'chicken', 'mooshroom', 'rabbit'])
 
-function cooldownFor (item) {
-  if (!item) return 250
-  const n = item.name
-  if (n.endsWith('_sword')) return 625
-  if (n.endsWith('_axe')) return /^(wooden|stone)_/.test(n) ? 1250 : /^iron_/.test(n) ? 1112 : 1000
-  if (n.endsWith('_pickaxe')) return 834
-  if (n.endsWith('_shovel')) return 1000
-  if (n === 'trident') return 910
-  if (n === 'mace') return 1667
-  return 250
-}
+/** Abklingzeit der Waffe in der Hand – die Zeiten stehen zentral in mc-knowledge.js. */
+function cooldownFor (item) { return item ? KNOW.cooldownFor(item.name) : 250 }
 
 class CombatSystem {
   constructor (ctx) {
@@ -306,14 +298,46 @@ class CombatSystem {
     const now = Date.now()
     const near = threats.filter(t => t.d <= 5)
 
-    // 1) Leben retten: <= 12 HP -> Abstand gewinnen und essen
-    if (bot.health <= 12 && now - this.lastRetreatAt > 9000 && this.edible()) {
+    const policy = ctx.policy ? ctx.policy() : null
+    const retreatHp = ctx.learn ? ctx.learn.retreatHpFor(threats.map(t => t.e.name)) : 12
+    const funnelAt = policy ? policy.funnelAt : 4
+    // 0) Gelernt/Tipp: sehr starken natürlichen Gegnern ausweichen statt kämpfen (Gift-Mobs werden bekämpft)
+    if (policy && policy.avoid.length) {
+      const boss = threats.find(t => !t.gift && policy.avoid.includes(t.e.name))
+      if (boss) {
+        ctx.emit('avoid', { mob: boss.e.name })
+        this.ignoreUntil.set(boss.e.id, now + 20000)
+        bot.setControlState('sneak', boss.e.name === 'warden')
+        await this.backOff([boss], 3500, token)
+        bot.setControlState('sneak', false)
+        return
+      }
+    }
+    // 0b) Übermacht und wenig Leben: hochbauen und von oben weiterkämpfen
+    if (policy && policy.pillarWhenSwarmed && near.length > funnelAt && bot.health <= retreatHp + 2 && now - (this.lastPillarAt || 0) > 45000 && ctx.autonomy && ctx.autonomy.blocksAvailable() >= 3) {
+      this.lastPillarAt = now
+      ctx.emit('pillar_escape', { count: near.length })
+      this.lowerShield(); this.stopPathing(); this.releaseKeys()
+      await ctx.watchdog.pillarUp(3, token, { force: true })
+      return
+    }
+    // 0c) Creeper im engen Gang: Block dazwischen setzen statt kämpfen
+    if (policy && policy.creeperCaution >= 2 && !this.hasShield() && now - (this.lastWallAt || 0) > 8000 && ctx.autonomy) {
+      const cr = threats.find(t => t.e.name === 'creeper' && t.d <= 5)
+      if (cr && ctx.autonomy.inTunnel()) {
+        this.lastWallAt = now
+        this.lowerShield(); this.stopPathing(); this.releaseKeys()
+        if (await ctx.autonomy.wallOff(cr.e, token)) { this.ignoreUntil.set(cr.e.id, now + 15000); await this.backOff([cr], 1200, token); return }
+      }
+    }
+    // 1) Leben retten: Abstand gewinnen und essen (Schwelle steigt mit der Erfahrung)
+    if (bot.health <= retreatHp && now - this.lastRetreatAt > 9000 && this.edible()) {
       this.lastRetreatAt = now
       await this.retreatAndEat(threats, token)
       return
     }
     // 2) Umzingelt (>= 4 Mobs): 5 Blöcke zurücksprinten und die Meute in eine Linie ziehen
-    if (near.length >= 4 && now - this.lastFunnelAt > 6000) {
+    if (near.length >= funnelAt && now - this.lastFunnelAt > 6000) {
       this.lastFunnelAt = now
       await this.funnel(near, token)
       return
@@ -375,7 +399,9 @@ class CombatSystem {
     const want = {}
     const melee = !RANGED.has(target.name) || tDist < 6
     if (reach > 3.05) { want.forward = true; want.sprint = reach > 3.6 && !this.critPrep } else if (reach < 2.7 && melee && target.name !== 'creeper') want.back = true
-    if (target.name === 'creeper' && reach < 2.9) want.back = true
+    // Creeper: treffen und sofort zurück – mit Erfahrung mehr Abstand und längerer Rückzug nach jedem Schlag
+    const cc = policy ? policy.creeperCaution : 0
+    if (target.name === 'creeper' && (reach < 2.9 + cc * 0.35 || (cc >= 1 && now - this.lastSwingAt < 450 + cc * 250))) { want.back = true; want.forward = false; want.sprint = false }
     if (now > this.strafeUntil) {
       this.strafeDir = this.strafeDir === 'left' ? 'right' : 'left'
       this.strafeUntil = now + rand(500, 900)

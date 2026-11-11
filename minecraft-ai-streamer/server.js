@@ -25,6 +25,8 @@ const { worldCommands, sanitizeWorld, cleanCommand, RULES } = require('./modules
 const { lanAddresses } = require('./modules/lan')
 const { LikeGoal, sanitizeLikes } = require('./modules/like-goal')
 const { LlmBrain, sanitizeLlm } = require('./modules/llm-brain')
+const { AILearning } = require('./modules/ai-learning')
+const { ChatWisdom, RULES: TIP_RULES, matchRule: matchTip } = require('./modules/chat-wisdom')
 const QRCode = require('qrcode')
 
 const ROOT = __dirname
@@ -33,6 +35,8 @@ const CFG_DIR = path.join(ROOT, 'config')
 const SETTINGS_FILE = path.join(CFG_DIR, 'settings.json')
 const LAYOUT_FILE = path.join(CFG_DIR, 'overlay-layout.json')
 const LIBRARY_FILE = path.join(CFG_DIR, 'tiktok-gifts.json')
+const MISTAKES_FILE = path.join(CFG_DIR, 'mistakes_memory.json')
+const WISDOM_FILE = path.join(CFG_DIR, 'chat_wisdom.json')
 
 // ------------------------------------------------------------------ Konfiguration (/config/settings.json)
 function readJson (file, fallback) { try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch (_) { return fallback } }
@@ -86,6 +90,13 @@ function sanitizeLayout (l) {
 // ------------------------------------------------------------------ Module
 const bot = new MinecraftAIBot(config.minecraft)
 const tts = new TTSEngine({ voice: config.voice })
+// ---- Lernen: Fehler-Gedächtnis und Chat-Tipps (überleben Neustarts)
+let learnPush = null
+const learnChanged = () => { if (!learnPush) learnPush = setTimeout(() => { learnPush = null; broadcastState() }, 1500) }
+const learning = new AILearning(readJson(MISTAKES_FILE, null), { onChange: () => { writeLater(MISTAKES_FILE, () => learning.toJSON(), 2000); learnChanged() } })
+const wisdom = new ChatWisdom(readJson(WISDOM_FILE, null), { onChange: () => { writeLater(WISDOM_FILE, () => wisdom.toJSON(), 2000); learning.setTips(wisdom.active()); learnChanged() } })
+learning.setTips(wisdom.active())
+bot.attachLearning(learning)
 const tiktok = new TikTokBridge()
 bot.camera.setPlayer(config.cameraPlayer || '')
 bot.camera.setMode(config.cameraMode || 'auto')
@@ -234,6 +245,8 @@ function fullState () {
     mc: mc.state,
     likes: { config: likes.config, ...likes.state(), legend: likeLegend() },
     llm: llm.publicState(),
+    learning: learning.summary(),
+    wisdom: wisdom.summary(),
     world: config.world,
     worldRules: Object.entries(RULES).map(([id, r]) => ({ id, label: r.label })),
     config: { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername || '', voice: tts.voice, voices: MALE_VOICES, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode },
@@ -329,6 +342,10 @@ function handle (m, ws = { isLocal: true }) {
       saveConfig(); broadcastState()
       break
     }
+    case 'LEARN_RESET': learning.reset(); log('info', 'Fehler-Gedächtnis gelöscht'); broadcastState(); break
+    case 'WISDOM_TOGGLE': if (wisdom.setEnabled(String(m.id), !!m.enabled)) broadcastState(); break
+    case 'WISDOM_REMOVE': if (wisdom.remove(String(m.id))) broadcastState(); break
+    case 'WISDOM_RESET': wisdom.reset(); log('info', 'Chat-Tipps gelöscht'); broadcastState(); break
     case 'LLM_RESET': llm.resetStats(); broadcastState(); break
     case 'LLM_TEST':
       if (!llm.ready()) { log('warn', 'Sprachmodell-Test: ' + (!llm.hasKey ? 'kein API-Schlüssel hinterlegt' : !llm.config.enabled ? 'ist ausgeschaltet' : llm.stats.budgetHit ? 'Budget erreicht' : 'gerade beschäftigt')); break }
@@ -510,8 +527,37 @@ function onLike ({ viewer, count }) {
 }
 
 function onChat ({ viewer, text }) {
+  const name = viewer.nickname || viewer.uniqueId
+  // Spiel-Tipp aus dem Chat? Ein erkannter Tipp ("Goldrüstung im Nether") geht vor; reine Spielwünsche
+  // ("Geh in den Nether", "Bau ein Haus") laufen normal weiter.
+  if (matchTip(text) || !brain.parseGoal(String(text).toLowerCase())) {
+    const tip = wisdom.consider(name, text)
+    if (tip && tip.kind !== 'unknown') {
+      brain.onTip(viewer, tip)
+      pushFeed({ kind: 'chat', user: name, avatar: viewer.avatar || null, text, goal: tip.kind === 'new' ? 'Tipp gemerkt: ' + tip.rule.label : null })
+      if (tip.kind === 'new') log('info', `Chat-Tipp von ${name}: ${tip.rule.label} – ${tip.rule.effect}`)
+      return
+    }
+    // Klingt wie ein Tipp, passt aber auf kein Muster: das Sprachmodell darf ihn einer festen Regel zuordnen
+    if (tip && tip.kind === 'unknown' && llm.ready()) {
+      llm.classifyTip(text, TIP_RULES.map(r => ({ id: r.id, label: `${r.label} (${r.effect})` }))).then(id => {
+        const t = id ? wisdom.learn(id, name, text) : null
+        if (t) { brain.onTip(viewer, t); if (t.kind === 'new') log('info', `Chat-Tipp von ${name} (vom Sprachmodell zugeordnet): ${t.rule.label}`) }
+      })
+    }
+  }
   const r = brain.onChat(viewer, text)
-  pushFeed({ kind: 'chat', user: viewer.nickname || viewer.uniqueId, avatar: viewer.avatar || null, text, goal: r.goal || null })
+  pushFeed({ kind: 'chat', user: name, avatar: viewer.avatar || null, text, goal: r.goal || null })
+}
+
+// Spielmomente, in denen ein gemerkter Tipp zum Einsatz kommt
+const TIP_CONTEXT = { nether_enter: 'nether', night: 'night', night_shelter: 'night', kite: 'swarm', pillar_escape: 'swarm', low_hp: 'low_hp', critical_hp: 'low_hp', mine_start: 'deep', cave_start: 'cave', avoid: 'warden', wall_off: 'creeper', ate: 'hungry' }
+function recallTips (type, data) {
+  let ctxName = TIP_CONTEXT[type]
+  if (type === 'combat_start' && data && Array.isArray(data.mobs)) ctxName = data.mobs.includes('creeper') ? 'creeper' : data.mobs.includes('warden') ? 'warden' : data.mobs.some(m => ['skeleton', 'stray', 'pillager', 'blaze'].includes(m)) ? 'ranged' : null
+  if (type === 'avoid' && data && data.mob !== 'warden') ctxName = null
+  if (!ctxName) return
+  for (const t of wisdom.recall(ctxName)) brain.onTipRecall(t.by, t.rule)
 }
 
 tiktok.on('gift', onGift)
@@ -540,11 +586,12 @@ tiktok.on('follow', e => pushFeed({ kind: 'follow', user: e.viewer.nickname, tex
 const OVERLAY_EVENTS = new Set(['liquid_escape', 'liquid_rescue', 'camera', 'corpse_run_start', 'corpse_run_done', 'swing', 'hurt', 'shield', 'death', 'combat_start', 'combat_end', 'kill', 'low_hp', 'critical_hp', 'lava', 'enchanted', 'respawn', 'ate', 'build_done', 'portal_lit'])
 bot.on('event', e => {
   brain.onBotEvent(e.type, e.data)
+  recallTips(e.type, e.data)
   if (OVERLAY_EVENTS.has(e.type)) broadcast({ type: 'BOT_EVENT', event: e.type, data: e.data })
   else if (e.type !== 'hotbar') broadcast({ type: 'BOT_EVENT', event: e.type, data: e.data }, isControl)
   if (e.type === 'log') log('info', e.data.message)
   else if (e.type === 'warn' || e.type === 'bot_error' || e.type === 'bot_kicked') log('warn', e.data.message || e.data.reason || e.type)
-  else if (['bot_spawned', 'bot_disconnected', 'plan', 'death', 'goal_pushed', 'goal_done', 'goal_failed', 'action_cooldown', 'build_done', 'enchanted', 'portal_lit', 'mode', 'cave_done', 'cave_aborted', 'liquid_rescue'].includes(e.type)) {
+  else if (['bot_spawned', 'bot_disconnected', 'plan', 'death', 'goal_pushed', 'goal_done', 'goal_failed', 'action_cooldown', 'build_done', 'enchanted', 'portal_lit', 'mode', 'cave_done', 'cave_aborted', 'liquid_rescue', 'lesson', 'death_analysis', 'rethink', 'tool_worn', 'lag_pause', 'lag_resume', 'bunker', 'avoid', 'night_shelter'].includes(e.type)) {
     log('info', `${e.type} ${JSON.stringify(e.data).slice(0, 200)}`)
     broadcastState()
   }

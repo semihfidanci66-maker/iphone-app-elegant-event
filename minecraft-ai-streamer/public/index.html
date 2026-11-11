@@ -166,6 +166,11 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
 #login input, #login button { width: 100%; }
 #login p { margin: 0; color: var(--dim); }
 .view iframe { display: block; width: min(100%, 330px); margin: 0 auto; aspect-ratio: 9 / 16; border: 1px solid var(--line); border-radius: var(--rs); background: repeating-conic-gradient(#1a2330 0 25%, #121923 0 50%) 0 0 / 24px 24px; }
+.learnList { display: grid; gap: 6px; font-size: 13px; }
+.learnList > div { background: var(--well); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.learnList > div.empty { color: var(--dim); border-style: dashed; }
+.learnList small { color: var(--dim); display: block; }
+.learnList b { color: var(--cyan); }
 #toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #05080c; border: 1px solid var(--line2); padding: 9px 16px; border-radius: 99px; font-weight: 600; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; z-index: 50; }
 #toast.on { opacity: 1; }
 </style>
@@ -415,6 +420,19 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
       </section>
     </div>
     <div class="stack c7">
+      <section>
+        <h2>🎓 Gelerntes <small id="learnInfo"></small></h2>
+        <h3>Aus Fehlern</h3>
+        <div id="lessons" class="learnList"></div>
+        <h3>So spielt er dadurch anders</h3>
+        <div id="policyBox" class="learnList"></div>
+        <h3>Tipps aus dem Chat</h3>
+        <div id="tipsBox" class="learnList"></div>
+        <h3>Auswege, die er ausprobiert hat</h3>
+        <div id="stratBox" class="learnList"></div>
+        <div class="row" style="margin-top:12px"><button class="sm danger" id="learnReset">Fehler-Gedächtnis löschen</button><button class="sm danger" id="wisdomReset">Chat-Tipps löschen</button></div>
+        <div class="hint">Der Bot merkt sich Tode und Fehlschläge und passt sein Verhalten an. Tipps aus dem Chat wirken nur, wenn sie auf eine feste, sinnvolle Regel passen. Beides bleibt über Neustarts erhalten.</div>
+      </section>
       <section>
         <h2>Protokoll <small><button class="sm" id="logClear">Leeren</button></small></h2>
         <div id="log" aria-live="off"></div>
@@ -670,6 +688,35 @@ function renderState (s) {
   for (const b of $$('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
   for (const b of $$('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '9:16'))
   $('dzBtn').classList.toggle('on', !!s.designer)
+  // Gelerntes
+  if (s.learning) {
+    const Lr = s.learning; const Wd = s.wisdom || { tips: [], unknown: [] }
+    const fill = (id, rows, empty) => { const box = $(id); box.textContent = ''; if (!rows.length) box.appendChild(el('div', { className: 'empty', textContent: empty })); for (const r of rows) box.appendChild(r) }
+    $('learnInfo').textContent = `${Lr.deaths} Tode ausgewertet · ${Lr.lessons.length} Lehren · ${Wd.tips.length} Tipps`
+    fill('lessons', Lr.lessons.map(l => el('div', {}, el('span', { textContent: l.text }))), 'Noch keine Lehren. Die erste entsteht beim ersten Tod.')
+    const P = Lr.policy; const why = k => (P.reasons[k] ? ` (${P.reasons[k]})` : '')
+    const rows = []
+    if (P.retreatHp !== 12) rows.push(`Zieht sich schon bei ${P.retreatHp / 2} Herzen zurück statt bei 6${why('retreatHp')}`)
+    if (P.funnelAt !== 4) rows.push(`Weicht schon bei ${P.funnelAt} Gegnern zurück${why('funnelAt')}`)
+    if (P.creeperCaution) rows.push(`Creeper: ${P.creeperCaution >= 2 ? 'nur treffen-und-weg, im Gang einmauern' : 'mehr Abstand'}${why('creeperCaution')}`)
+    if (P.avoid.length) rows.push(`Weicht aus: ${P.avoid.join(', ')}${why('avoid')}`)
+    if (P.eatAt !== 14) rows.push(`Isst früher und nimmt ${P.foodReserve} Essen mit${why('eatAt') || why('foodReserve')}`)
+    if (P.caveNeedsIron) rows.push(`Tiefe Höhle erst mit Eisenausrüstung${why('caveNeedsIron')}`)
+    if (P.caveNeedsWater) rows.push(`Tiefe Mine erst mit Wassereimer${why('caveNeedsWater')}`)
+    if (P.nightShelter) rows.push(`Bunkert sich nachts ohne Bett ein${why('nightShelter')}`)
+    if (P.pillarWhenSwarmed) rows.push(`Baut sich bei Übermacht hoch${why('pillarWhenSwarmed')}`)
+    if (P.maxDrop !== 3) rows.push(`Springt höchstens ${P.maxDrop} Blöcke tief${why('maxDrop')}`)
+    if (P.shieldFirst) rows.push(`Baut das Schild zuerst${why('shieldFirst')}`)
+    if (P.torchStock !== 6) rows.push(`Nimmt ${P.torchStock} Fackeln mit${why('torchStock')}`)
+    fill('policyBox', rows.map(t => el('div', {}, el('span', { textContent: t }))), 'Spielt noch nach den Grundregeln.')
+    fill('tipsBox', [...Wd.tips.map(t => {
+      const on = el('input', { type: 'checkbox', checked: t.enabled, disabled: t.already }); on.setAttribute('aria-label', 'Tipp aktiv'); on.style.flex = 'none'
+      on.onchange = () => send({ type: 'WISDOM_TOGGLE', id: t.id, enabled: on.checked })
+      const del = el('button', { className: 'sm danger', textContent: '✕', title: 'Tipp löschen' }); del.onclick = () => send({ type: 'WISDOM_REMOVE', id: t.id })
+      return el('div', {}, on, el('span', { style: 'flex:1' }, el('b', { textContent: t.by }), `: ${t.label}`, el('small', { textContent: (t.already ? 'Macht er schon. ' : t.effect + ' ') + (t.count > 1 ? `${t.count}× genannt. ` : '') + (t.applied ? `${t.applied}× angewandt.` : '') })), del)
+    }), ...Wd.unknown.slice(0, 4).map(u => el('div', { className: 'empty' }, el('span', {}, el('b', { textContent: u.by }), `: ${u.text}`, el('small', { textContent: 'Nicht verstanden – nur notiert.' }))))], 'Noch keine Tipps. Beispiel im Chat: „Nutz Goldrüstung im Nether“.')
+    fill('stratBox', Lr.strategies.map(x => el('div', {}, el('span', { textContent: `${x.action}: ${x.label}` }), el('b', { textContent: `${x.wins} von ${x.tries} geholfen` }))), 'Noch keine. Nach drei Fehlschlägen hintereinander probiert er einen Ausweg.')
+  }
   // Sprachmodell
   const G = s.llm
   if (G) {
@@ -806,6 +853,8 @@ confirmTap($('mcRestart'), () => send({ type: 'MC_SERVER', cmd: 'restart' }, 'Se
 confirmTap($('mcStop'), () => send({ type: 'MC_SERVER', cmd: 'stop' }, 'Server wird gestoppt …'))
 const sendCmd = () => { const t = $('cmdTxt').value.trim(); if (t && send({ type: 'MC_COMMAND', text: t }, 'Befehl gesendet')) $('cmdTxt').value = '' }
 $('cmdBtn').onclick = sendCmd
+confirmTap($('learnReset'), () => send({ type: 'LEARN_RESET' }, 'Fehler-Gedächtnis gelöscht'))
+confirmTap($('wisdomReset'), () => send({ type: 'WISDOM_RESET' }, 'Chat-Tipps gelöscht'))
 // Sprachmodell
 const setLlm = (patch, label) => send({ type: 'LLM_SET', llm: patch }, label)
 for (const b of $$('[data-llmon]')) b.onclick = () => setLlm({ enabled: b.dataset.llmon === '1' }, b.dataset.llmon === '1' ? 'Sprachmodell an' : 'Sprachmodell aus')
@@ -915,6 +964,8 @@ function demo () {
     remote: { autoTunnel: false, notify: false, notifyTopic: 'ki-streamer-Beispiel123' },
     lan: { urls: ['http://192.168.178.20:3000/mobile.html?k=Beispiel'], qr: null },
     mc: { installed: true, phase: 'running', own: true, error: null },
+    learning: { deaths: 3, mistakes: 7, lessons: [{ id: 'creeper_1', text: 'Creeper: mehr Abstand halten, nur treffen und sofort zurück.' }, { id: 'night_1', text: 'Nachts draußen gestorben: Bett früher besorgen und nachts ohne Bett einbunkern.' }], recent: [], policy: { retreatHp: 12, funnelAt: 4, eatAt: 14, foodReserve: 5, creeperCaution: 1, maxDrop: 3, avoid: ['warden'], caveNeedsIron: false, caveNeedsWater: false, nightShelter: true, pillarWhenSwarmed: false, shieldFirst: false, torchStock: 6, reasons: { creeperCaution: 'aus einem Creeper-Tod gelernt', avoid: 'Tipp von Lea', nightShelter: 'nachts draußen gestorben' } }, strategies: [{ action: 'MineIron', name: 'relocate', label: 'woanders versuchen', tries: 2, wins: 1 }] },
+    wisdom: { tips: [{ id: 'avoid_warden', label: 'Warden nicht bekämpfen', effect: 'Weicht einem natürlichen Wärter aus, statt zu kämpfen.', already: false, by: 'Lea', text: 'Schlag den Warden nicht', count: 2, supporters: [], enabled: true, applied: 1 }], unknown: [{ by: 'Ben', text: 'du solltest einen bogen craften' }] },
     llm: { enabled: true, hasKey: true, model: 'claude-haiku-5-5', budgetUsd: 0.5, maxPerHour: 300, monologues: true, models: [A('claude-haiku-5-5', 'Claude Haiku 5.5 (schnell, günstig)'), A('claude-sonnet-5-5', 'Claude Sonnet 5.5 (wortgewandter, ca. 20× teurer)')], calls: 142, ok: 139, failed: 3, costUsd: 0.036, avgMs: 900, lastError: null, budgetHit: false },
     likes: { config: { enabled: true, every: 100, action: 'zombie_fast', mob: 'zombie', amount: 1, escalate: true }, enabled: true, every: 100, progress: 63, total: 263, level: 2, last: 'Max', legend: '3× Zombie' },
     world: { timeLock: 'off', rules: { keepInventory: false, mobSpawning: true } },

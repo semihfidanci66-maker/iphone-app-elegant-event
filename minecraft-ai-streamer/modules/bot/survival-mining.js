@@ -144,7 +144,8 @@ class MiningPhase {
   async ensureTorches (token) {
     const { ctx } = this
     const a = ctx.actions
-    if (a.count('torch') >= 6) return
+    const want = ctx.policy ? ctx.policy().torchStock : 6
+    if (a.count('torch') >= want) return
     const fuel = a.find('coal') || a.find('charcoal')
     if (!fuel) return
     if (!(await ctx.crafting.ensureSticks(1, token))) return

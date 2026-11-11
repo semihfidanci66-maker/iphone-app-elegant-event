@@ -48,7 +48,7 @@ class Planner {
       cobble: cobble >= 16 || (pick >= 2 && sword >= 2),
       stoneKit: pick >= 2 && sword >= 2 && (g.has('furnace') || baseDone || !!m.furnaceJob),
       rawFood: ctx.food.foodCount() >= 5,
-      food: ctx.food.cookedCount() >= 5,
+      food: ctx.food.cookedCount() >= (ctx.policy ? ctx.policy().foodReserve : 5),
       bed: !!a.findMatch(/_bed$/) || !!m.bedPlaced,
       rawIron: rawIron + iron >= 6 || ironKit,
       ironIngots: iron >= 6 || ironKit,
@@ -203,10 +203,13 @@ class Planner {
     for (const act of this.actions) {
       if (!act.eff.includes(fact)) continue
       const steps = []
-      let cost = act.cost + (this.onCooldown(act.name) ? 50 : 0)
+      // gelernte Gewichte: oft gescheiterte Aktionen werden teurer, Lehren fügen Vorbedingungen hinzu
+      const learn = this.ctx.learn
+      let cost = act.cost + (this.onCooldown(act.name) ? 50 : 0) + (learn ? learn.costPenalty(act.name) : 0)
+      const pres = learn ? [...act.pre, ...learn.extraPreconditions(act.name).filter(p => !act.pre.includes(p) && !act.eff.includes(p))] : act.pre
       let ok = true
       const localPlanned = new Set(planned)
-      for (const pre of act.pre) {
+      for (const pre of pres) {
         const sub = this.resolve(pre, facts, visiting, localPlanned)
         if (!sub) { ok = false; break }
         for (const s of sub.steps) { steps.push(s); for (const e of s.eff) localPlanned.add(e) }
@@ -266,7 +269,7 @@ class Planner {
     }
     // 2) Progression: erstes offenes Ziel, dessen erster Schritt nicht gesperrt ist
     let fallback = null
-    for (const fact of this.progression) {
+    for (const fact of (this.ctx.learn ? this.ctx.learn.progression(this.progression) : this.progression)) {
       if (facts[fact]) continue
       const plan = this.planFor([fact], facts)
       if (!plan || !plan.steps.length) continue
