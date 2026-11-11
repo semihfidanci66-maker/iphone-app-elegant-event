@@ -111,10 +111,11 @@ class CombatSystem {
       if (!this.isThreat(e)) continue
       const d = e.position.distanceTo(me)
       const gift = this.giftMobs.has(e.id) || !!this.donorOf(e)
-      if (d > (gift ? 40 : radius)) continue
-      if (Math.abs(e.position.y - me.y) > 10 && !gift) continue
-      // Mobs hinter Wänden in >6 Blöcken ignoriert ein Mensch (er sieht sie nicht)
-      if (!gift && d > 6 && !this.hasLineOfSight(e)) continue
+      // Gift-Mobs gelten wie alle anderen: nur was er sieht oder was direkt bei ihm ist.
+      // Ein Zombie auf der anderen Seite der Höhle wird ignoriert, bis er selbst herankommt.
+      if (d > radius) continue
+      if (Math.abs(e.position.y - me.y) > 6) continue
+      if (d > 6 && !this.hasLineOfSight(e)) continue
       out.push({ e, d, gift })
     }
     out.sort((a, b) => a.d - b.d)

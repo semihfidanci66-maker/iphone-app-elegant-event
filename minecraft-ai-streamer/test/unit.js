@@ -153,7 +153,8 @@ const mkBrain = (status) => {
   const said = []; const goals = []
   const b = new StreamerBrain({ getStatus: () => status, pushGoal: (id, by) => { goals.push([id, by]); return { ok: true, label: id } }, speak: async l => { said.push(l); return 10 } })
   clearInterval(b.timer)
-  return { b, said, goals, q: () => b.queue.map(i => i.text) }
+  // Ereignisse und Chat-Antworten (eigene Warteschlange) zusammen
+  return { b, said, goals, q: () => [...b.queue.map(i => i.text), ...b.chatQueue.map(c => c.out)] }
 }
 const calm = { connected: true, activity: 'mine', pos: { x: 10, y: -54, z: 3 }, health: 20, food: 20, threats: 0, fighting: false, inv: { pickTier: 3 }, shield: true }
 t('Persona: Zuschauergedächtnis – 1. Rose vs. 5. Rose', () => {
@@ -162,8 +163,11 @@ t('Persona: Zuschauergedächtnis – 1. Rose vs. 5. Rose', () => {
   b.onGift({ uniqueId: 'lukas' }, { id: 'rose', name: 'Rose', coins: 1 }, eff, 1)
   assert(/Lukas/.test(q()[0]) && !/Nummer|schon wieder/.test(q()[0]), q()[0])
   b.cooldowns.clear(); b.queue = []
-  for (let i = 0; i < 3; i++) { b.onGift({ uniqueId: 'lukas' }, { id: 'rose', name: 'Rose', coins: 1 }, eff, 1); b.cooldowns.clear() }
+  // zwischen den Rosen vergehen jeweils mehr als 25 s (Sperre pro Zuschauer)
+  const wait = () => { b.viewerMemoryMap.get('lukas').giftSaidAt = Date.now() - 26000 }
+  for (let i = 0; i < 3; i++) { wait(); b.onGift({ uniqueId: 'lukas' }, { id: 'rose', name: 'Rose', coins: 1 }, eff, 1); b.cooldowns.clear() }
   b.queue = []
+  wait()
   b.onGift({ uniqueId: 'lukas' }, { id: 'rose', name: 'Rose', coins: 1 }, eff, 1)
   assert.strictEqual(b.viewerMemoryMap.get('lukas').gifts.rose, 5)
   assert(/Lukas/.test(q()[0]) && /(fünfte|Nummer 5|5)/.test(q()[0]), q()[0])
@@ -176,7 +180,7 @@ t('Persona: "Was machst du gerade?" beim Minen nennt die echte Ebene', () => {
 t('Persona: "Wie geht\'s?" im Kampf -> Panik mit Mob-Anzahl', () => {
   const { b, q } = mkBrain({ ...calm, activity: 'combat', fighting: true, threats: 4, health: 9 })
   b.onChat({ uniqueId: 'u2', nickname: 'Tom' }, "wie geht's?")
-  assert(/4/.test(q()[0]) && /Tom/.test(q()[0]), q()[0]); assert.strictEqual(b.queue[0].emotion, 'panic')
+  assert(/4/.test(q()[0]) && /Tom/.test(q()[0]), q()[0]); assert.strictEqual(b.chatQueue[0].emotion, 'panic')
 })
 t('Persona: Chat-Wünsche werden zu Zielen', () => {
   const cases = { 'Geh mal Holz holen': 'wood', 'Bau ein Haus': 'house', 'Mach dir ein Eisenschwert': 'iron_sword', 'Geh in den Nether': 'nether', 'Iss mal was': 'eat', 'such mal diamanten': 'diamonds', 'geh mal in die mine': 'mine', 'geh schlafen': 'sleep' }
@@ -485,11 +489,101 @@ t('Sprachmodell: Einzelne Einstellung ändert nur dieses Feld', () => {
 t('Persona: mit Sprachmodell kommt dessen Antwort, sonst der Textbaustein', async () => {
   const mk = (answer) => { const x = mkBrain(calm); x.b.deps.llm = { config: { monologues: true }, ready: () => true, chatTask: o => o, idleTask: o => o, ask: async () => answer }; return x }
   const a = mk('Ben schreibt Pizza... Schön für dich, ich zocke.')
+  // Das Modell wird gefragt, wenn die Nachricht an der Reihe ist (_speakChat), nicht schon beim Eintreffen
   const r = a.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'ich mag pizza'); assert(r.llm)
-  await new Promise(resolve => setImmediate(resolve)); assert.strictEqual(a.q()[0], 'Ben schreibt Pizza... Schön für dich, ich zocke.')
+  await a.b._speakChat(); assert.strictEqual(a.said[0].text, 'Ben schreibt Pizza... Schön für dich, ich zocke.')
   const f = mk(null); f.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'bist du eine ki?')
-  await new Promise(resolve => setImmediate(resolve)); assert(/Ben fragt, ob ich eine KI bin/.test(f.q()[0]), f.q()[0])
-  const g = mk('egal'); g.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'Bau ein Haus'); assert(!/egal/.test(g.q()[0] || ''), 'Spielwünsche bleiben beim schnellen Baustein')
+  await f.b._speakChat(); assert(/Ben fragt, ob ich eine KI bin/.test(f.said[0].text), f.said[0].text)
+  const g = mk('egal'); g.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'Bau ein Haus'); await g.b._speakChat(); assert(!/egal/.test(g.said[0].text), 'Spielwünsche bleiben beim schnellen Baustein')
+})
+
+// ---------- Rückmeldung aus dem ersten echten Stream ----------
+const { SpeechMemory } = require('../modules/speech-memory')
+/** Spielt die Sprech-Warteschlange komplett ab (ohne echte Zeit) und liefert alles Gesagte. */
+async function drain (b, maxRounds = 80) {
+  for (let i = 0; i < maxRounds && (b.queue.length || b.chatQueue.length); i++) {
+    b.busyUntil = 0
+    b._tick()
+    await new Promise(resolve => setImmediate(resolve))
+    while (b.speaking) await new Promise(resolve => setImmediate(resolve))
+  }
+}
+t('Stream: JEDE Chat-Nachricht wird beantwortet, auch wenn Gifts und Ereignisse dazwischenkommen', async () => {
+  const { b, said } = mkBrain({ ...calm, activity: 'build' })
+  const names = ['Lukas', 'Mia', 'Tom', 'Ben', 'Lea', 'Max', 'Nina', 'Paul', 'Emma', 'Finn']
+  const eff = { kind: 'mob', tier: 1, spawnText: 'einen Zombie', mob: 'zombie' }
+  names.forEach((n, i) => {
+    b.onChat({ uniqueId: n.toLowerCase(), nickname: n }, ['hallo', 'lol', 'was machst du gerade?', 'du bist krass', 'ich mag pizza'][i % 5])
+    b.onGift({ uniqueId: 'spender' + i }, { id: 'rose', name: 'Rose', coins: 1 }, eff, 1)
+    b.onBotEvent('kill', { mob: 'zombie' })
+  })
+  await drain(b)
+  const all = said.map(x => x.text).join(' | ')
+  for (const n of names) assert(all.includes(n), `${n} wurde nicht beantwortet: ${all}`)
+})
+t('Stream: dieselbe Ansage wird nicht wiederholt (Sprach-Gedächtnis)', async () => {
+  const { b, said } = mkBrain(calm)
+  for (let i = 0; i < 6; i++) { b.cooldowns.clear(); b.onBotEvent('night', {}); await drain(b) }
+  const texts = said.map(x => x.text)
+  assert.strictEqual(new Set(texts).size, texts.length, 'doppelt gesagt: ' + texts.join(' | '))
+  assert(texts.length <= 2, 'Pool hat 2 Sätze, danach muss er still sein: ' + texts.length)
+})
+t('Stream: Lukas schickt viele Rosen hintereinander -> EINE Ansage, später eine Zusammenfassung', async () => {
+  const { b, said } = mkBrain({ ...calm, activity: 'build' })
+  const eff = { kind: 'mob', tier: 1, spawnText: 'einen Zombie', mob: 'zombie' }
+  for (let i = 0; i < 6; i++) b.onGift({ uniqueId: 'lukas', nickname: 'Lukas' }, { id: 'rose', name: 'Rose', coins: 1 }, eff, 1)
+  await drain(b)
+  assert.strictEqual(said.filter(x => /Lukas/.test(x.text)).length, 1, said.map(x => x.text).join(' | '))
+  b.viewerMemoryMap.get('lukas').giftSaidAt = Date.now() - 26000
+  b._flushGiftMore(); await drain(b)
+  const more = said.filter(x => /Lukas/.test(x.text))
+  assert.strictEqual(more.length, 2); assert(/fünf|5/.test(more[1].text), more[1].text)
+})
+t('Stream: Tod und Loot-Lauf ergeben EINE Ansage, ein fortgesetzter Lauf keine', async () => {
+  const { b, said } = mkBrain(calm)
+  b.onBotEvent('death', { deaths: 1 }); b.onBotEvent('corpse_run_start', { secondsLeft: 280 }); await drain(b)
+  b.onBotEvent('corpse_run_start', { resumed: true, secondsLeft: 200 }); await drain(b)
+  assert.strictEqual(said.length, 1, said.map(x => x.text).join(' | '))
+})
+t('Stream: "Geh zurück an Land" ist Oberfläche (nicht Mine), "Geh ein Dorf suchen" ist Dorfsuche', () => {
+  const cases = { 'ey geh zurück an Land': 'surface', 'raus aus der Höhle!': 'surface', 'geh mal an die Oberfläche': 'surface', 'geh hoch': 'surface', 'geh ein Dorf suchen': 'village', 'such mal ein Dorf': 'village', 'geh in die Höhle': 'mine' }
+  for (const [text, goal] of Object.entries(cases)) {
+    const { b, goals } = mkBrain(calm)
+    b.onChat({ uniqueId: 'v', nickname: 'Semih' }, text)
+    assert.strictEqual(goals[0] && goals[0][0], goal, text)
+  }
+})
+t('Stream: Spam (gleiche Nachricht) wird einmal kommentiert, Rückkehrer werden erkannt', async () => {
+  const mem = new SpeechMemory()
+  mem.noteMessage('lukas', 'Lukas', 'baut mal ein haus', Date.now() - 86400000 - 5000)
+  mem.viewers.lukas.last = Date.now() - 86400000
+  const { b, said } = mkBrain(calm); b.memory = mem
+  b.onChat({ uniqueId: 'lukas', nickname: 'Lukas' }, 'hallo')
+  b.onChat({ uniqueId: 'lukas', nickname: 'Lukas' }, 'hallo')
+  b.onChat({ uniqueId: 'lukas', nickname: 'Lukas' }, 'hallo')
+  await drain(b)
+  const all = said.map(x => x.text)
+  assert(/wieder da|kenn ich|zurück/i.test(all[0]), all[0])
+  assert.strictEqual(all.filter(x => /schon geschrieben|Doppelt schreiben/.test(x)).length, 1, all.join(' | '))
+})
+t('Sprach-Gedächtnis: erkennt gleiche und fast gleiche Sätze, bleibt über Neustart erhalten', () => {
+  const m = new SpeechMemory()
+  m.record('Es wird dunkel, Leute. Jetzt kommen die Monster raus. Augen auf!')
+  assert(m.recentlySaid('Es wird dunkel, Leute. Jetzt kommen die Monster raus. Augen auf!'))
+  assert(m.recentlySaid('es wird dunkel leute jetzt kommen die monster raus augen auf'))
+  assert(!m.recentlySaid('Ich hab Diamanten gefunden!'))
+  const m2 = new SpeechMemory(JSON.parse(JSON.stringify(m.toJSON())))
+  assert(m2.recentlySaid('Es wird dunkel, Leute. Jetzt kommen die Monster raus. Augen auf!'))
+})
+t('Bot: Loot-Lauf nicht in die Todesfalle, nicht in Lava, nicht in Höhlen im Oberflächen-Modus', () => {
+  const { MinecraftAIBot } = require('../modules/mc-ai-bot')
+  const why = (d, mode, forced = false) => MinecraftAIBot.prototype._corpseSkipReason.call({ mode }, d, forced)
+  assert.strictEqual(why({ repeatSpot: true }, 'cave'), 'trap')
+  assert.strictEqual(why({ inLava: true }, 'surface', true), 'lava')
+  assert.strictEqual(why({ underground: true }, 'surface'), 'cave')
+  assert.strictEqual(why({ underground: true }, 'cave'), null)
+  assert.strictEqual(why({ underground: true }, 'surface', true), null, 'Chat "Hol deinen Loot" darf die Höhlen-Sperre übergehen')
+  assert.strictEqual(why({}, 'surface'), null)
 })
 
 // ---------- Welt-Steuerung & Handy im WLAN ----------

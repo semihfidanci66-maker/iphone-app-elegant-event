@@ -86,6 +86,8 @@ const VIEWER_GOALS = {
       return ok
     }
   },
+  surface: { label: 'Zurück an die Oberfläche', activity: 'exit_cave', direct: 'surface' },
+  village: { label: 'Dorf suchen', activity: 'explore', task: (ctx, t) => ctx.findVillage(t) },
   sleep: { label: 'Schlafen gehen', activity: 'sleep', pre: ['bed'], task: (ctx, t) => ctx.building.sleepInBed(t) },
   bed: { label: 'Bett craften', facts: ['bed'] },
   corpse: { label: 'Loot zurückholen', activity: 'corpse', task: async (ctx, t) => ctx.corpseRun(t, true) },
@@ -149,6 +151,8 @@ class MinecraftAIBot extends EventEmitter {
         ctx.autonomy.tick()
         if (n % 20 === 0) for (const w of ctx.autonomy.checkWear()) this._emit('tool_worn', w)
         ctx.liquid.brainTick() // 4-Sekunden-Garantie gegen Wasser/Lava
+        // Oberflächenhöhe merken (Bezug für "wirklich in einer Höhle" und für die Wegfindung)
+        if (n % 4 === 0 && bot.entity.onGround && !/nether|end/.test(bot.game.dimension || '') && ctx.mining.isSurface()) this.memory.surfaceY = ctx.actions.feet().y
         this.camera.tick()
         this.emit('pose', { yaw: bot.entity.yaw + ctx.look.headYawOffset, pitch: bot.entity.pitch + ctx.look.headPitchOffset, moveYaw: ctx.look.yaw, blocking: !!ctx.combat.blocking, onGround: bot.entity.onGround, speed: Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z) })
         if (n % 4 === 0) this.emit('status', this.status())
@@ -238,6 +242,7 @@ class MinecraftAIBot extends EventEmitter {
       explore: (token, dist) => this._explore(token, dist),
       isBaseBlock: pos => !!ctx.building && ctx.building.isBaseBlock(pos),
       corpseRun: (t, forced) => this._corpseRun(t, forced),
+      findVillage: t => this._findVillage(t),
       caveAllowed: () => this.mode === 'cave' || !!this.memory.caveTripActive,
       isPortalBlock: pos => !!ctx.endgame && ctx.endgame.isPortalBlock(pos),
       learn: this.learning,
@@ -257,12 +262,24 @@ class MinecraftAIBot extends EventEmitter {
     ctx.watchdog = new StuckWatchdog(ctx)
     ctx.planner = new Planner(ctx)
     ctx.liquid = new LiquidEscape(ctx, this)
+    // Oberflächen-Modus: Wege tief unter Tage (Höhlen, Schluchten) sind für die normale Wegfindung sehr teuer.
+    // So läuft er beim Erkunden, Jagen oder Holzhacken nicht mehr in Höhleneingänge hinein.
+    ctx.actions.walkMoves.exclusionAreasStep.push(block => {
+      if (this.mode === 'cave' || this.memory.caveTripActive || !block || !block.position) return 0
+      if (/nether|end/.test(bot.game.dimension || '')) return 0
+      const ref = this.memory.surfaceY
+      if (ref === undefined || block.position.y >= ref - 5) return 0
+      return (block.skyLight ?? 0) >= 8 ? 0 : 60
+    })
     ctx.autonomy = new Autonomy(ctx, this)
     this.ctx = ctx
     this.connected = true
     this.exploreHeading = Math.random() * Math.PI * 2
 
     bot.on('death', () => {
+      // mineflayer kann den Tod bei Lag doppelt melden: innerhalb von 5 s zählt er nur einmal
+      if (Date.now() - (this._lastDeathAt || 0) < 5000) return
+      this._lastDeathAt = Date.now()
       this.deaths++
       // Aus dem Tod lernen: Lage festhalten, neue Lehren ansagen
       try {
@@ -273,7 +290,12 @@ class MinecraftAIBot extends EventEmitter {
       } catch (e) { this._emit('log', { message: 'Lernen (Tod): ' + e.message }) }
       ctx.autonomy.bunker = null
       // lastDeath überlebt Respawn und Reconnect; der Corpse-Run startet beim nächsten Spawn
-      this.lastDeath = { pos: bot.entity.position.clone(), dimension: bot.game.dimension, time: Date.now(), tried: false }
+      const dpos = bot.entity.position.clone()
+      // Todesorte der letzten 15 Minuten merken: wer zweimal an derselben Stelle stirbt, geht da nicht noch mal hin
+      this.deathSpots = (this.deathSpots || []).filter(x => Date.now() - x.at < 900000)
+      const repeatSpot = this.deathSpots.some(x => x.dimension === bot.game.dimension && x.pos.distanceTo(dpos) < 24)
+      this.deathSpots.push({ pos: dpos, dimension: bot.game.dimension, at: Date.now() })
+      this.lastDeath = { pos: dpos, dimension: bot.game.dimension, time: Date.now(), tried: false, attempts: 0, underground: this.isUnderground(), inLava: !!bot.entity.isInLava, repeatSpot }
       this.memory.mineEntrance = null
       this.memory.furnaceJob = null
       this.interrupt('death')
@@ -387,11 +409,22 @@ class MinecraftAIBot extends EventEmitter {
           this.setActivity('eat')
           await this._run({ name: 'Eat', label: 'Essen' }, t => ctx.food.eatIfNeeded(t))
         }
+        // ---- Oberflächen-Modus: ist er (ohne Höhlen-Auftrag) länger als 10 s richtig unter Tage, geht er hoch ----
+        if (this.mode !== 'cave' && !this.memory.caveTripActive && this._deepUnderground()) {
+          if (!this._undergroundSince) this._undergroundSince = Date.now()
+          if (Date.now() - this._undergroundSince > 10000) {
+            this._undergroundSince = 0
+            this.setActivity('exit_cave')
+            await this._run({ name: 'ExitCave', label: 'Raus an die Oberfläche', activity: 'exit_cave' }, t => this._exitCave(t))
+            continue
+          }
+        } else this._undergroundSince = 0
         // ---- STATE_CORPSE_RUN: höchste Priorität nach dem Respawn ----
         if (this._corpseRunDue()) {
           this.setActivity('corpse')
           const r = await this._run({ name: 'CorpseRun', label: 'Loot zurückholen', activity: 'corpse' }, t => this._corpseRun(t, false))
-          if (r === 'interrupted' && this.lastDeath) this.lastDeath.tried = false
+          // Unterbrochen (Kampf, Wasser …): höchstens EIN weiterer Versuch, und der wird nicht neu angesagt
+          if (r === 'interrupted' && this.lastDeath && this.lastDeath.attempts < 2) this.lastDeath.tried = false
           continue
         }
         // ---- STATE_SLEEP_NIGHT: Nacht oder Gewitter -> Bett ----
@@ -486,6 +519,55 @@ class MinecraftAIBot extends EventEmitter {
     }
   }
 
+  /**
+   * Wirklich in einer Höhle – nicht nur unter einem Baum oder im eigenen Haus:
+   * deutlich unter der zuletzt gemerkten Oberflächenhöhe UND kaum Himmelslicht.
+   */
+  _deepUnderground () {
+    if (!this.ctx || !this.bot.entity || /nether|end/.test(this.bot.game.dimension || '')) return false
+    const feet = this.ctx.actions.feet()
+    const ref = this.memory.surfaceY ?? 63
+    if (feet.y >= ref - 6) return false
+    const head = this.bot.blockAt(feet.offset(0, 1, 0))
+    return !head || (head.skyLight ?? 0) < 8
+  }
+
+  /**
+   * Dorf suchen: an der Oberfläche in eine Richtung laufen (ohne zu graben), nach Dorfbewohnern,
+   * Glocken und Dorf-Blöcken Ausschau halten, unterwegs Fortschritt melden. Höchstens ~600 Blöcke.
+   */
+  async _findVillage (token) {
+    const { ctx, bot } = this
+    const mc = ctx.mcData
+    const ids = ['bell', 'hay_block', 'composter', 'smithing_table', 'fletching_table', 'cartography_table', 'lectern', 'grindstone']
+      .map(n => mc.blocksByName[n] && mc.blocksByName[n].id).filter(id => id !== undefined)
+    const start = bot.entity.position.clone()
+    let reported = 0
+    const findVillage = () => {
+      const v = bot.nearestEntity(e => e.name === 'villager' || e.name === 'iron_golem')
+      if (v && v.position.distanceTo(bot.entity.position) < 96) return v.position.clone()
+      const b = bot.findBlock({ matching: ids, maxDistance: 96 })
+      return b ? b.position.clone() : null
+    }
+    for (let leg = 0; leg < 14; leg++) {
+      token.check()
+      const spot = findVillage()
+      if (spot) {
+        this._emit('village_found', { distance: Math.round(bot.entity.position.distanceTo(spot)) })
+        await ctx.actions.goto(new goals.GoalNear(spot.x, spot.y, spot.z, 6), { token, timeout: 90000 })
+        this.memory.village = { x: Math.round(spot.x), y: Math.round(spot.y), z: Math.round(spot.z) }
+        this._emit('village_arrived', {})
+        return true
+      }
+      const dist = Math.round(bot.entity.position.distanceTo(start))
+      if (dist > 600) break
+      if (dist - reported >= 120) { reported = dist; this._emit('village_progress', { distance: dist }) }
+      await this._explore(token, 48)
+    }
+    this._emit('village_failed', { distance: Math.round(bot.entity.position.distanceTo(start)) })
+    return false
+  }
+
   /** Bot steht unter Tage (kein freier Himmel über dem Kopf). */
   isUnderground () { return !!this.ctx && !this.ctx.mining.isSurface() && !/nether|end/.test(this.bot.game.dimension || '') }
 
@@ -563,17 +645,36 @@ class MinecraftAIBot extends EventEmitter {
    * STATE_CORPSE_RUN: auf dem schnellsten Weg zur Todesstelle sprinten, alle Drops einsammeln,
    * beste Rüstung und Waffen wieder anlegen.
    */
+  /**
+   * Lohnt der Rückweg? Nicht, wenn er dort schon einmal kurz vorher gestorben ist (Todesfalle),
+   * wenn er in Lava gestorben ist, oder wenn der Todesort unter Tage liegt und Höhlen gesperrt sind.
+   * forced (Chat/Regie "Hol deinen Loot") übergeht nur die Höhlen-Sperre, nie Lava oder die Todesfalle.
+   */
+  _corpseSkipReason (d, forced) {
+    if (d.inLava) return 'lava'
+    if (d.repeatSpot) return 'trap'
+    if (d.underground && this.mode !== 'cave' && !forced) return 'cave'
+    return null
+  }
+
   async _corpseRun (token, forced) {
     const { ctx, bot } = this
     const d = this.lastDeath
     if (!d || (forced && Date.now() - d.time > 300000)) { this._emit('corpse_run_none', {}); return false }
     d.tried = true
-    this._emit('corpse_run_start', { distance: Math.round(bot.entity.position.distanceTo(d.pos)), secondsLeft: Math.max(0, Math.round((300000 - (Date.now() - d.time)) / 1000)) })
+    const skip = this._corpseSkipReason(d, forced)
+    if (skip) {
+      this.lastDeath = null
+      this._emit('corpse_skip', { reason: skip })
+      return false
+    }
+    d.attempts = (d.attempts || 0) + 1
+    this._emit('corpse_run_start', { resumed: d.attempts > 1, distance: Math.round(bot.entity.position.distanceTo(d.pos)), secondsLeft: Math.max(0, Math.round((300000 - (Date.now() - d.time)) / 1000)) })
     const p = d.pos
     const before = bot.inventory.items().reduce((n, i) => n + i.count, 0)
     let ok = await ctx.actions.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { token, timeout: 120000 })
-    // Todesstelle in einer Grube/Höhle: jetzt darf sich der Bot durchgraben (Notfall-Routine)
-    if (!ok && bot.entity.position.distanceTo(p) > 4) ok = await ctx.actions.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { token, timeout: 60000, moves: ctx.actions.digMoves })
+    // Todesstelle in einer Grube: graben nur, wenn Höhlen erlaubt sind oder ausdrücklich verlangt wurde
+    if (!ok && bot.entity.position.distanceTo(p) > 4 && (forced || this.mode === 'cave')) ok = await ctx.actions.goto(new goals.GoalNear(p.x, p.y, p.z, 2), { token, timeout: 60000, moves: ctx.actions.digMoves })
     if (ok || bot.entity.position.distanceTo(p) < 6) await ctx.actions.collectDrops(p, 9, { token, timeout: 20000 })
     await ctx.hotbar.organize(true) // equipBestArmorAndWeapons: Rüstung, Schild, Hotbar
     const got = bot.inventory.items().reduce((n, i) => n + i.count, 0) - before
@@ -699,6 +800,12 @@ class MinecraftAIBot extends EventEmitter {
     if (!def) return { ok: false, reason: 'unknown' }
     if (!this.ctx) return { ok: false, reason: 'offline', label: def.label }
     if ((id === 'mine' || id === 'cave') && this.mode !== 'cave') return { ok: false, reason: 'cave_locked', label: def.label }
+    // "Geh zurück an Land": sofort Höhle abbrechen, Oberflächen-Modus, laufende Aufgabe beenden
+    if (def.direct === 'surface') {
+      const under = this.isUnderground() || (this.ctx && this.ctx.liquid && this.ctx.liquid.inLiquid())
+      this.abortCave()
+      return under ? { ok: true, label: def.label } : { ok: true, already: true, label: def.label }
+    }
     if (id === 'corpse') return this.forceCorpseRun() ? { ok: true, label: def.label } : { ok: false, reason: 'no_loot', label: def.label }
     const ctx = this.ctx
     if (def.facts) {
@@ -767,7 +874,22 @@ class MinecraftAIBot extends EventEmitter {
    * Gültiger Spawnpunkt 5–7 Blöcke vor dem Bot auf festem Oberflächenboden.
    * @returns {{x:number,y:number,z:number}|null}
    */
-  spawnPoint (minDist = 5, maxDist = 7) {
+  /** Freie Sichtlinie von den Augen des Bots zu einem Punkt (Strahl in 0,4er-Schritten). */
+  _canSee (target) {
+    const bot = this.bot
+    const from = bot.entity.position.offset(0, 1.62, 0)
+    const dir = target.minus(from)
+    const len = dir.norm()
+    if (len < 0.5) return true
+    const step = dir.scaled(1 / len)
+    for (let t = 0.4; t < len - 0.3; t += 0.4) {
+      const b = bot.blockAt(from.plus(step.scaled(t)))
+      if (b && b.boundingBox === 'block' && !b.transparent) return false
+    }
+    return true
+  }
+
+  spawnPoint (minDist = 2.5, maxDist = 4) {
     const bot = this.bot
     if (!bot || !bot.entity) return null
     const p = bot.entity.position
@@ -786,7 +908,8 @@ class MinecraftAIBot extends EventEmitter {
           const b2 = bot.blockAt(new Vec3(x, y + 2, z))
           if (!floor || floor.boundingBox !== 'block' || /lava|magma|cactus|fire/.test(floor.name)) continue
           const free = b => !b || (b.boundingBox === 'empty' && b.name !== 'lava' && b.name !== 'water')
-          if (free(b0) && free(b1) && free(b2)) return { x: x + 0.5, y, z: z + 0.5 }
+          // nur Stellen, die er direkt sieht (keine Wand dazwischen) – sonst spawnt der Mob hinter Höhlenwänden
+          if (free(b0) && free(b1) && free(b2) && Math.abs(dy) <= 1 && this._canSee(new Vec3(x + 0.5, y + 1.2, z + 0.5))) return { x: x + 0.5, y, z: z + 0.5 }
         }
       }
     }

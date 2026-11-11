@@ -2,7 +2,7 @@
 
 > **Aktueller Stand liegt jetzt auf `claude/minecraft-ai-streamer-vet79e`** (enthält alles von `claude/affectionate-cray-d9cvu6` bis `403bbad` plus die Korrekturen unten). Bitte dort weitermachen bzw. diesen Branch vorher einmischen.
 
-Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (45 Logiktests)
+Branch: `claude/affectionate-cray-d9cvu6` · Ordner: `minecraft-ai-streamer/` · Tests: `npm test` (53 Logiktests)
 
 ## Auftrag (11.11.2026)
 
@@ -47,3 +47,17 @@ Der Bot soll selbstständig besser werden: Wissensbasis, Lernen aus Fehlern, Tip
 - `llm-brain.js` – `setConfig` übernimmt nur gesetzte Felder. Vorher schaltete z. B. ein Modellwechsel im Dashboard das Sprachmodell aus und setzte Budget/Limit auf die Standardwerte zurück.
 - `server.js` – `LLM_SET`: API-Schlüssel, Modell, Budget und Anfragen-Limit nur am PC selbst (wie `REMOTE_SET`). Von außen nur ein/aus und Monologe.
 - `test/unit.js` – zwei Tests dafür. Sperre von außen zusätzlich im laufenden Server geprüft.
+
+## Rückmeldung aus dem ersten echten Stream (11.11.2026)
+
+Gemeldet: sagt ständig „tot“, antwortet nur auf 1–2 Chat-Nachrichten, wiederholt sich, Lukas' Rosen mehrfach angesagt, geht immer wieder in dieselbe Höhle, „geh zurück an Land“ wirkt nicht, läuft Gift-Zombies quer durch die Höhle hinterher.
+
+- **Ursache „tot“ + Höhlen-Schleife:** Loot-Lauf startete nach jeder Unterbrechung neu (`tried = false`) und sagte jedes Mal „Ich bin gestorben“ (cd 3 s, Prio 6). Jetzt: höchstens 2 Versuche, der zweite ohne Ansage; Tod + Aufbruch teilen einen Cooldown (30 s). Kein Loot-Lauf in eine Todesfalle (zweiter Tod < 24 Blöcke in 15 min), nicht in Lava, nicht unter Tage im Oberflächen-Modus (Chat „Hol deinen Loot“ darf Letzteres). `_corpseSkipReason` in `mc-ai-bot.js`.
+- **Chat:** eigene Warteschlange `chatQueue` in `ai-streamer-brain.js` (vorher teilte Chat sich 4 Plätze mit Ereignissen, verfiel nach 10 s, einfache Nachrichten wurden absichtlich übersprungen). Jetzt verfällt nichts vor 3 min; ab 3 wartenden Nachrichten werden sie gebündelt vorgelesen. Sprachmodell wird gefragt, wenn die Nachricht dran ist.
+- **Wiederholungen:** neues `modules/speech-memory.js` (gespeichert in `config/speech_memory.json`): jeder gesprochene Satz, exakt gleich 45 min gesperrt, ≥ 75 % gleiche Wörter 12 min. Ereignis-Ansagen ohne frische Formulierung entfallen. Zuschauer-Nachrichten werden pro Person gemerkt (Rückkehrer-Begrüßung, Spam-Erkennung, frühere Nachrichten gehen ans Sprachmodell).
+- **Gifts:** pro Zuschauer höchstens eine Ansage alle 25 s, Rest wird gesammelt und einmal zusammengefasst (`_flushGiftMore`).
+- **Chat-Befehle:** neu `surface` („geh zurück an Land“, „raus aus der Höhle“, „geh hoch“) – steht vor `mine`, weil „geh … Höhle“ vorher als Mine erkannt wurde. Neu `village` („geh ein Dorf suchen“) -> `_findVillage`: an der Oberfläche erkunden, Dorfbewohner/Glocke/Dorfblöcke suchen, bis ~600 Blöcke.
+- **Oberflächen-Modus:** Reflex „> 10 s tief unter Tage (6 Blöcke unter gemerkter Oberfläche, wenig Himmelslicht) -> raus“; Wegfindung verteuert Wege tief unter Tage (`exclusionAreasStep`).
+- **Gift-Mobs:** Spawnpunkt 2,5–4 Blöcke, gleiche Höhe ±1, nur mit freier Sichtlinie (`_canSee`). Kampf: Gift-Mobs nur noch in Sichtweite/16 Blöcken, wie alle anderen (vorher 40 Blöcke durch Wände).
+- Tests: 8 neue in `test/unit.js`, `test/live-spawn.js` (live: 20/20 Spawnpunkte nah und sichtbar, 0 hinter einer Wand).
+- **Offen:** Live-Test `live-liquid.js` schwankt auf dem Test-Server (flying-squid) schon vor diesen Änderungen; „Höhlen-Abbruch wurde angesagt“ schlug dort auch vorher fehl. Dorfsuche und Höhlen-Reflex sind nicht live getestet (Test-Server hat keine Dörfer und überall volles Himmelslicht).

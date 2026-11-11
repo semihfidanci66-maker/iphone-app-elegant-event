@@ -16,6 +16,7 @@ const { WebSocketServer } = require('ws')
 
 const { MinecraftAIBot, VIEWER_GOALS } = require('./modules/mc-ai-bot')
 const { StreamerBrain } = require('./modules/ai-streamer-brain')
+const { SpeechMemory } = require('./modules/speech-memory')
 const { TTSEngine, MALE_VOICES } = require('./modules/tts-engine')
 const { TikTokBridge, sanitizeUsername } = require('./modules/tiktok-bridge')
 const { GiftEngine, ACTIONS, MOBS } = require('./modules/gift-engine')
@@ -179,8 +180,16 @@ setInterval(() => {
   llmWarn = msg
 }, 5000).unref()
 
+// Gedächtnis des Streamers: gesagte Sätze und Zuschauer-Nachrichten, bleibt über Neustarts erhalten
+const SPEECH_FILE = path.join(CFG_DIR, 'speech_memory.json')
+// Gedrosselt statt verschoben: spätestens 5 s nach der ersten Änderung wird geschrieben, auch wenn er ununterbrochen redet
+let speechSaveAt = 0
+const speechMemory = new SpeechMemory(readJson(SPEECH_FILE, {}), {
+  onChange: () => { if (!speechSaveAt) { speechSaveAt = Date.now(); setTimeout(() => { speechSaveAt = 0; writeLater(SPEECH_FILE, () => speechMemory.toJSON(), 0) }, 5000) } }
+})
 const brain = new StreamerBrain({
   llm,
+  memory: speechMemory,
   getStatus: () => bot.status(),
   pushGoal: (id, by) => bot.pushGoal(id, by),
   onAddress: () => bot.expressiveLook(),

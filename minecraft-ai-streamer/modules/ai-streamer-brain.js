@@ -13,6 +13,7 @@
  * Das Modul spricht nicht selbst: es liefert Zeilen { text, emotion } an speakFn (TTS-Pipeline).
  */
 const EventEmitter = require('events')
+const { SpeechMemory } = require('./speech-memory')
 
 const pick = arr => arr[Math.floor(Math.random() * arr.length)]
 const ORD = ['', 'erste', 'zweite', 'dritte', 'vierte', 'fünfte', 'sechste', 'siebte', 'achte', 'neunte', 'zehnte', 'elfte', 'zwölfte']
@@ -487,6 +488,25 @@ Object.assign(L, {
 })
 
 // Chat wird erst vorgelesen, dann kommt der Konter ("Max fragt, ob ich eine KI bin... Ja, ...")
+// ---- Gedächtnis, Gift-Nachschlag, Bündel-Antworten, Dorf, Oberfläche
+const L2 = {
+  gift_more: {
+    mob: ['{user} legt noch {giftcount} nach. Okay, ich hab verstanden, du willst mich leiden sehen.', 'Und {user} hat inzwischen noch {giftcount} hinterhergeschickt. Ich zähl mit, {user}!', '{user} ist noch nicht fertig: weitere {giftcount}. Na dann, her mit den Monstern.'],
+    support: ['{user} hat noch {giftcount} nachgelegt. Danke dir, ehrlich!', 'Noch mal {giftcount} von {user}. So einen Support bekommt nicht jeder.']
+  },
+  welcome_back: ['{user} ist wieder da! Letztes Mal hattest du geschrieben: {prev}.', 'Ah, {user}, kenn ich doch. Du warst schon mal im Stream.', 'Willkommen zurück, {user}! Ich hab dich nicht vergessen.'],
+  repeat_msg: ['{user}, das hast du gerade schon geschrieben. Ich hab es gelesen, keine Sorge.', 'Hab ich schon, {user}. Doppelt schreiben macht es nicht schneller.'],
+  batch_intro: ['Okay, Chat, ihr seid schnell heute. Der Reihe nach:', 'Moment, Moment, ich les alles vor:', 'So, ich arbeite den Chat ab:'],
+  corpse_skip: ['Ich geh da nicht noch mal rein, da bin ich gerade gestorben. Der Loot ist es nicht wert.', 'Nee, zurück in diese Todesfalle geh ich nicht. Neue Sachen farmen ist sicherer.'],
+  village_start: ['Alles klar, {user}, ich such ein Dorf! Ich lauf in eine Richtung und halt die Augen offen.', 'Dorf suchen, verstanden {user}. Mal sehen, ob hier irgendwo Dorfbewohner rumlaufen.'],
+  village_progress: ['Immer noch kein Dorf. {distance} Blöcke bin ich schon gelaufen, aber ich geb nicht auf.', 'Ich lauf weiter, {distance} Blöcke bis jetzt. Irgendwo hier muss doch ein Dorf sein.'],
+  village_found: ['DA! Ein Dorf, Chat! Ungefähr {distance} Blöcke vor mir. Ich lauf hin.', 'Ich seh ein Dorf! Dorfbewohner, Häuser, alles da. Auf geht es!'],
+  village_arrived: ['So, wir sind im Dorf angekommen. Schaut euch das an, Chat!'],
+  village_failed: ['Ich hab kein Dorf gefunden, Leute. {distance} Blöcke gelaufen und nichts. Vielleicht ist hier einfach keins.'],
+  surface_ack: ['Alles klar, {user}, ich geh sofort zurück an die Oberfläche!', 'Verstanden {user}, raus aus der Höhle und ab nach oben!'],
+  surface_already: ['Ich bin doch schon oben, {user}! Frische Luft, Sonne, alles da.']
+}
+
 const QUOTE = {
   who: ['{user} fragt, ob ich eine KI bin... '],
   what_doing: ['{user} fragt, was ich gerade mache... ', '{user} will wissen, was ich mache... '],
@@ -516,6 +536,9 @@ const KIND_DE = { cobble: 'Bruchstein', log: 'Stämme', planks: 'Planken', slab:
 
 // Gameplay-Wünsche aus dem Chat
 const GOAL_PATTERNS = [
+  // Zuerst: zurück an die Oberfläche (enthält oft auch 'Höhle' – darf nicht als 'geh in die Mine' gelten)
+  ['surface', /\b(zur[üu]ck|raus|rauf|hoch|nach oben)\b.*\b(land|oberfl[äa]che|oben|tageslicht|h[öo]hle)\b|\braus aus\b.*\bh[öo]hle\b|\b(an|auf) (die|das) (oberfl[äa]che|land)\b|\bgeh\w* (raus|hoch|nach oben)\b|\bverlass\w* (die )?h[öo]hle\b/i],
+  ['village', /\b(dorf|d[öo]rfer|village|dorfbewohner|villager)\b/i],
   ['nether', /\b(nether|netherportal|hölle)\b/i],
   ['house', /\b(haus|h[üu]tte|base|basis|unterschlupf|shelter)\b.*\b(bau|mach|errichte)|\bbau\w*\b.*\b(haus|h[üu]tte|base|basis)\b/i],
   ['iron_sword', /\b(eisenschwert|eisen ?schwert|iron ?sword)\b/i],
@@ -554,11 +577,17 @@ class StreamerBrain extends EventEmitter {
     this.lastStage = -1
     this.timer = null // kein eigener Timer: tick() hängt am zentralen Game-Loop
     this.tickN = 0
+    // Gedächtnis: was er gesagt hat und was Zuschauer geschrieben haben (dauerhaft, siehe speech-memory.js)
+    this.memory = deps.memory || new SpeechMemory()
+    this.sessionStart = Date.now()
+    // Chat hat eine eigene Warteschlange: keine Nachricht fliegt raus, weil Gifts oder Ereignisse dazwischenkommen
+    this.chatQueue = []
+    this.lastKind = null
   }
 
   dispose () {}
   /** Vom zentralen 250-ms-Loop aufgerufen. */
-  tick () { this._tick(); if (++this.tickN % 4 === 0) this.tacticalCallout() }
+  tick () { this._tick(); if (++this.tickN % 4 === 0) { this.tacticalCallout(); this._flushGiftMore() } }
   status () { return this.deps.getStatus() || { connected: false, activity: 'offline' } }
 
   // ---------------------------------------------------------------- Zuschauergedächtnis
@@ -595,14 +624,32 @@ class StreamerBrain extends EventEmitter {
     return tpl.replace(/\{(\w+)\}/g, (_, k) => (vars[k] !== undefined && vars[k] !== null ? String(vars[k]) : '')).replace(/\s+([!?.,])/g, '$1').replace(/\s{2,}/g, ' ').trim()
   }
 
-  /** Zeile aus einem Pool wählen, ohne direkte Wiederholung. */
-  line (pool, vars = {}) {
+  /**
+   * Zeile aus einem Pool wählen, die er kürzlich NICHT gesagt hat (Sprach-Gedächtnis).
+   * strict: true -> gibt es keine frische Formulierung, kommt null (Ansage fällt weg).
+   * Sonst (Chat-Antworten) wird die am längsten nicht benutzte Vorlage genommen.
+   */
+  line (pool, vars = {}, o = {}) {
     if (!pool || !pool.length) return null
-    const fresh = pool.filter(t => !this.recentLines.includes(t))
-    const tpl = pick(fresh.length ? fresh : pool)
+    const unused = pool.filter(t => !this.recentLines.includes(t)).sort(() => Math.random() - 0.5)
+    const used = pool.filter(t => this.recentLines.includes(t)).sort((x, y) => this.recentLines.indexOf(x) - this.recentLines.indexOf(y))
+    const order = [...unused, ...used] // nie benutzte zuerst, dann die am längsten nicht benutzten
+    for (const tpl of order) {
+      const text = this.fill(tpl, vars)
+      if (this.memory.recentlySaid(text)) continue
+      this._useTpl(tpl)
+      return text
+    }
+    if (o.strict) return null
+    this._useTpl(order[0])
+    return this.fill(order[0], vars)
+  }
+
+  _useTpl (tpl) {
+    const i = this.recentLines.indexOf(tpl)
+    if (i >= 0) this.recentLines.splice(i, 1)
     this.recentLines.push(tpl)
-    if (this.recentLines.length > 40) this.recentLines.shift()
-    return this.fill(tpl, vars)
+    if (this.recentLines.length > 400) this.recentLines.shift()
   }
 
   /**
@@ -611,27 +658,65 @@ class StreamerBrain extends EventEmitter {
    */
   say (text, o = {}) {
     if (!text || !this.enabled) return false
-    const item = { id: ++this.lineId, text, emotion: o.emotion || 'chill', priority: o.priority ?? 1, kind: o.kind || 'misc', at: Date.now(), ttl: o.ttl ?? 9000 }
-    // Der Streamer hängt nie mehr als ein paar Sätze hinterher: Unwichtiges fliegt raus
+    const kind = o.kind || 'misc'
+    // Schon kürzlich gesagt oder steht schon in der Warteschlange -> nicht noch einmal (Regie-Sätze ausgenommen)
+    if (kind !== 'operator' && kind !== 'chat' && (this.memory.recentlySaid(text) || this.queue.some(i => i.text === text))) return false
+    const item = { id: ++this.lineId, text, emotion: o.emotion || 'chill', priority: o.priority ?? 1, kind, at: Date.now(), ttl: o.ttl ?? 9000 }
     this.queue.push(item)
     this.queue.sort((a, b) => b.priority - a.priority || a.at - b.at)
+    // Ereignisse: höchstens 4 warten, Unwichtiges fliegt raus. Chat steht in this.chatQueue und ist davon nicht betroffen.
     while (this.queue.length > 4) this.queue.pop()
     return true
   }
 
+  /** Nächster Sprecher: dringende Ereignisse zuerst, sonst Chat und Ereignisse im Wechsel. */
   _tick () {
     const now = Date.now()
-    if (!this.speaking && now >= this.busyUntil) {
-      this.queue = this.queue.filter(i => now - i.at <= i.ttl)
-      const item = this.queue.shift()
-      if (item) this._speak(item)
-      else this._maybeMonologue(now)
+    if (this.speaking || now < this.busyUntil) return
+    this.queue = this.queue.filter(i => now - i.at <= i.ttl)
+    // Chat-Nachrichten verfallen erst nach 3 Minuten (vorher: 10 Sekunden)
+    this.chatQueue = this.chatQueue.filter(c => now - c.at <= 180000)
+    const urgent = this.queue.length && this.queue[0].priority >= 5
+    const chatTurn = this.chatQueue.length && (!this.queue.length || this.lastKind !== 'chat' || this.chatQueue.length >= 3)
+    if (!urgent && chatTurn) { this._speakChat(); return }
+    const item = this.queue.shift()
+    if (item) { this.lastKind = item.kind; this._speak(item) } else this._maybeMonologue(now)
+  }
+
+  /** Chat beantworten: einzeln (gern mit Sprachmodell) oder, wenn viel los ist, mehrere am Stück. */
+  async _speakChat () {
+    this.speaking = true
+    this.lastKind = 'chat'
+    let item = null
+    try {
+      const n = this.chatQueue.length >= 6 ? 4 : this.chatQueue.length >= 3 ? 3 : 1
+      const batch = this.chatQueue.splice(0, n)
+      let text
+      if (batch.length === 1) {
+        const c = batch[0]
+        text = c.out
+        const llm = this.deps.llm
+        if (c.llm && llm && llm.ready() && !this.status().fighting) {
+          const t = await llm.ask(c.llm()).catch(() => null)
+          if (t && !this.memory.recentlySaid(t)) text = t
+        }
+      } else {
+        const intro = this.line(L2.batch_intro, {}, { strict: true })
+        text = [intro, ...batch.map(c => c.out)].filter(Boolean).join(' ')
+      }
+      if (!text) return
+      item = { id: ++this.lineId, text, emotion: batch[batch.length - 1].emotion, priority: 2, kind: 'chat', at: Date.now(), ttl: 60000 }
+      if (!this.status().fighting && this.deps.onAddress) this.deps.onAddress()
+    } finally {
+      this.speaking = false
     }
+    if (item) await this._speak(item)
   }
 
   async _speak (item) {
     this.speaking = true
     this.lastSpoke = Date.now()
+    this.memory.record(item.text, item.kind)
     try {
       const dur = await this.deps.speak(item)
       this.busyUntil = Date.now() + (Number(dur) || this.estimate(item.text)) + 250
@@ -709,11 +794,34 @@ class StreamerBrain extends EventEmitter {
     else if (effect.tier >= 4 && before === 0) { text = this.line(L.gift_big, vars); emotion = 'panic' } else if (n >= 5) text = this.line(L.gift_many[kind], vars)
     else if (n >= 2) text = this.line(L.gift_repeat[kind], vars)
     else text = this.line(L.gift_first[kind], vars)
-    // Kleine Gifts im Dauerfeuer: nicht jedes einzelne kommentieren
-    const small = effect.tier <= 1
-    if (small && count < 2 && !this.cooldown('gift:' + m.id, n >= 5 ? 6000 : 3500) && n !== 5) return { memory: m, spoken: false }
+    // Pro Zuschauer höchstens eine Gift-Ansage alle 25 s (Bosse ausgenommen). Was in der Zwischenzeit
+    // kommt, wird gesammelt und danach EINMAL zusammengefasst ("Lukas legt noch 4 Rosen nach").
+    const now = Date.now()
+    if (effect.tier < 5 && m.giftSaidAt && now - m.giftSaidAt < 25000) {
+      const p = m.giftPending = m.giftPending && m.giftPending.id === gift.id ? m.giftPending : { id: gift.id, name: gift.name, count: 0, kind }
+      p.count += count
+      return { memory: m, spoken: false }
+    }
+    if (!text) return { memory: m, spoken: false }
+    m.giftSaidAt = now
+    m.giftPending = null
     this.say(text, { emotion, priority: 3 + Math.min(3, effect.tier), kind: 'gift', ttl: 14000 })
     return { memory: m, spoken: true }
+  }
+
+  /** Gesammelte Gifts eines Zuschauers nach Ablauf seiner Sperre einmal zusammenfassen. */
+  _flushGiftMore () {
+    const now = Date.now()
+    for (const m of this.viewerMemoryMap.values()) {
+      const p = m.giftPending
+      if (!p || now - m.giftSaidAt < 25000) continue
+      m.giftPending = null
+      if (p.count < 1) continue
+      m.giftSaidAt = now
+      const giftcount = `${numDe(p.count)} ${p.count > 1 ? GIFT_PLURAL[String(p.name).toLowerCase()] || 'mal ' + p.name : p.name}`
+      const t = this.line(L2.gift_more[p.kind] || L2.gift_more.mob, { user: m.name, giftcount }, { strict: true })
+      if (t) this.say(t, { emotion: 'hype', priority: 3, kind: 'gift', ttl: 20000 })
+    }
   }
 
   onFollow (viewer) {
@@ -791,11 +899,24 @@ class StreamerBrain extends EventEmitter {
     const fighting = !!s.fighting
     const vars = this.stateVars(m)
     const emotion = this.emotionForState()
+    const vid = viewer.uniqueId || viewer.nickname
+    // Exakt dieselbe Nachricht noch einmal (Spam)? Einmal kurz darauf hinweisen, sonst nichts.
+    const spam = this.memory.isRepeat(vid, text)
+    const known = this.memory.noteMessage(vid, m.name, text, this.sessionStart)
+    if (spam) {
+      if (this.cooldown('spam:' + m.id, 60000)) this._queueChat(this.line(L2.repeat_msg, vars), emotion)
+      return { intent: 'repeat', replied: false }
+    }
+    // Wiederkehrender Zuschauer (aus einem früheren Stream): einmal begrüßen und an seine letzte Nachricht erinnern
+    let prefix = ''
+    if (known.returning && m.chats === 1) {
+      const prev = known.notes.length ? quotable(known.notes[known.notes.length - 1].t) : null
+      prefix = this.line(prev ? L2.welcome_back : L2.welcome_back.slice(1), { ...vars, prev }) + ' '
+    }
+    // Jede Nachricht kommt in die Chat-Warteschlange und wird beantwortet (bei viel Betrieb gebündelt)
     const reply = (t, o = {}) => {
       if (!t) return false
-      const ok = this.say(t, { emotion, priority: o.priority ?? 2, kind: 'chat', ttl: o.ttl ?? 10000 })
-      if (ok && !fighting && this.deps.onAddress) this.deps.onAddress()
-      return ok
+      return this._queueChat(prefix + t, emotion, o.llm)
     }
     const lower = text.toLowerCase()
 
@@ -807,9 +928,12 @@ class StreamerBrain extends EventEmitter {
       if (!res.ok && res.reason === 'offline') reply(this.line(L.goal_offline, vars), { priority: 3 })
       else if (!res.ok && res.reason === 'cave_locked') reply(this.line(L.cave_locked, vars), { priority: 3 })
       else if (!res.ok && res.reason === 'no_loot') reply(this.line(L.corpse_run_none, vars), { priority: 3 })
+      else if (res.already && goal === 'surface') reply(this.line(L2.surface_already, vars))
       else if (res.already) reply(this.line(L.goal_already, { ...vars, label: res.label }), { priority: 3 })
       else if (res.ok && fighting) reply(this.line(L.goal_busy, vars), { priority: 3 })
-      else if (res.ok) reply(this.line(L.goal_ack[goal], vars), { priority: 4, ttl: 15000 })
+      else if (goal === 'surface') reply(this.line(res.already ? L2.surface_already : L2.surface_ack, vars))
+      else if (goal === 'village') reply(this.line(L2.village_start, vars))
+      else if (res.ok) reply(this.line(L.goal_ack[goal] || L.goal_ack.wood, vars), { priority: 4, ttl: 15000 })
       return { intent: 'goal', goal, replied: true }
     }
     // 2) Fragen zum Zustand
@@ -847,21 +971,31 @@ class StreamerBrain extends EventEmitter {
       // der Name steht schon im Vorspann – im Konter nicht noch einmal direkt am Anfang wiederholen
       out = pre.trimEnd() + ' ' + out
     }
-    // Wenn der Chat rast, bekommen einfache Nachrichten nicht jede eine Sprachantwort (verarbeitet sind sie trotzdem)
-    const low = intent === 'generic' || intent === 'laugh' || intent === 'greet'
-    if (low && (this.queue.length >= 2 || !this.cooldown('chat:low', fighting ? 9000 : 3500))) return { intent, replied: false }
-    if (!this.cooldown(`chat:${m.id}:${intent}`, 12000)) return { intent, replied: false }
-    // Sprachmodell: formuliert die Antwort frei. Kommt nichts Brauchbares zurück (zu langsam, Budget, Fehler),
-    // spricht er den Textbaustein. Im Kampf bleibt es bei den schnellen Bausteinen.
+    // Sprachmodell: formuliert die Antwort frei, sobald die Nachricht an der Reihe ist. Kommt nichts
+    // Brauchbares zurück (zu langsam, Budget, Fehler), spricht er den Textbaustein.
     const llm = this.deps.llm
-    if (llm && !fighting && llm.ready()) {
-      const state = this.llmState(s, vars)
-      const who = `${m.chats}. Nachricht in diesem Stream, ${m.totalGifts || 0} Gifts geschickt`
-      llm.ask(llm.chatTask({ name: m.name, msg: quotable(text), state, viewer: who }))
-        .then(t => reply(t || out, { priority: low ? 1 : 2 }), () => reply(out, { priority: low ? 1 : 2 }))
-      return { intent, replied: true, llm: true }
+    let llmTask = null
+    if (llm) {
+      const msg = quotable(text)
+      const history = known.notes.slice(-3).map(n => quotable(n.t)).filter(Boolean)
+      llmTask = () => {
+        const who = `${m.chats}. Nachricht in diesem Stream, ${m.totalGifts || 0} Gifts geschickt` +
+          (known.returning ? ', war schon in früheren Streams da' : '') +
+          (history.length ? `. Frühere Nachrichten von ${m.name}: ${history.join(' | ')}` : '')
+        const said = this.memory.recent(8)
+        return llm.chatTask({ name: m.name, msg, state: this.llmState(this.status(), this.stateVars(m)), viewer: who }) +
+          (said.length ? `\nDAS HAST DU ZULETZT GESAGT (nichts davon wiederholen, auch nicht sinngemäß):\n- ${said.join('\n- ')}` : '')
+      }
     }
-    return { intent, replied: reply(out, { priority: low ? 1 : 2 }) }
+    return { intent, replied: reply(out, { llm: llmTask }), llm: !!llmTask }
+  }
+
+  _queueChat (text, emotion, llm = null) {
+    if (!text) return false
+    this.chatQueue.push({ out: text, emotion: emotion || 'chill', at: Date.now(), llm })
+    // Sicherheitsgrenze bei extremem Ansturm: älteste Nachrichten werden dann gebündelt statt verworfen
+    if (this.chatQueue.length > 40) this.chatQueue.splice(0, this.chatQueue.length - 40)
+    return true
   }
 
   /** Spielstand als kurzer Text für das Sprachmodell. */
@@ -887,7 +1021,8 @@ class StreamerBrain extends EventEmitter {
     const say = (pool, vars, o = {}) => {
       const key = o.key || type
       if (!this.cooldown('ev:' + key, o.cd ?? 25000)) return
-      this.say(this.line(pool, { ...v, ...vars }), { emotion: o.emotion || 'chill', priority: o.priority ?? 1, kind: 'event', ttl: o.ttl })
+      const text = this.line(pool, { ...v, ...vars }, { strict: true })
+      if (text) this.say(text, { emotion: o.emotion || 'chill', priority: o.priority ?? 1, kind: 'event', ttl: o.ttl })
     }
     switch (type) {
       case 'plan':
@@ -937,7 +1072,13 @@ class StreamerBrain extends EventEmitter {
       case 'sleep_failed': return say(L.sleep_failed, d, { cd: 120000 })
       case 'wake': return say(L.wake, d, { cd: 120000 })
       case 'bed_crafted': return say(L.bed_crafted, d, { emotion: 'hype', priority: 2 })
-      case 'corpse_run_start': return say(L.corpse_run_start, d, { emotion: 'panic', priority: 6, cd: 3000, ttl: 20000 })
+      // nur beim ERSTEN Aufbruch nach einem Tod; ein fortgesetzter Lauf wird nicht noch einmal angesagt
+      case 'corpse_run_start': if (d.resumed) return; return say(L.corpse_run_start, d, { emotion: 'panic', priority: 5, key: 'death', cd: 30000, ttl: 15000 })
+      case 'corpse_skip': return say(L2.corpse_skip, d, { key: 'death_skip', cd: 30000, priority: 3 })
+      case 'village_progress': return say(L2.village_progress, d, { cd: 45000 })
+      case 'village_found': return say(L2.village_found, d, { emotion: 'hype', priority: 4, cd: 60000 })
+      case 'village_arrived': return say(L2.village_arrived, d, { emotion: 'hype', priority: 3, cd: 60000 })
+      case 'village_failed': return say(L2.village_failed, d, { priority: 3, cd: 60000 })
       case 'corpse_run_done': return say(d.ok ? L.corpse_run_done.ok : L.corpse_run_done.fail, d, { emotion: d.ok ? 'hype' : 'chill', priority: 4, cd: 3000, ttl: 20000 })
       case 'corpse_run_none': return say(L.corpse_run_none, d, { cd: 15000 })
       case 'camera': if (d.mode === 'third' && d.auto) say(L.camera.third, d, { cd: 180000 }); return
@@ -964,7 +1105,8 @@ class StreamerBrain extends EventEmitter {
       case 'low_hp': return say(L.low_hp, d, { emotion: 'panic', priority: 4, key: 'low_hp', cd: 25000 })
       case 'critical_hp': return say(L.critical_hp, d, { emotion: 'panic', priority: 4, key: 'low_hp', cd: 25000 })
       case 'ate': return d.underPressure ? say(L.ate_pressure, d, { emotion: 'hype', priority: 2 }) : say(L.ate, { item_de: itemDe(d.item) }, { cd: 90000 })
-      case 'death': this.queue = []; return say(L.death, d, { emotion: 'panic', priority: 6, cd: 3000, ttl: 20000 })
+      // gleicher Schlüssel wie der Loot-Lauf: Tod + Aufbruch ergeben EINE Ansage, nicht zwei
+      case 'death': this.queue = this.queue.filter(i => i.kind === 'operator'); return say(L.death, d, { emotion: 'panic', priority: 6, key: 'death', cd: 30000, ttl: 20000 })
       case 'stuck': return say(d.depth > 1 ? L.stuck.hole : L.stuck.other, d, { cd: 30000, emotion: 'hype' })
       case 'night': return say(L.night, d, { cd: 300000 })
       case 'day': return say(L.day, d, { cd: 300000 })
@@ -1021,19 +1163,19 @@ class StreamerBrain extends EventEmitter {
 
   // ---------------------------------------------------------------- Idle-Monologe
   _maybeMonologue (now) {
-    if (now - this.lastExternal < 12000 || now - this.lastSpoke < 9000) return
+    if (this.chatQueue.length || now - this.lastExternal < 12000 || now - this.lastSpoke < 9000) return
     const s = this.status()
     if (!s.connected || s.fighting) return
     if (!this.cooldown('monologue', 14000)) return
     const pool = Math.random() < 0.25 ? L.idle.generic : (L.idle[s.activity] || L.idle.generic)
-    const fallback = this.line(pool, this.stateVars())
+    const fallback = this.line(pool, this.stateVars(), { strict: true })
     const llm = this.deps.llm
     // jeder zweite Leerlauf-Spruch kommt frisch vom Sprachmodell (wenn es an ist)
     if (llm && llm.config.monologues && Math.random() < 0.5 && llm.ready()) {
       llm.ask(llm.idleTask({ state: this.llmState(s, this.stateVars()) })).then(t => { if (t && now - this.lastExternal >= 0) this.say(t, { emotion: 'chill', priority: 0, kind: 'monologue', ttl: 8000 }) }, () => {})
       return
     }
-    this.say(fallback, { emotion: 'chill', priority: 0, kind: 'monologue', ttl: 6000 })
+    if (fallback) this.say(fallback, { emotion: 'chill', priority: 0, kind: 'monologue', ttl: 6000 })
   }
 
   /** Operator-Sprachzeile (Dashboard/Handy). */
