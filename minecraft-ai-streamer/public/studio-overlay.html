@@ -61,8 +61,8 @@ body.designer #dz { display: flex; }
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
   background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 4px);
 }
-#camGlow { position: absolute; inset: 0; z-index: 1; background: radial-gradient(120% 80% at 50% 112%, var(--glow, rgba(70, 224, 255, .3)), transparent 62%); transition: background .3s; }
-#camRays { position: absolute; inset: -40%; z-index: 1; opacity: 0; background: repeating-conic-gradient(from 0deg at 50% 62%, rgba(255, 255, 255, .11) 0 7deg, transparent 7deg 18deg); animation: rays 9s linear infinite; transition: opacity .3s; }
+#camGlow { position: absolute; inset: 0; z-index: 3; pointer-events: none; mix-blend-mode: screen; opacity: .55; background: radial-gradient(120% 80% at 50% 112%, var(--glow, rgba(70, 224, 255, .3)), transparent 62%); transition: background .3s; }
+#camRays { position: absolute; inset: -40%; z-index: 3; pointer-events: none; mix-blend-mode: screen; opacity: 0; background: repeating-conic-gradient(from 0deg at 50% 62%, rgba(255, 255, 255, .11) 0 7deg, transparent 7deg 18deg); animation: rays 9s linear infinite; transition: opacity .3s; }
 @keyframes rays { to { transform: rotate(360deg); } }
 #skin { position: absolute; inset: 0; width: 100% !important; height: 100% !important; z-index: 2; transition: filter .4s; }
 #camFlash { position: absolute; inset: 0; z-index: 4; background: radial-gradient(circle, rgba(255, 60, 80, .15), rgba(255, 30, 60, .7)); opacity: 0; pointer-events: none; }
@@ -124,7 +124,7 @@ body.designer #dz { display: flex; }
 
 /* ---------- Untertitel ---------- */
 #subs { width: 760px; min-height: 112px; display: flex; align-items: flex-start; }
-#stage.f916 #subs { width: 640px; min-height: 190px; align-items: flex-end; justify-content: flex-end; }
+#stage.f916 #subs { width: 572px; min-height: 190px; align-items: flex-end; justify-content: flex-end; }
 #stage.f916 #subBox { font-size: 31px; border-radius: 22px 22px 6px 22px; border-width: 2px; }
 #subBox { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 16px; padding: 14px 20px; font-size: 30px; line-height: 1.28; font-weight: 800; letter-spacing: .005em; text-shadow: 0 2px 4px rgba(0, 0, 0, .9); backdrop-filter: blur(8px); opacity: 0; transform: translateY(8px); transition: opacity .18s, transform .18s; max-width: 100%; }
 #subBox.on { opacity: 1; transform: none; }
@@ -338,7 +338,7 @@ const DEFAULTS = {
   '16:9': { likes: { x: 680, y: 960, s: 1 }, alerts: { x: 580, y: 34, s: 1 }, hud: { x: 36, y: 36, s: 1 }, legend: { x: 1584, y: 250, s: 1 }, cam: { x: 36, y: 460, s: 1 }, subs: { x: 36, y: 932, s: 1 } },
   // 9:16 (TikTok LIVE): oben 230 px frei für Profil/Zuschauerzahl, unten links frei für den Chat,
   // ganz unten frei für die Bedienleiste. Gift-Leiste oben, Facecam rechts über dem Herz-Knopf.
-  '9:16': { legend: { x: 30, y: 236, s: 1 }, likes: { x: 30, y: 608, s: 1 }, alerts: { x: 30, y: 740, s: 1 }, hud: { x: 746, y: 744, s: 0.92 }, subs: { x: 30, y: 1030, s: 1 }, cam: { x: 690, y: 1040, s: 1 } },
+  '9:16': { legend: { x: 30, y: 236, s: 1 }, likes: { x: 30, y: 608, s: 1 }, alerts: { x: 30, y: 740, s: 1 }, hud: { x: 746, y: 744, s: 0.92 }, subs: { x: 30, y: 1040, s: 1 }, cam: { x: 618, y: 960, s: 1.2 } },
   // Split: linke Spalte Streamer, rechte Spalte Gifts, Mitte komplett frei
   custom: { likes: { x: 680, y: 30, s: 1 }, alerts: { x: 580, y: 880, s: 0.9 }, hud: { x: 36, y: 30, s: 1 }, legend: { x: 1580, y: 30, s: 1.05 }, cam: { x: 36, y: 180, s: 1.1 }, subs: { x: 36, y: 700, s: 0.78 } }
 }
@@ -461,9 +461,6 @@ function drawSkin () {
   R(40, 16, 16, 16, hood); R(40, 29, 16, 3, skin); R(32, 48, 16, 16, hood); R(32, 61, 16, 3, skin)
   // Beine
   R(0, 16, 16, 16, pants); R(0, 29, 16, 3, shoe); R(16, 48, 16, 16, pants); R(16, 61, 16, 3, shoe)
-  // Headset (zweite Kopfschicht)
-  R(40, 3, 8, 2, '#10151f'); R(32, 10, 8, 4, '#10151f'); R(34, 11, 4, 2, '#46e0ff'); R(48, 10, 8, 4, '#10151f'); R(50, 11, 4, 2, '#46e0ff')
-  R(40, 14, 1, 1, '#10151f'); R(41, 15, 2, 1, '#10151f') // Mikrofon-Arm
   return c
 }
 
@@ -475,17 +472,109 @@ function initCam () {
   viewer.animation = null
   viewer.controls.enableRotate = false; viewer.controls.enableZoom = false; viewer.controls.enablePan = false
   viewer.fov = 30
-  viewer.camera.position.set(-9, 15, 74)
-  viewer.controls.target.set(0, 10.5, 0)
+  viewer.camera.position.set(-12, 24, 90)
+  viewer.controls.target.set(0, 13.5, 0)
   viewer.controls.update()
   viewer.globalLight.intensity = 2.6
   viewer.cameraLight.intensity = 1.1
   rig = viewer.playerObject.skin
+  try { buildRoom() } catch (e) { console.warn('Gaming-Zimmer konnte nicht gebaut werden:', e) }
   const tryCustom = new Image()
   tryCustom.onload = () => { if (tryCustom.width >= 64) { viewer.loadSkin(tryCustom); setTimeout(grabFace, 60) } }
   tryCustom.src = 'skin.png' // optional: eigener Skin in /public/skin.png
   grabFace()
 }
+/* ---------------------------------------------------------------- Gaming-Zimmer: Schreibtisch, Tastatur, Stuhl, Headset, Neon-Schild */
+const room = { sign: null, signMat: null, kbCanvas: null, kbTex: null, kbAt: 0, strips: [] }
+const SIGN_TEXT = 'S E M I R O'
+function buildRoom () {
+  // three.js steckt im skinview3d-Bundle; die Klassen holen wir uns von den vorhandenen Objekten
+  let sample = null
+  rig.head.traverse(o => { if (!sample && o.isMesh) sample = o })
+  const Mesh = sample.constructor; const Box = sample.geometry.constructor; const Mat = sample.material.constructor
+  const Group = Object.getPrototypeOf(rig.head.constructor)
+  const Tex = viewer.skinTexture.constructor
+  const box = (w, h, d, color, x, y, z, o = {}) => { const m = new Mesh(new Box(w, h, d), new Mat({ color, roughness: 0.75, metalness: 0.15, ...o })); m.position.set(x, y, z); return m }
+  const glow = (w, h, d, color, x, y, z, k = 1.6) => box(w, h, d, 0x000000, x, y, z, { emissive: color, emissiveIntensity: k })
+  const scene = new Group()
+  viewer.scene.add(scene)
+
+  // --- Rückwand mit LED-Streifen
+  scene.add(box(90, 80, 1, 0x141d3a, 0, 18, -17, { roughness: 1 }))
+  for (const [x, col] of [[-21, 0x46e0ff], [21, 0xb14cff]]) { const st = glow(0.8, 60, 0.6, col, x, 14, -16.2, 1.4); scene.add(st); room.strips.push(st.material) }
+  for (let i = 0; i < 6; i++) scene.add(box(5.4, 5.4, 0.5, i % 2 ? 0x1b2750 : 0x222f5e, -13.5 + (i % 3) * 5.8 + (i > 2 ? 21 : 0) - (i > 2 ? 17.4 : 0), 6 + Math.floor(i / 3) * 5.8, -16.3)) // Akustik-Panels
+
+  // --- Neon-Schild "S E M I R O"
+  const sc = document.createElement('canvas'); sc.width = 1024; sc.height = 256
+  const g = sc.getContext('2d')
+  const grad = g.createLinearGradient(80, 0, 944, 0); grad.addColorStop(0, '#3ff0ff'); grad.addColorStop(0.5, '#9d7bff'); grad.addColorStop(1, '#e24dff')
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = "700 150px 'Chakra Petch', 'Arial Black', Arial, sans-serif"
+  for (const [blur, alpha] of [[60, 0.9], [28, 1], [10, 1]]) { g.shadowColor = '#7b5cff'; g.shadowBlur = blur; g.globalAlpha = alpha; g.fillStyle = grad; g.fillText(SIGN_TEXT, 512, 132, 940) }
+  g.shadowBlur = 0; g.globalAlpha = 1; g.fillStyle = '#f4fbff'; g.fillText(SIGN_TEXT, 512, 132, 940) // heller Röhrenkern
+  g.globalAlpha = 0.55; g.lineWidth = 5; g.strokeStyle = grad; g.strokeText(SIGN_TEXT, 512, 132, 940); g.globalAlpha = 1
+  const signTex = new Tex(sc)
+  room.signMat = new Mat({ color: 0x000000, emissive: 0xffffff, emissiveMap: signTex, emissiveIntensity: 1.5, transparent: true, alphaMap: null, map: signTex, roughness: 1 })
+  room.sign = new Mesh(new Box(30, 7.5, 0.1), room.signMat); room.sign.position.set(0.6, 33.2, -15.4)
+  scene.add(box(31.5, 8.6, 0.4, 0x070a14, 0.6, 33.2, -15.9, { roughness: 1 })) // Trägerplatte
+  scene.add(room.sign)
+
+  // --- Gaming-Stuhl (Rückenlehne mit Flügeln und Kopfstütze)
+  const chair = new Group(); chair.position.set(0, 0, -4.2)
+  chair.add(box(13, 20, 2, 0x1b1e2b, 0, 10, 0))
+  for (const sx of [-1, 1]) {
+    chair.add(box(3, 16, 3, 0x232738, sx * 7.6, 11, 0.6)) // Seitenflügel
+    chair.add(glow(0.8, 16, 0.4, sx < 0 ? 0x46e0ff : 0xb14cff, sx * 8.2, 11, 2.2, 1.3))
+    chair.add(box(3.4, 3, 3.2, 0x232738, sx * 6.2, 20.2, 0.6)) // Schulterstützen
+  }
+  chair.add(box(9, 5, 2.6, 0x232738, 0, 22.6, 0.2)); chair.add(glow(6, 0.7, 0.4, 0x46e0ff, 0, 24.2, 1.6, 1.3)) // Kopfstütze
+  scene.add(chair)
+
+  // --- Schreibtisch mit RGB-Kante, Tastatur, Maus und Mauspad
+  const deskY = 5.4
+  scene.add(box(46, 1.2, 16, 0x222636, 0, deskY, 11, { roughness: 0.5 }))
+  scene.add(box(46, 14, 0.8, 0x171a26, 0, deskY - 7.6, 18.6))
+  const edge = glow(46, 0.4, 0.4, 0x46e0ff, 0, deskY + 0.2, 19.1, 1.5); scene.add(edge); room.strips.push(edge.material)
+  scene.add(box(32, 0.15, 10, 0x0c0e15, 1.5, deskY + 0.68, 11.5, { roughness: 1 })) // Deskmat
+  room.kbCanvas = document.createElement('canvas'); room.kbCanvas.width = 120; room.kbCanvas.height = 40
+  room.kbTex = new Tex(room.kbCanvas); room.kbTex.magFilter = viewer.skinTexture.magFilter
+  paintKeyboard(0)
+  const kb = new Mesh(new Box(14, 0.7, 4.8), [0, 1, 3, 4, 5].map(() => new Mat({ color: 0x0d0f16, roughness: 0.6 })))
+  kb.material.splice(2, 0, new Mat({ color: 0x000000, emissive: 0xffffff, emissiveMap: room.kbTex, emissiveIntensity: 1.25 })) // Oberseite leuchtet
+  kb.position.set(-0.4, deskY + 1.05, 11.4); kb.rotation.x = 0.07
+  scene.add(kb)
+  scene.add(box(1.8, 0.9, 2.8, 0x0d0f16, 11.2, deskY + 1.1, 11.4)); scene.add(glow(0.5, 0.2, 1.2, 0xb14cff, 11.2, deskY + 1.6, 11.9, 1.6)) // Maus
+  scene.add(box(2.4, 3.2, 2.4, 0x1c2030, -15.5, deskY + 2.2, 9)); scene.add(glow(2.5, 0.5, 2.5, 0x9dff6a, -15.5, deskY + 3.9, 9, 1.1)) // Energy-Dose
+  // Bildschirmlicht von vorne unten (kaltes Blau im Gesicht)
+  viewer.globalLight.intensity = 2.2; viewer.cameraLight.intensity = 1.4
+
+  // --- Headset am Kopf (Bügel, zwei Ohrmuscheln mit Leuchtring, Mikro)
+  const hs = new Group()
+  hs.add(box(9.6, 1.1, 2.2, 0x10131c, 0, 8.55, 0)); hs.add(box(8.2, 0.5, 1.6, 0x46e0ff, 0, 8.05, 0, { emissive: 0x46e0ff, emissiveIntensity: 0.5 }))
+  for (const sx of [-1, 1]) {
+    hs.add(box(1.5, 3.4, 1.4, 0x10131c, sx * 4.75, 6.6, 0))
+    hs.add(box(1.7, 4.6, 4.6, 0x10131c, sx * 4.85, 3.9, 0))
+    hs.add(glow(0.3, 3, 3, sx < 0 ? 0x46e0ff : 0xb14cff, sx * 5.75, 3.9, 0, 1.6))
+  }
+  const mic = box(0.5, 0.5, 4.8, 0x10131c, -4.9, 2.2, 2.6); mic.rotation.x = 0.18; hs.add(mic)
+  hs.add(box(1.5, 0.5, 0.5, 0x10131c, -4.2, 1.72, 4.9)); hs.add(box(1.1, 1.1, 1.1, 0x23283a, -3.2, 1.72, 4.9)); hs.add(glow(0.4, 0.4, 0.2, 0xff4d5e, -3.2, 1.72, 5.5, 2))
+  rig.head.add(hs)
+  rig.leftLeg.visible = rig.rightLeg.visible = false // sitzt: die Beine verschwinden unter dem Tisch
+  room.headset = hs
+}
+/** Tastenbeleuchtung: RGB-Welle, einzelne Tasten blitzen beim Tippen auf. */
+function paintKeyboard (t, hits = 0) {
+  const c = room.kbCanvas; const g = c.getContext('2d')
+  g.fillStyle = '#05060a'; g.fillRect(0, 0, c.width, c.height)
+  for (let r = 0; r < 5; r++) {
+    for (let k = 0; k < 15; k++) {
+      const hot = hits && Math.random() < hits
+      g.fillStyle = hot ? '#ffffff' : `hsl(${(k * 14 + r * 20 + t * 60) % 360} 95% ${52 + 10 * Math.sin(t * 2 + k)}%)`
+      g.fillRect(2 + k * 7.8, 2 + r * 7.4, r === 4 && k > 3 && k < 10 ? 7.8 : 5.6, 5.2)
+    }
+  }
+  room.kbTex.needsUpdate = true
+}
+
 function grabFace () {
   try { faceBase = viewer.skinCanvas.getContext('2d').getImageData(FACE.x, FACE.y, 8, 8); lastMouth = -1 } catch (_) { faceBase = null }
 }
@@ -652,7 +741,9 @@ function setPose (p) {
 }
 const track = { yaw: 0, pitch: 0, block: 0, walk: 0, air: 0 }
 // weiche Überblendung zwischen den Ausdrücken (0..1)
-const W = { angry: 0, furious: 0, scared: 0, sad: 0, happy: 0, sleep: 0, work: 0, eat: 0 }
+const W = { angry: 0, furious: 0, scared: 0, sad: 0, happy: 0, sleep: 0, work: 0, eat: 0, type: 1, cam: 0, mouse: 0 }
+const desk = { camUntil: 0, mouseAt: performance.now() + 5000, mouseUntil: 0, typeSpeed: 1 }
+let typePhase = 0
 let lastChroma = 0; let lastFx = 0; let lastFrame = performance.now(); let expr = 'neutral'; let walkPhase = 0
 const anim = { swing: 0, hurt: 0, startle: 0, pump: 0, facepalm: 0, cheer: 0, blinkAt: performance.now() + 2500, blinkUntil: 0, lookX: 0, lookY: 0, lookT: 0, tx: 0, ty: 0 }
 const meterBars = [...$('meter').children]
@@ -692,9 +783,19 @@ function frame (now) {
   // Überblendgewichte
   const tgt = { angry: ex === 'angry' || ex === 'furious' ? 1 : 0, furious: ex === 'furious' ? 1 : 0, scared: ex === 'scared' ? 1 : 0, sad: ex === 'sad' ? 1 : 0, happy: ex === 'happy' ? 1 : 0, sleep: ex === 'sleep' ? 1 : 0, work: 0, eat: 0 }
   const calm = ex === 'neutral' && !speech.active && !bot.fighting
-  if (calm && ['mine', 'wood', 'build', 'craft', 'portal'].includes(bot.activity)) tgt.work = 1
   if (calm && bot.activity === 'eat') tgt.eat = 1
-  for (const k in W) W[k] += (tgt[k] - W[k]) * Math.min(1, dt * 7)
+  // Am Schreibtisch: tippt praktisch immer – außer wenn die Arme gerade etwas anderes ausdrücken
+  tgt.type = 1 - Math.max(tgt.furious, tgt.scared, tgt.sad, tgt.happy, tgt.sleep, tgt.eat)
+  tgt.cam = now < desk.camUntil ? 1 : 0 // Konter an den Chat: Blick hoch in die Kamera
+  if (now > desk.mouseAt) { desk.mouseUntil = now + 900 + Math.random() * 900; desk.mouseAt = now + 4500 + Math.random() * 6000 }
+  tgt.mouse = now < desk.mouseUntil ? 1 : 0
+  // Tipp-Tempo: beim Reden und Kämpfen schneller, wütend hämmert er in die Tasten
+  desk.typeSpeed += ((1 + (speech.active ? 0.35 : 0) + (bot.fighting ? 0.6 : 0) + tgt.angry * 0.8) - desk.typeSpeed) * 0.1
+  for (const k in W) W[k] += (tgt[k] - W[k]) * Math.min(1, dt * (k === 'cam' ? 14 : 7))
+  typePhase += dt * 21 * desk.typeSpeed
+  if (room.kbTex && now - room.kbAt > 110) { room.kbAt = now; paintKeyboard(t, W.type * 0.12 * desk.typeSpeed) }
+  if (room.signMat) room.signMat.emissiveIntensity = 1.45 + Math.sin(t * 2.1) * 0.12 - (Math.sin(t * 0.83) > 0.992 ? 0.9 : 0) // Neon flackert selten kurz
+  for (const [i, m] of room.strips.entries()) m.emissiveIntensity = 1.3 + Math.sin(t * 1.4 + i * 2) * 0.35 + lv * 0.8
   // Blinzeln + Gesicht
   if (now > anim.blinkAt) { anim.blinkUntil = now + 120; anim.blinkAt = now + 2200 + Math.random() * 3500 }
   paintFace(lv < 0.08 ? 0 : lv < 0.3 ? 1 : lv < 0.58 ? 2 : 3, now < anim.blinkUntil, ex)
@@ -715,8 +816,8 @@ function frame (now) {
   const walk = track.walk * (1 - W.sleep)
 
   // ---- Kopf
-  let hx = anim.lookY * (1 - live) - track.pitch * 0.75 - lv * 0.2 * energy + S(t * 1.3) * 0.02 - startle * 0.35
-  let hy = anim.lookX * (1 - live) + track.yaw * 0.8 + S(t * 0.7) * 0.04 + (speech.active ? S(t * 5.1) * 0.035 * energy * lv : 0)
+  let hx = anim.lookY * (1 - live) - track.pitch * 0.25 - lv * 0.2 * energy + S(t * 1.3) * 0.02 - startle * 0.35
+  let hy = anim.lookX * (1 - live) + track.yaw * 0.3 + S(t * 0.7) * 0.04 + (speech.active ? S(t * 5.1) * 0.035 * energy * lv : 0)
   let hz = S(t * 0.9) * 0.02 + (speech.active ? S(t * 3.3) * 0.04 * lv : 0)
   hy += W.angry * S(t * (9 + W.furious * 8)) * (0.1 + W.furious * 0.16) // wütendes Kopfschütteln
   hx += W.angry * 0.16 // Kinn runter, von unten anfunkeln
@@ -724,7 +825,12 @@ function frame (now) {
   hx += W.sad * 0.55; hz += W.sad * S(t * 1.2) * 0.06 // Kopf hängt
   hz += W.happy * S(t * 6) * 0.12; hx -= W.happy * 0.12
   hx += W.sleep * (0.42 + S(t * 1.1) * 0.05); hz += W.sleep * 0.3
-  hx += W.work * (0.18 + S(t * 6.5) * 0.05) + W.eat * 0.12
+  hx += W.eat * 0.12
+  // Blick auf den Monitor (leicht nach unten, Augen wandern über den Bildschirm) – beim Konter schnappt der Kopf hoch zur Kamera
+  const mon = W.type * (1 - W.cam)
+  hx += mon * (0.2 + S(t * 0.9) * 0.03) - W.cam * 0.1
+  hy = hy * (1 - W.cam * 0.85) + mon * S(t * 0.47) * 0.1 + W.cam * 0.14 // Kamera steht leicht links
+  hz += W.cam * 0.07
   rig.head.rotation.set(hx, hy, hz)
 
   // ---- Arme (Grundhaltung + Gestik beim Sprechen + Laufen)
@@ -733,8 +839,6 @@ function frame (now) {
   let rz = -0.06 - gest * 0.16; let lz = 0.06 + gest * 0.2
   const mix = (cur, target, w) => cur + (target - cur) * w
   // sauer: Fäuste ballen und schütteln; richtig wütend: beide Fäuste über dem Kopf
-  rx = mix(rx, -1.25 + S(t * 24) * 0.12, W.angry * (1 - W.furious)); rz = mix(rz, -0.25, W.angry * (1 - W.furious))
-  lx = mix(lx, -0.5 + S(t * 24 + 1) * 0.08, W.angry * (1 - W.furious)); lz = mix(lz, 0.3, W.angry * (1 - W.furious))
   rx = mix(rx, -2.75 + S(t * 19) * 0.3, W.furious); rz = mix(rz, -0.35 + S(t * 19) * 0.1, W.furious)
   lx = mix(lx, -2.75 + S(t * 19 + 1.6) * 0.3, W.furious); lz = mix(lz, 0.35 - S(t * 19 + 1.6) * 0.1, W.furious)
   // Panik: Hände schützend vors Gesicht
@@ -745,8 +849,13 @@ function frame (now) {
   // Freude: Arme hoch und winken
   rx = mix(rx, -2.9 + S(t * 9) * 0.2, W.happy); rz = mix(rz, -0.45 + S(t * 9) * 0.25, W.happy)
   lx = mix(lx, -2.9 + S(t * 9 + 1) * 0.2, W.happy * 0.8); lz = mix(lz, 0.45 - S(t * 9 + 1) * 0.25, W.happy * 0.8)
-  // Arbeiten (Hacken/Bauen) und Essen in ruhigen Momenten
-  rx = mix(rx, -1.35 + S(t * 6.5) * 0.75, W.work); rz = mix(rz, -0.12, W.work)
+  // Tippen: beide Hände auf der Tastatur, Finger hämmern abwechselnd, die Hände wandern über die Tasten
+  const hit = 0.07 + W.angry * 0.12
+  rx = mix(rx, -1.2 + Math.abs(S(typePhase)) * hit - gest * 0.12, W.type); rz = mix(rz, 0.03 + S(t * 2.3) * 0.06, W.type)
+  lx = mix(lx, -1.2 + Math.abs(S(typePhase + 1.9)) * hit - gest * 0.1, W.type); lz = mix(lz, -0.03 + S(t * 1.9 + 1) * 0.06, W.type)
+  // zwischendurch greift die rechte Hand zur Maus
+  rx = mix(rx, -1.18 + S(t * 7) * 0.03, W.mouse * W.type); rz = mix(rz, -0.42 + S(t * 5) * 0.05, W.mouse * W.type)
+  // Essen in ruhigen Momenten
   rx = mix(rx, -1.95 + S(t * 9) * 0.12, W.eat); rz = mix(rz, 0.42, W.eat)
   rx = mix(rx, 0.1, W.sleep); lx = mix(lx, 0.1, W.sleep)
   // Schwertschlag: Arm holt aus und schlägt durch
@@ -764,19 +873,19 @@ function frame (now) {
 
   // ---- Beine: Laufen, Stampfen, Springen
   const stomp = W.furious * Math.max(0, S(t * 13))
-  rig.rightLeg.rotation.x = -S(walkPhase) * 0.7 * walk - stomp * 0.9 - track.air * 0.5 + W.scared * S(t * 30) * 0.06
-  rig.leftLeg.rotation.x = S(walkPhase) * 0.7 * walk - W.furious * Math.max(0, S(t * 13 + Math.PI)) * 0.9 + track.air * 0.35 - W.scared * S(t * 30) * 0.06
+  rig.rightLeg.rotation.x = -1.45 + stomp * 0.5 + W.scared * S(t * 30) * 0.06
+  rig.leftLeg.rotation.x = -1.45 + W.furious * Math.max(0, S(t * 13 + Math.PI)) * 0.5 - W.scared * S(t * 30) * 0.06
   rig.rightLeg.rotation.z = W.happy * 0.12; rig.leftLeg.rotation.z = -W.happy * 0.12
 
   // ---- Oberkörper und ganzer Körper
-  rig.body.rotation.y = S(t * 0.6) * 0.03 + anim.lookX * 0.25 + bodyTwist + S(walkPhase) * 0.08 * walk
-  rig.body.rotation.x = W.work * S(t * 6.5) * 0.06
+  rig.body.rotation.y = S(t * 0.6) * 0.03 + anim.lookX * 0.15 + bodyTwist
+  rig.body.rotation.x = 0
   const po = viewer.playerObject
-  const hop = W.happy * Math.abs(S(t * 7.5)) * 2.2 + W.furious * Math.abs(S(t * 13)) * 0.9 + track.air * 1.6
-  po.position.y = BASE_Y + S(t * 1.8) * 0.08 * (1 + W.sleep * 2) + gest * 0.12 - startle * 0.5 + hop + Math.abs(S(walkPhase)) * 0.35 * walk - W.sad * 0.9 - W.scared * 0.5
+  const hop = W.happy * Math.abs(S(t * 7.5)) * 1.1 + W.furious * Math.abs(S(t * 13)) * 0.8 // hüpft im Stuhl
+  po.position.y = BASE_Y + S(t * 1.8) * 0.08 * (1 + W.sleep * 2) + gest * 0.12 - startle * 0.5 + hop + W.type * Math.abs(S(typePhase * 0.5)) * 0.05 - W.sad * 0.9 - W.scared * 0.5
   po.position.x = W.scared * S(t * 41) * 0.22 + W.furious * S(t * 33) * 0.25
-  po.rotation.x = W.angry * 0.16 - W.scared * 0.14 + W.sad * 0.2 + W.sleep * 0.1 + walk * 0.06
-  po.rotation.y = track.yaw * 0.25 + pose.turn * live * 0.5 + W.angry * S(t * 5) * 0.08
+  po.rotation.x = 0.07 * W.type + W.angry * 0.1 - W.scared * 0.14 + W.sad * 0.2 + W.sleep * 0.1 - W.cam * 0.05
+  po.rotation.y = track.yaw * 0.12 + W.angry * S(t * 5) * 0.05
   po.rotation.z = W.sleep * 0.08 + W.sad * S(t * 0.9) * 0.03
 }
 function swing () { anim.swing = performance.now() + 320 }
@@ -1027,7 +1136,7 @@ function onMessage (m) {
     case 'GIFT_ALERT': giftAlert(m); break
     case 'LIKES': setLikes(m); break
     case 'LIKE_GOAL': likeGoal(m); break
-    case 'TTS': playTTS(m); break
+    case 'TTS': playTTS(m); if (m.kind === 'chat' || m.kind === 'gift' || m.kind === 'like') desk.camUntil = performance.now() + Math.min(m.durationMs || 3000, m.kind === 'chat' ? 9000 : 2600); break
     case 'STATUS': setStatus(m.status); break
     case 'POSE': setPose(m.pose); break
     case 'LAYOUT': if (!document.body.classList.contains('designer') || m.reset) setLayout(m.layout); break
@@ -1100,7 +1209,7 @@ function demo () {
   setInterval(() => { const t = Date.now() / 1000; onMessage({ type: 'POSE', pose: { moveYaw: Math.sin(t / 3) * 2, yaw: Math.sin(t / 3) * 2 + (Math.sin(t / 2.3) > 0.8 ? 0.9 : 0), pitch: st.activity === 'mine' ? -0.5 + Math.sin(t) * 0.1 : Math.sin(t / 1.7) * 0.15, blocking: Date.now() < demoBlock, onGround: true, speed: st.activity === 'explore' ? 0.2 : 0 } }) }, 250)
   const fight = (ms) => { const end = Date.now() + ms; const iv = setInterval(() => { if (Date.now() > end) return clearInterval(iv); onMessage({ type: 'BOT_EVENT', event: 'swing' }) }, 625) }
   const script = [
-    [600, () => say('So Leute, das Fundament steht! Jetzt kommen die Wände, Block für Block.')],
+    [600, () => { say('User123 fragt, ob ich eine KI bin... Ja, ich bin eine KI. Und trotzdem zocke ich tausendmal besser als du.'); desk.camUntil = performance.now() + 4200 }],
     [5200, () => { alertFor(gifts[0], 'Lukas', 1); say('Ey Lukas, danke für die Rose, Bruder... aber musstest du mir echt direkt nen Zombie in den Nacken setzen?!', 'hype'); status({ activity: 'combat', fighting: true, threats: 1 }); fight(4500) }],
     [7000, () => onMessage({ type: 'BOT_EVENT', event: 'hurt' })],
     [11500, () => { status({ activity: 'build', fighting: false, threats: 0, health: 17 }); let c = 1; const iv = setInterval(() => { c += 1 + Math.floor(Math.random() * 3); alertFor(gifts[0], 'Lukas', c); if (c >= 14) clearInterval(iv) }, 260); say('Lukas schon wieder! Bruder, hast du heute ein persönliches Problem mit mir?! Lass mich doch erstmal mein Haus zu Ende bauen!', 'hype') }],

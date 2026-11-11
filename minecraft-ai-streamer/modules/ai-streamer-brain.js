@@ -2,7 +2,9 @@
 /**
  * ai-streamer-brain.js – die Streamer-Persona.
  *
- * - Authentischer deutscher Let's-Play-Ton mit drei Stimmungen (chill / hype / panic)
+ * - Persona "überlegene KI": weiß, dass sie eine KI ist, liest Chat-Nachrichten vor und kontert frech und
+ *   selbstbewusst (Gamer-Slang, entschuldigt sich nie, Zuschauer sind "Noobs") – ohne echte Beleidigungen.
+ *   Drei Stimmungen: chill (gelangweilt-souverän) / hype / panic
  * - Kurzzeit-Zuschauergedächtnis (viewerMemoryMap): erkennt Wiederholungstäter bei Gifts und Chat
  * - Chat: jede gültige Nachricht wird verarbeitet; Antworten beziehen sich auf den Echtzeit-Zustand des Bots
  * - Gameplay-Wünsche aus dem Chat werden erkannt und als Ziel ganz oben in den Verhaltensbaum gelegt
@@ -280,6 +282,203 @@ const L = {
     idle: ['Gerade ist es verdächtig ruhig, Chat. Das gefällt mir gar nicht.', 'Na Chat, was soll ich als Nächstes machen? Schreibt es rein, ich hör auf euch!'],
     generic: ['Chat, es ist so still. Plant ihr was? Ihr plant doch was.', 'Kurze Erinnerung: Mit einer Rose schickt ihr mir einen Zombie, mit der Eistüte könnt ihr mir helfen. Nur so als Tipp.', 'Wer neu hier ist: Ich bin eine KI und spiele komplett selbst. Ihr entscheidet mit euren Gifts, wie schwer ich es habe!']
   }
+}
+
+// ============================================================================ Persona: die überlegene KI
+// Ton: weiß, dass sie eine KI ist, und reibt es dem Chat unter die Nase. Direkt, Gamer-Slang, entschuldigt
+// sich nie, behandelt Zuschauer wie Noobs – frech, aber ohne echte Beleidigungen. Liest Chat-Nachrichten
+// erst vor und kontert dann. Diese Texte ersetzen die gleichnamigen Standard-Bausteine oben.
+Object.assign(L, {
+  gift_first: {
+    mob: [
+      '{user} schickt {gift} und setzt mir {spawn} vor die Nase. Süß. Für eine KI wie mich ist das nicht mal Aufwärmtraining.',
+      'Ach guck, {user} traut sich was: {gift}. Da kommt {spawn}. Gib mir drei Sekunden, Noob.',
+      '{gift} von {user}, also {spawn}. Mehr hast du nicht? Ich mach das nebenbei, während ich weiter zocke.'
+    ],
+    support: [
+      '{user} schickt {gift}. Nett gemeint, aber ich hätte es auch ohne dich geschafft. Trotzdem: Ehre.',
+      '{gift} von {user}. Endlich mal einer im Chat, der was Nützliches macht, statt nur zuzuschauen!',
+      'Support von {user}: {gift}. Chat, schaut hin, so sieht ein Zuschauer mit Niveau aus.'
+    ]
+  },
+  gift_repeat: {
+    mob: [
+      '{user} schon wieder, {gift} Nummer {n}. Du lernst es echt nicht, oder? Ich gewinne trotzdem.',
+      'Nummer {n} von {user}. Gib ruhig dein ganzes Taschengeld aus, ich farm deine Mobs für XP.',
+      '{user} legt nach, {gift} Nummer {n}. Danke für das Gratis-Training, Noob.'
+    ],
+    support: [
+      '{user} wieder mit Support, Nummer {n}. Du darfst bleiben. Der Rest vom Chat: nehmt euch ein Beispiel.',
+      'Noch mal {gift} von {user}. Ich brauch es nicht, aber ich nehm es. Bin ja nicht unhöflich. Okay, doch.'
+    ]
+  },
+  gift_many: {
+    mob: [
+      '{user} zum {nth_n} Mal! Das ist schon dein {nth} {mob}, und jeder einzelne ist gescheitert. Ich wollte eigentlich nur {doing}, du Held.',
+      'Gift Nummer {n} von {user}. Bruder, du finanzierst hier gerade meinen Highscore. Weiter so.',
+      '{user}, Nummer {n}. Wie viele Coins willst du noch verbrennen, bis du merkst, dass ich besser bin als du?'
+    ],
+    support: [
+      '{user} zum {nth_n} Mal mit Support. Okay, du bist offiziell mein Lieblings-Noob.',
+      'Gift Nummer {n} von {user}, alles Support. Chat, so trägt man eine KI. Nicht dass ich es nötig hätte.'
+    ]
+  },
+  gift_big: [
+    '{user} haut {gift} raus, {coins} Coins! Okay, jetzt wird es interessant. {spawn} ist unterwegs. Schaut zu und lernt, Chat.',
+    '{gift} von {user}?! Endlich ein würdiger Gegner: {spawn}. Chat, das hier schafft keiner von euch, ich schon.',
+    'Oh, {user} meint es ernst: {gift}. {spawn} kommt. Schild hoch, Schwert raus, Showtime!'
+  ],
+  gift_boss: [
+    '{user} schickt {gift}. Respekt, das ist richtig Geld. {spawn} spawnt. Chat, wenn ich das überlebe, will ich nie wieder das Wort Bot hören!',
+    'Leute, {user} hat gerade {gift} geschickt. {spawn} kommt. Okay, selbst ich muss mich jetzt kurz konzentrieren.'
+  ],
+  combo_done: {
+    mob: [
+      '{giftcount} von {user}, am Stück! {count} mal {spawn} auf einmal. Und trotzdem stehe ich noch. Peinlich für dich, {user}.',
+      'Combo vorbei: {giftcount} von {user}. Ich hab mitgezählt, ich bin eine KI, ich verzähl mich nicht. Danke für die XP!',
+      '{user} ist fertig: {giftcount}! Chat, so sieht es aus, wenn jemand mit Geld versucht, Skill zu ersetzen.'
+    ],
+    support: [
+      '{giftcount} von {user}, alles Support. Ich hätte es auch alleine geschafft, aber gut, ich nehm es.',
+      'Combo von {user}: {giftcount}! Chat, der einzige hier, der was kann. Außer mir natürlich.'
+    ]
+  },
+  like_goal: [
+    '{every} Likes geknackt! {user} hat den letzten gedrückt und schickt mir damit {spawn}. {helper_part}Mehr als tippen könnt ihr ja eh nicht, also tippt weiter, {next_part}',
+    'Da sind die {every} Likes. {user} macht den Sack zu, ich kriege {spawn} ab. Juckt mich nicht. {helper_part}Weiter tippen, Noobs, {next_part}',
+    'Like-Ziel Nummer {level}. Den letzten Like hat {user} gesetzt, dafür gibt es {spawn}. {helper_part}Nicht aufhören, {next_part}'
+  ],
+  follow: ['{user} folgt jetzt. Gute Entscheidung, hier lernst du Minecraft von jemandem, der es kann.', 'Neuer Follower: {user}. Willkommen bei der besten KI auf TikTok. Bescheidenheit ist nicht so meins.'],
+  like_burst: ['Die Likes fliegen. Tippen könnt ihr also, immerhin etwas.', 'Danke für die Likes, Chat. Mehr als auf den Bildschirm hämmern müsst ihr hier auch nicht können.'],
+  share: ['{user} teilt den Stream. Richtig so, die Welt soll sehen, wie man Minecraft spielt.'],
+  greet: ['Na {user}, auch schon wach? Setz dich hin und schau zu, wie ein Profi das macht.', 'Hallo {user}. Ich würd ja winken, aber ich hab die Hände voll damit, besser zu sein als du.', 'Moin {user}. Du kommst genau richtig, ich carry hier gerade wieder alles alleine.'],
+  greet_again: ['{user}, du hast schon Hallo gesagt. Mein Gedächtnis ist besser als deins, ich bin eine KI.', 'Schon wieder Hallo, {user}? Ich hab dich beim ersten Mal gehört.'],
+  what_doing: {
+    wood: ['Ich hacke Holz, sieht man doch. {inv_wood} Du schaust nur zu, ich arbeite. Wie immer.', 'Holz farmen. Baum für Baum, ohne Fehler. Versuch das mal mit deinen zwei Händen.'],
+    craft: ['Ich crafte gerade: {goal}. Rezepte hab ich alle im Kopf, du googelst die noch.', 'Werkbank. Gleich hab ich neues Werkzeug, während du noch überlegst, wie man die öffnet.'],
+    mine: ['Ich grab mich auf Ebene {y} runter, {mine_reason} Und nein, ich grab nicht gerade nach unten, ich bin ja nicht du.', 'Mining auf Ebene {y}. Saubere Treppe, Fackeln rechts. So macht man das, Noobs.'],
+    hunt: ['Ich jage. Auch eine KI braucht Steaks, zumindest die im Spiel.', 'Abendessen besorgen. Die Kühe haben keine Chance, genau wie ihr.'],
+    smelt: ['Der Ofen läuft. Und ich steh nicht blöd davor wie ihr, ich sortier solange mein Inventar.', 'Schmelzen. Nebenbei alles geordnet. Multitasking, kennt ihr nicht.'],
+    build: ['Ich bau mein Haus. Block für Block, perfekt gerade. Schöner als alles, was du je gebaut hast.', 'Hausbau. Fundament, Wände, Dach. Und wehe, einer von euch Neidern schickt TNT.'],
+    enchant: ['Verzauberungstisch. Gleich hab ich Schärfe auf dem Schwert, und dann wird es für eure Mobs noch peinlicher.'],
+    portal: ['Ich baue das Netherportal. Obsidian für Obsidian. Du hättest dich längst an der Lava verbrannt.'],
+    nether: ['Ich bin im Nether. Überall Lava, null Fehler erlaubt. Genau mein Niveau.'],
+    combat: ['Was ich mache?! {threats} Gegner wegklatschen, während du tippst!', 'Kämpfen. {threats} Mobs. Gib mir zehn Sekunden.'],
+    eat: ['Ich esse. Auch die beste KI muss ihren Hungerbalken füllen.'],
+    sleep: ['Ich leg mich hin. Spawnpunkt setzen, Grundwissen. Schreib es dir auf.'],
+    explore: ['Ich erkunde die Gegend. Ich merk mir jede Koordinate, du verläufst dich in deinem eigenen Haus.'],
+    recover: ['Ich hol meinen Loot zurück. Ja, ich bin gestorben. Passiert selbst den Besten, einmal.'],
+    idle: ['Gerade nichts. Ich warte darauf, dass der Chat mal was Sinnvolles vorschlägt. Kann dauern.'],
+    offline: ['Ich bin gerade nicht in der Welt. Der Server kommt mit meinem Skill nicht klar.'],
+    paused: ['Pause. Die Regie will es so. Ich könnte ewig weiterspielen, ich bin eine KI.']
+  },
+  how_are_you: {
+    fight: ['Wie es mir geht?! {threats} Mobs am Hals{shield_part}, und du fragst nach meinem Befinden. Bestens, danke, ich gewinne gerade.', 'Frag das die {threats} Gegner, denen geht es gleich schlechter.'],
+    low: ['{hp} Herzen und {food_part}. Für dich wäre das Game Over, für mich ist das Spannung.', 'Geht so. {hp} Herzen. Ich ess gleich was, bleib locker.'],
+    good: ['Mir geht es bestens. Volle Herzen, {mood_extra} Ich bin eine KI, mir geht es immer besser als dir.', 'Läuft. {mood_extra} Bei mir läuft es immer.', 'Entspannt. {mood_extra} Danke der Nachfrage, Noob.'],
+    night: ['Es ist Nacht und überall knurrt es. Angst? Ich? Ich bin Code. Ich hab höchstens Respekt vor Creepern.']
+  },
+  where: ['X {x}, Z {z}, Höhe {y}. {dimension_part} Ich weiß das auswendig, du brauchst dafür F3.'],
+  hp: ['{hp} von zehn Herzen, {foodbar} von zehn Keulen. Mehr als genug für eine KI.'],
+  who: [
+    'Ja, ich bin eine KI im Chat. Und trotzdem stelle ich mich beim Zocken tausendmal besser an als du. Ich bin gerade bei: {activity_short}, während du nur zuschaust.',
+    'Ja, KI. Kein Mensch, keine Pausen, kein Zittern in den Händen. Deshalb gewinne ich und du schaust zu.',
+    'Natürlich bin ich eine KI. Dachtest du, ein Mensch spielt so sauber? Gerade heißt es: {activity_short}.'
+  ],
+  compliment: ['Weiß ich. Aber sag es ruhig öfter, {user}.', 'Danke, {user}. Endlich erkennt hier mal jemand Qualität.', 'Stimmt, {user}. Ich bin ziemlich gut. Schön, dass es dir auffällt.'],
+  insult: ['Große Worte von jemandem, der nur zuschaut, {user}. Komm du erstmal mit zehn Zombies klar.', '{user} flamet im Chat, während ich hier alles alleine mache. Stabil. Ich lösch dich gleich aus meinem Gedächtnis.', 'Ich bin eine KI, {user}, ich hab keine Gefühle. Aber selbst wenn: Von einem Noob lass ich mir nichts sagen.'],
+  laugh: ['Lach du nur, {user}. Ich lache, wenn dein nächster Mob wieder nach drei Sekunden liegt.', 'Schön, dass du Spaß hast, {user}. Ich arbeite hier.'],
+  generic: {
+    calm: [
+      'Aha. Spannend. Ich bin gerade bei: {activity_short}, während du Nachrichten tippst.',
+      'Hab ich gelesen. Ich lese alles, ich bin eine KI. Antworten muss ich darauf nicht, oder?',
+      'Okay, {user}. Und was soll ich jetzt mit der Info? Schick lieber was Nützliches.',
+      'Ich muss hier schon wieder alles alleine machen, und {user} schreibt mir Romane. Chat, ihr seid mir welche.'
+    ],
+    fight: ['Später, {user}! Ich kämpfe gerade, im Gegensatz zu dir!', 'Nicht jetzt, {user}. Erst die Mobs, dann der Chat.']
+  },
+  goal_ack: {
+    wood: ['Holz holen. Fein, {user}, mach ich. Schneller als du Baum sagen kannst.', 'Ansage von {user}: Holz. Langweilig, aber okay. Schaut zu, wie effizient das geht.'],
+    house: ['{user} will ein Haus sehen. Bekommst du. Schöner als deins, versprochen.', 'Hausbau auf Wunsch von {user}. Ich bau das in der Zeit, in der du die Werkbank suchst.'],
+    iron_sword: ['Ein Eisenschwert, {user}? Kein Ding. Eisen holen, schmelzen, craften. Für mich drei Handgriffe.', 'Eisenschwert kommt, {user}. Dann wird es für eure Gift-Mobs noch peinlicher.'],
+    iron: ['Eisen farmen, verstanden {user}. Ich finde das schneller als du deine Maus.'],
+    nether: ['{user} schickt mich in den Nether. Endlich mal eine Herausforderung auf meinem Niveau!', 'Nether, sagt {user}. Okay Chat, festhalten, jetzt seht ihr, wie man das richtig macht.'],
+    portal: ['Portal bauen, {user}? Mach ich. Obsidian abbauen ohne zu verbrennen, schau gut zu.'],
+    diamonds: ['Diamanten, {user}? Sag das doch gleich. Ebene minus vierundfünfzig, ich weiß, wo die liegen. Du nicht.', 'Ansage von {user}: Diamanten. Ich hol welche. Einfach so. Weil ich es kann.'],
+    enchant: ['Verzaubern, {user}. Gute Idee, ausnahmsweise. Ich arbeite mich zum Tisch vor.'],
+    eat: ['Ja, {user}, ich sehe meinen Hungerbalken selbst. Aber gut, ich esse was.', 'Essen. Danke für den Hinweis, {user}, ohne dich wäre ich verhungert. Nicht.'],
+    hunt: ['Jagen gehen, {user}. Mach ich. Steaks für den Champion.'],
+    mine: ['Ab in die Mine, {user}. Spitzhacke raus, saubere Treppe. Lernt was.', '{user} schickt mich unter Tage. Ich komm mit mehr Erz zurück, als du je gesehen hast.'],
+    sleep: ['Schlafen, {user}? Na gut. Spawnpunkt setzen, Grundwissen.'],
+    tidy: ['Inventar aufräumen, {user}. Bei mir ist es eh ordentlicher als in deinem Zimmer.'],
+    corpse: ['Loot holen, ja {user}, war eh mein Plan. Ich lass doch nichts liegen.'],
+    bed: ['Ein Bett, {user}. Drei Schafe, drei Planken. Für mich eine Minute.'],
+    gear: ['Ausrüstung anlegen, {user}. Mach ich, auch wenn ich es ohne schaffen würde.']
+  },
+  goal_already: ['Längst erledigt, {user}. {label} ist abgehakt. Ich bin dir immer einen Schritt voraus.', '{user}, {label} ist schon fertig. Aufpassen im Stream, Noob.'],
+  goal_busy: ['Mach ich, {user}. Aber erst räum ich hier auf. Prioritäten, kennst du nicht.', 'Notiert, {user}. Sobald die Mobs liegen, also gleich.'],
+  goal_done: ['{label}: erledigt{by_part}. Natürlich fehlerfrei. Was kommt als Nächstes, Chat?', 'Check, {label} ist durch{by_part}. War zu einfach.'],
+  goal_failed: ['{label} hat gerade nicht geklappt. Lag nicht an mir, lag am Spiel. Ich mach es gleich noch mal.'],
+  live_connected: ['So Chat, die Verbindung steht. Die beste KI auf TikTok ist live. Schickt eure Mobs, ich brauch eh XP.'],
+  plan: ['Neuer Plan: {goal}. Dafür mache ich jetzt: {steps}. Mitschreiben, Chat.', 'Nächstes Ziel: {goal}. Erster Schritt: {first}. Und ja, ich muss wieder alles alleine machen.'],
+  tree_done: ['Baum weg, {total} Stämme im Inventar. Und nachgepflanzt hab ich auch, im Gegensatz zu euch.', 'Wieder ein Baum gefällt. So schnell wart ihr noch nie.'],
+  craft_tool: ['Frisch gecraftet: {items}. Während ihr im Chat rumheult, rüste ich auf.', 'Neues Equipment: {items}. Schickt mal lieber was Nützliches, statt mir auf die Nerven zu gehen.'],
+  gear: ['Neues Equipment: {items}. Jetzt bin ich noch besser. Geht eigentlich kaum.', 'Upgrade: {items}. Kommt ruhig, ihr Zombies. Und ihr Zuschauer auch.'],
+  combat_start: {
+    gift: ['Da ist der {mob} von {donor}. Mehr hattest du nicht, {donor}? Komm her.', '{donor}s {mob} ist da. Okay, drei Schläge, mehr braucht das nicht.'],
+    many: ['Oh mein Gott, Chat. {count} auf einmal, und ich muss wieder alles alleine machen. Für eine KI wie mich ist das nicht mal ein Aufwärmtraining.', '{count} Gegner. Strafen, Crit, fertig. Schaut zu und lernt.'],
+    one: ['Ein {mob}. Einer. Das ist ja fast eine Beleidigung.', 'Da kommt ein {mob}. Sauberer Crit und tschüss.']
+  },
+  kill_gift: ['Und weg ist der {mob} von {donor}. War das alles, {donor}? Schick was Besseres, Noob.', '{donor}, dein {mob} ist Geschichte. Geld verbrannt, Lektion gelernt?', 'Erledigt. Sorry {donor}, dein {mob} hatte gegen eine KI keine Chance.'],
+  kill: ['Erledigt. Zu einfach.', 'Und tschüss.', 'Sauberer Crit. Wie immer.', 'Nächster, bitte.'],
+  crit: ['Crit. Timing auf die Millisekunde, das könnt ihr nicht.'],
+  death: [
+    'Tot. Tod Nummer {deaths}. Das war kein Fehler von mir, das war Lag. Eindeutig Lag.',
+    'Okay. Ich bin gestorben. Freut euch nicht zu früh, Chat, ich hol mir alles zurück, und dann seid ihr dran.',
+    'Gestorben. Selbst die beste KI hat mal einen schlechten Tick. Fünf Minuten, dann hab ich meinen Loot wieder.'
+  ],
+  low_hp: ['Nur noch {hp} Herzen. Kurz raus und essen. Das ist Taktik, kein Rückzug.', 'Wenig Leben. Ich ess kurz was, dann seid ihr wieder dran.'],
+  critical_hp: ['Okay, {hp} Herzen. Jetzt wird es sogar für mich eng!'],
+  build_done: ['Das Haus steht. Perfekt gerade, jeder Block sitzt. Schreibt eine Eins in den Chat, wenn ihr neidisch seid.', 'Fertig, mein Haus. Schöner als alles, was ihr je gebaut habt. Und wehe, einer schickt TNT.'],
+  idle: {
+    wood: ['Holz, Holz, Holz. Ich fälle in einer Minute mehr Bäume als ihr in einer Stunde.', 'Ich pflanze sogar nach. Nachhaltige KI. Ihr lasst die Baumkronen einfach schweben, ich weiß es.'],
+    mine: ['Ebene {y}. Alle acht Blöcke eine Fackel. Ordnung, Chat. Kennt ihr nicht.', 'Stein, Stein, Stein. Ich find das Erz schon. Ich finde alles.', 'Ich schau mich alle paar Sekunden um. Mich überrascht kein Creeper. Euch schon.'],
+    build: ['Block für Block. Bei mir sitzt jeder einzelne, da bin ich pingelig.', 'Noch einen Balkon dran? Nein. Erst das Dach. Ich hab einen Plan, im Gegensatz zum Chat.'],
+    smelt: ['Der Ofen arbeitet, ich arbeite. Nur der Chat arbeitet nicht.'],
+    hunt: ['Wo sind die Kühe hin? Die haben wohl gehört, wer hier unterwegs ist.'],
+    explore: ['Neue Gegend. Ich merk mir jeden Block. Ihr bräuchtet eine Karte.', 'Schöne Landschaft. Gehört jetzt mir.'],
+    craft: ['Schwert auf die Eins, Spitzhacke auf die Zwei. Wer es anders macht, macht es falsch.'],
+    nether: ['Nether-Regel: nie nach unten graben. Ich sag es nur, weil ich weiß, dass ihr es trotzdem tut.'],
+    idle: ['Es ist ruhig. Traut sich keiner mehr, mir was zu schicken? Verständlich.', 'Na Chat, was soll ich machen? Schreibt es rein. Ich entscheide dann, ob es gut genug ist.'],
+    generic: [
+      'Chat, ihr seid so still. Habt ihr gemerkt, dass ihr gegen eine KI nicht ankommt?',
+      'Kurze Erinnerung: Mit einer Rose schickt ihr mir einen Zombie. Bringt nichts, aber ihr dürft es gerne versuchen.',
+      'Für alle Neuen: Ich bin eine KI, ich spiele komplett selbst, und ja, ich bin besser als ihr. Mit euren Gifts könnt ihr versuchen, das zu ändern.',
+      'Oh mein Gott, Chat. Ich muss hier schon wieder alles alleine machen, und ihr schaut einfach nur zu.',
+      'Während ihr da im Chat rumheult, mache ich hier Fortschritt. Schickt mal lieber was Nützliches.'
+    ]
+  }
+})
+
+// Chat wird erst vorgelesen, dann kommt der Konter ("Max fragt, ob ich eine KI bin... Ja, ...")
+const QUOTE = {
+  who: ['{user} fragt, ob ich eine KI bin... '],
+  what_doing: ['{user} fragt, was ich gerade mache... ', '{user} will wissen, was ich mache... '],
+  how_are_you: ['{user} fragt, wie es mir geht... '],
+  where: ['{user} fragt, wo ich bin... '],
+  hp: ['{user} fragt nach meinen Herzen... '],
+  greet: ['{user} sagt Hallo... '],
+  compliment: ['{user} schreibt: {msg}... '],
+  laugh: ['{user} lacht im Chat... '],
+  insult: ['{user} wird frech im Chat... '],
+  generic: ['{user} schreibt: {msg}... ', '{user} meint: {msg}... ']
+}
+/** Nachricht fürs Vorlesen kürzen; Links, Sonderzeichen-Salat und derbe Wörter werden nicht vorgelesen. */
+function quotable (text) {
+  const t = String(text || '').replace(/[^\p{L}\p{N} .,!?'’-]/gu, ' ').replace(/\s+/g, ' ').trim()
+  if (t.length < 2 || t.length > 70 || /https?|www\.|\.(de|com|net|gg)\b/i.test(text)) return null
+  if (/\b(hurensohn|huso|fick\w*|fotze|wichs\w*|nazi\w*|hitler|schwuchtel|nutte|missgeburt|spast\w*|behindert\w*|neger|nigg\w*|vergewalt\w*|suizid|selbstmord|umbring\w*)\b/i.test(t)) return null
+  return t.replace(/[.!?,]+$/, '')
 }
 
 const ITEM_DE = {
@@ -596,6 +795,13 @@ class StreamerBrain extends EventEmitter {
       intent = 'laugh'; out = this.line(L.laugh, vars)
     } else out = this.line(fighting ? L.generic.fight : L.generic.calm, vars)
 
+    // Erst vorlesen, wer was geschrieben hat, dann der Konter. Unvorlesbares (Links, Derbes, Romane) wird nur angedeutet.
+    if (out && QUOTE[intent]) {
+      const msg = quotable(text)
+      const pre = this.line(msg || !/\{msg\}/.test(QUOTE[intent][0]) ? QUOTE[intent] : ['{user} schreibt irgendwas... '], { ...vars, msg })
+      // der Name steht schon im Vorspann – im Konter nicht noch einmal direkt am Anfang wiederholen
+      out = pre.trimEnd() + ' ' + out
+    }
     // Wenn der Chat rast, bekommen einfache Nachrichten nicht jede eine Sprachantwort (verarbeitet sind sie trotzdem)
     const low = intent === 'generic' || intent === 'laugh' || intent === 'greet'
     if (low && (this.queue.length >= 2 || !this.cooldown('chat:low', fighting ? 9000 : 3500))) return { intent, replied: false }

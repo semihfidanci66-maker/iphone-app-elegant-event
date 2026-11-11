@@ -24,6 +24,13 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
 
+## Neu in Version 7
+
+- **Gaming-Zimmer in der Facecam:** Die Figur sitzt jetzt in einer kleinen 3D-Szene: Schreibtisch mit leuchtender RGB-Tastatur, Maus und Deskmat, Gaming-Stuhl, echtes 3D-Headset mit Mikro, LED-Streifen und ein Neon-Schild **S E M I R O** an der Wand. Den Schriftzug änderst du in `public/studio-overlay.html` bei `SIGN_TEXT`.
+- **Gamer-Bewegungen:** Die Hände tippen durchgehend (schneller beim Reden und Kämpfen, wütend hämmert er in die Tasten), die rechte Hand greift zwischendurch zur Maus, der Blick liegt auf dem Monitor und schnappt bei Chat-Kontern hoch in die Kamera. Lip-Sync, Wut-Balken und alle Stimmungen bleiben.
+- **Neue Persona „überlegene KI“:** frech, selbstbewusst, entschuldigt sich nie. Chat-Nachrichten werden erst vorgelesen („Max fragt, ob ich eine KI bin…“), dann kommt der Konter. Links und derbe Ausdrücke liest er nicht vor. Die Texte stehen in `modules/ai-streamer-brain.js` im Block „Persona: die überlegene KI“.
+- **Stimme:** Conrad, im ruhigen Modus etwas tiefer (gelangweilt-souverän).
+
 ## Neu in Version 6
 
 - **Like-Ziel:** Alle Zuschauer füllen gemeinsam einen Herz-Balken im Overlay. Im Reiter *Gifts* stellst du ein, alle wie viele Likes (50, 100, 150, 200, 500 oder frei) was passiert, z. B. ein Zombie. Wer den letzten Like zum Ziel schickt, bekommt die Aktion mit seinem Namen; der Streamer sagt es an, bedankt sich bei den Mittippern und fordert zum Weitertippen auf. Mit „Jede Runde eins mehr“ steigert sich die Menge bis +4.
