@@ -35,6 +35,11 @@ button.gift b { display: block; font-size: 24px; }
 input, select { font: inherit; width: 100%; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
 .row { display: flex; gap: 8px; margin-top: 8px; }
 .row select { flex: 0 0 104px; } .row button { flex: 0 0 96px; padding: 10px; }
+button.alarm { background: #4a1420; border-color: #a03446; color: #ffd0d6; font-weight: 800; }
+button.water { background: #10293f; border-color: #2a5f8f; }
+button.modeOn { border: 2px solid var(--cyan); background: #12303a; }
+.stack { display: grid; gap: 8px; }
+.stack button { text-align: left; padding: 14px 12px; }
 #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #0a0f15; border: 1px solid var(--line); padding: 9px 16px; border-radius: 99px; font-weight: 600; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; }
 #toast.on { opacity: 1; }
 #denied { text-align: center; padding: 30px 10px; color: var(--dim); }
@@ -47,6 +52,16 @@ input, select { font: inherit; width: 100%; color: var(--ink); background: #0e15
   <div class="card">
     <div id="act">–</div>
     <div class="stat"><div><b id="sHp">–</b><span>Herzen</span></div><div><b id="sFood">–</b><span>Hunger</span></div><div><b id="sY">–</b><span>Ebene</span></div><div><b id="sMob">–</b><span>Gegner</span></div></div>
+  </div>
+  <div class="card" style="border-width:2px;border-color:#2b4a63">
+    <h2 style="font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0">🎮 Bot-Steuerung: Was soll die KI machen?</h2>
+    <div class="stack">
+      <button data-mode="surface">☀️ AN DER OBERFLÄCHE SPIELEN (Standard)</button>
+      <button data-mode="cave">⛏️ JETZT IN DIE HÖHLE GEHEN (1x Erze holen)</button>
+      <button class="alarm" data-cmd="abort_cave">🚨 HÖHLE SOFORT ABBRECHEN &amp; RAUS!</button>
+      <button class="water" data-cmd="rescue">💧 Aus Wasser/Lava/Loch befreien</button>
+    </div>
+    <div class="grid" style="margin-top:8px"><button data-goal="house">🏠 Haus bauen</button><button data-goal="sleep">🛏️ Bett &amp; Schlafen</button><button data-cmd="corpse">💀 Todes-Loot holen</button><button data-mode="fight">⚔️ Nur Kämpfen</button></div>
   </div>
   <div class="card">
     <h2>Notfall</h2>
@@ -103,6 +118,7 @@ function status (s) {
   $('sY').textContent = s.connected ? s.pos.y : '–'
   $('sMob').textContent = s.connected ? s.threats : '–'
   $('pause').textContent = s.paused ? 'Weiter' : 'Pause'
+  for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('modeOn', b.dataset.mode === (s.mode || 'surface'))
 }
 function build (goals, rules) {
   const g = $('goals'); g.textContent = ''
@@ -112,6 +128,9 @@ function build (goals, rules) {
 }
 const ITEMS = [['cooked_beef', 'Steak', 8], ['golden_apple', 'Goldapfel', 2], ['cobblestone', 'Bruchstein', 64], ['torch', 'Fackeln', 16], ['iron_ingot', 'Eisen', 8], ['diamond', 'Diamant', 3], ['shield', 'Schild', 1], ['water_bucket', 'Wasser', 1], ['oak_log', 'Holz', 16]]
 for (const [id, label, n] of ITEMS) { const b = document.createElement('button'); b.textContent = `${label} ×${n}`; b.onclick = () => send({ type: 'BOT', cmd: 'give', item: id, count: n }, label); $('items').appendChild(b) }
+for (const b of document.querySelectorAll('[data-mode]')) b.onclick = () => { send({ type: 'MODE', mode: b.dataset.mode }, b.textContent.trim().slice(0, 28)); if (DEMO) status({ ...st, mode: b.dataset.mode }) }
+for (const b of document.querySelectorAll('.stack [data-cmd], .card [data-cmd="corpse"]')) b.onclick = () => { send({ type: 'BOT', cmd: b.dataset.cmd }, b.textContent.trim().slice(0, 28)); if (DEMO && b.dataset.cmd === 'abort_cave') status({ ...st, mode: 'surface' }) }
+for (const b of document.querySelectorAll('[data-goal]')) b.onclick = () => send({ type: 'BOT', cmd: 'goal', goal: b.dataset.goal }, b.textContent.trim())
 $('unstuck').onclick = () => send({ type: 'BOT', cmd: 'unstuck' }, 'Unstuck')
 $('respawn').onclick = () => send({ type: 'BOT', cmd: 'respawn' }, 'Respawn')
 $('pause').onclick = () => send({ type: 'BOT', cmd: st.paused ? 'resume' : 'pause' }, st.paused ? 'Weiter' : 'Pause')

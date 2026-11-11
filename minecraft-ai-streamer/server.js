@@ -207,6 +207,7 @@ function handle (m) {
     case 'DESIGNER': designerOn = !!m.on; broadcast({ type: 'DESIGNER', on: designerOn }); broadcastState(); break
     case 'LAYOUT_FORMAT': if (['16:9', '9:16', 'custom'].includes(m.format)) { layout = sanitizeLayout({ ...(layout || {}), format: m.format }); writeLater(LAYOUT_FILE, () => layout); broadcast({ type: 'LAYOUT', layout }); broadcastState() } break
     case 'LAYOUT_RESET': layout = null; try { fs.unlinkSync(LAYOUT_FILE) } catch (_) {} broadcast({ type: 'LAYOUT', layout: null, reset: true }); broadcastState(); break
+    case 'MODE': { const mode = bot.setMode(String(m.mode)); if (mode === 'cave') bot._emit('cave_start', { auto: false }); log('info', 'Bot-Modus: ' + mode); broadcastState(); break }
     case 'CAMERA': bot.camera.setMode(String(m.mode)); saveConfig(); broadcastState(); break
     case 'SIM_GIFT': {
       const rule = gifts.rules.find(r => r.id === m.ruleId)
@@ -247,6 +248,8 @@ function handle (m) {
         case 'respawn': bot.respawn(); break
         case 'give': bot.give(String(m.item || ''), Number(m.count) || 1); break
         case 'corpse': bot.forceCorpseRun(); break
+        case 'rescue': bot.rescue(); break
+        case 'abort_cave': bot.abortCave(); break
         case 'goal': { const r = bot.pushGoal(String(m.goal || ''), 'Regie'); log('info', `Ziel ${m.goal}: ${JSON.stringify(r)}`); break }
         case 'clear_goals': bot.clearGoals(); break
         case 'chat': bot.say(m.text); break
@@ -300,14 +303,14 @@ tiktok.on('live', e => {
 })
 tiktok.on('follow', e => pushFeed({ kind: 'follow', user: e.viewer.nickname, text: 'folgt jetzt', emoji: '➕' }))
 
-const OVERLAY_EVENTS = new Set(['camera', 'corpse_run_start', 'corpse_run_done', 'swing', 'hurt', 'shield', 'death', 'combat_start', 'combat_end', 'kill', 'low_hp', 'critical_hp', 'lava', 'enchanted', 'respawn', 'ate', 'build_done', 'portal_lit'])
+const OVERLAY_EVENTS = new Set(['liquid_escape', 'liquid_rescue', 'camera', 'corpse_run_start', 'corpse_run_done', 'swing', 'hurt', 'shield', 'death', 'combat_start', 'combat_end', 'kill', 'low_hp', 'critical_hp', 'lava', 'enchanted', 'respawn', 'ate', 'build_done', 'portal_lit'])
 bot.on('event', e => {
   brain.onBotEvent(e.type, e.data)
   if (OVERLAY_EVENTS.has(e.type)) broadcast({ type: 'BOT_EVENT', event: e.type, data: e.data })
   else if (e.type !== 'hotbar') broadcast({ type: 'BOT_EVENT', event: e.type, data: e.data }, isControl)
   if (e.type === 'log') log('info', e.data.message)
   else if (e.type === 'warn' || e.type === 'bot_error' || e.type === 'bot_kicked') log('warn', e.data.message || e.data.reason || e.type)
-  else if (['bot_spawned', 'bot_disconnected', 'plan', 'death', 'goal_pushed', 'goal_done', 'goal_failed', 'action_cooldown', 'build_done', 'enchanted', 'portal_lit'].includes(e.type)) {
+  else if (['bot_spawned', 'bot_disconnected', 'plan', 'death', 'goal_pushed', 'goal_done', 'goal_failed', 'action_cooldown', 'build_done', 'enchanted', 'portal_lit', 'mode', 'cave_done', 'cave_aborted', 'liquid_rescue'].includes(e.type)) {
     log('info', `${e.type} ${JSON.stringify(e.data).slice(0, 200)}`)
     broadcastState()
   }

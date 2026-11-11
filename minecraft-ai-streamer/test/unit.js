@@ -13,7 +13,7 @@ let n = 0
 const t = (name, fn) => { fn(); n++; console.log('PASS ', name) }
 
 // ---------- GOAP ----------
-const fakeCtx = () => ({ actions: {}, emit () {}, memory: {}, mcData: {}, bot: {} })
+const fakeCtx = () => ({ actions: {}, emit () {}, memory: {}, mcData: {}, bot: {}, caveAllowed: () => false })
 const P = () => { const p = new Planner(fakeCtx()); return p }
 const none = () => Object.fromEntries(['bed', 'wood', 'woodPick', 'woodKit', 'cobble', 'stoneKit', 'rawFood', 'food', 'rawIron', 'ironIngots', 'ironKit', 'waterBucket', 'buildMats', 'base', 'diamonds', 'diamondPick', 'lapis', 'obsidian4', 'enchantTable', 'enchanted', 'gold', 'flintSteel', 'obsidian10', 'portal', 'blazeRods'].map(k => [k, false]))
 t('GOAP: frischer Spawn -> Holz hacken zuerst', () => {
@@ -44,6 +44,23 @@ t('GOAP: zweimal gescheitert -> Cooldown, nächstes Ziel rückt vor', () => {
   const s1 = p.next(); assert.strictEqual(s1.action.name, 'Hunt')
   p.report(s1.action, s1.goal, false); p.report(s1.action, s1.goal, false)
   assert.strictEqual(p.next().action.name, 'GetBed')
+})
+
+t('Höhle: Oberflächen-Modus sperrt Untertage-Aktionen, erlaubt genau einen Automatik-Trip', () => {
+  const p = P(); const f = none(); Object.assign(f, { wood: true, woodPick: true, woodKit: true, cobble: true, stoneKit: true, bed: true }); p.facts = () => f
+  // ohne gebratenes Essen: kein Höhlen-Trip -> Jagd zuerst
+  assert.strictEqual(p.next().action.name, 'Hunt')
+  f.rawFood = true; f.food = true
+  const s1 = p.next(); assert.strictEqual(s1.action.name, 'MineIron'); assert.strictEqual(s1.autoCaveTrip, true)
+  p.ctx.memory.autoCaveTripUsed = true
+  const s2 = p.next(); assert.strictEqual(s2.action.name, 'GatherBuildMaterials')
+  // Zuschauerziel, das unter Tage führt, wird abgelehnt
+  const failed = []; p.ctx.emit = (t, d) => { if (t === 'goal_failed') failed.push(d.reason) }
+  p.pushGoal({ id: 'diamonds', label: 'Diamanten', facts: ['diamondPick'], by: 'Ben' }); p.next()
+  assert.deepStrictEqual(failed, ['cave_locked'])
+  // mit Freigabe (Höhlen-Button) geht es wieder
+  p.ctx.caveAllowed = () => true
+  assert.strictEqual(p.next().action.name, 'MineIron')
 })
 
 // ---------- PvP-Rhythmus ----------
@@ -112,10 +129,10 @@ t('TikTok: Watchdog bricht bei Offline-Stream nicht ab (8 s) und reconnectet nac
   b.on('state', s => states.push(s.phase + '|' + s.badge))
   b.wanted = true; b.state.username = 'MyUsername'
   b._retry(8000, 'waiting', 'Stream ist noch nicht live')
-  assert(/^waiting\|🟡 Warte auf Live-Start von @MyUsername \(Prüfe alle 8s\)/.test(states.pop())); assert(b.timer)
+  assert.strictEqual(states.pop(), 'waiting|🟡 Warte automatisch auf deinen Live-Start (@MyUsername)...'); assert(b.timer)
   let live = 0; b.on('live', () => live++)
   b._onLive('A'); b._viewers(42)
-  assert.strictEqual(b.state.badge, '🟢 LIVE VERBUNDEN (@MyUsername | Zuschauer: 42)'); assert.strictEqual(live, 1)
+  assert.strictEqual(b.state.badge, '🟢 LIVE VERBUNDEN! (@MyUsername | Zuschauer: 42)'); assert.strictEqual(live, 1)
   b.conn = { removeAllListeners () {}, disconnect () {} }
   b._dropped('Verbindung getrennt', 2000, 'reconnecting')
   assert.strictEqual(b.state.phase, 'reconnecting'); assert(b.state.nextRetryAt - Date.now() <= 2000)
@@ -198,6 +215,13 @@ t('Persona: neue Chat-Befehle (Loot holen, schlafen, Diamanten farmen)', () => {
   for (const [text, goal] of Object.entries({ 'Hol deinen Loot': 'corpse', 'Geh schlafen': 'sleep', 'Geh Diamanten farmen': 'diamonds', 'hol deine sachen zurück': 'corpse' })) {
     const { b, goals } = mkBrain(calm); b.onChat({ uniqueId: 'v', nickname: 'Ben' }, text); assert.strictEqual(goals[0] && goals[0][0], goal, text)
   }
+})
+t('Persona: Höhlen-Abbruch, Rettung und gesperrte Höhle werden angesagt', () => {
+  const { b, q } = mkBrain(calm)
+  b.onBotEvent('cave_aborted', {}); assert.strictEqual(q()[0], 'Alles klar, Höhle abgebrochen! Wir sind wieder oben an der frischen Luft, Chat!')
+  b.queue = []; b.onBotEvent('liquid_escape', { lava: true }); assert.strictEqual(b.queue[0].emotion, 'panic')
+  const m = mkBrain(calm); m.b.deps.pushGoal = () => ({ ok: false, reason: 'cave_locked', label: 'Minen gehen' })
+  m.b.onChat({ uniqueId: 'v', nickname: 'Ben' }, 'geh mal in die mine'); assert(/Ben/.test(m.q()[0]) && /(Regie|gesperrt)/.test(m.q()[0]), m.q()[0])
 })
 t('Persona: Namen werden aussprechbar', () => {
   const { b } = mkBrain(calm)

@@ -3,8 +3,9 @@
  * tiktok-bridge.js – Dual-Engine-TikTok-Live-Connector mit 24/7-Auto-Live-Watchdog.
  *
  *  Engine A: tiktok-live-connector (WebcastPushConnection) mit optimierten Client-Parametern.
- *  Engine B: lokales Relay (TikFinity-kompatibel, ws://localhost:21213/), falls TikTok Engine A
- *            mit Signatur-/Rate-Limit-Fehlern blockt.
+ *  Engine B: eingebauter Hintergrund-Browser (modules/tiktok-browser-grabber.js), der die Live-Seite
+ *            unsichtbar öffnet und Chat/Gifts/Likes direkt mitliest – ohne jede Fremd-App.
+ *            Springt automatisch ein, wenn Engine A mit Signatur-/Rate-Limit-/Verbindungsfehlern scheitert.
  *
  *  Watchdog: Ist der Stream noch offline, wird NICHT abgebrochen – alle 8 s wird neu geprüft.
  *            Bricht die Verbindung mitten im Stream ab, folgt nach 2 s der Reconnect.
@@ -18,11 +19,11 @@
  *  Es läuft höchstens EIN Timer (setTimeout-Kette), kein Intervall.
  */
 const EventEmitter = require('events')
-const WebSocket = require('ws')
+const { BrowserGrabber } = require('./tiktok-browser-grabber')
 
 const RETRY_OFFLINE_MS = 8000
 const RETRY_DROP_MS = 2000
-const RELAY_URL = process.env.TIKTOK_RELAY_URL || 'ws://127.0.0.1:21213/'
+const BROWSER_SIGNAL_MS = 25000
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 /** "@Name", " Name ", "https://www.tiktok.com/@Name/live?x=1" -> "Name" */
@@ -67,7 +68,7 @@ class TikTokBridge extends EventEmitter {
   constructor () {
     super()
     this.conn = null
-    this.relay = null
+    this.grabber = null
     this.probe = null
     this.timer = null
     this.wanted = false
@@ -81,12 +82,13 @@ class TikTokBridge extends EventEmitter {
     Object.assign(this.state, patch)
     const s = this.state
     s.connected = s.phase === 'live'
-    s.connecting = s.phase === 'connecting' || s.phase === 'reconnecting'
+    s.connecting = s.phase === 'connecting' || s.phase === 'reconnecting' || s.phase === 'browser'
     s.error = s.diagnostic
     s.badge = s.phase === 'live'
-      ? `🟢 LIVE VERBUNDEN (@${s.username} | Zuschauer: ${s.viewers})`
-      : s.phase === 'waiting' ? `🟡 Warte auf Live-Start von @${s.username} (Prüfe alle 8s)...`
+      ? `🟢 LIVE VERBUNDEN! (@${s.username} | Zuschauer: ${s.viewers})`
+      : s.phase === 'waiting' ? `🟡 Warte automatisch auf deinen Live-Start (@${s.username})...`
         : s.phase === 'connecting' ? `🟡 Verbinde mit @${s.username} ...`
+          : s.phase === 'browser' ? `🟡 Starte Hintergrund-Browser für @${s.username} ...`
           : s.phase === 'reconnecting' ? `🟠 Verbindung verloren – Reconnect zu @${s.username} ...`
             : '⚪ Nicht verbunden'
     this.emit('state', { ...s })
@@ -119,8 +121,8 @@ class TikTokBridge extends EventEmitter {
     clearTimeout(this.timer); this.timer = null
     const c = this.conn; this.conn = null
     if (c) { try { c.removeAllListeners() } catch (_) {} try { Promise.resolve(c.disconnect()).catch(() => {}) } catch (_) {} }
-    const r = this.relay; this.relay = null
-    if (r) { try { r.removeAllListeners(); r.on('error', () => {}); r.close() } catch (_) {} }
+    const g = this.grabber; this.grabber = null
+    if (g) g.stop().catch(() => {})
     this.streaks.clear()
   }
 
@@ -170,16 +172,18 @@ class TikTokBridge extends EventEmitter {
       reasonA = classify(e)
       if (reasonA.kind === 'offline') return this._retry(RETRY_OFFLINE_MS, 'waiting', reasonA.text)
     }
-    // 3) Engine B (lokales Relay) – bei Signatur-/Netz-/sonstigen Fehlern
+    // 3) Engine B (eingebauter Hintergrund-Browser) – bei Signatur-/Netz-/sonstigen Fehlern
+    if (reasonA.kind === 'user' && this.attempts % 3 !== 0) return this._retry(RETRY_OFFLINE_MS, 'waiting', reasonA.text)
+    this._set({ phase: 'browser', diagnostic: `Direktverbindung blockiert (${reasonA.text}) – starte Hintergrund-Browser` })
     try {
-      await this._engineB(username)
-      this._set({ diagnostic: `Engine A blockiert: ${reasonA.text} → Engine B (lokales Relay) aktiv` })
+      const how = await this._engineB(username)
+      if (!this.wanted || this.state.username !== username) return
+      this._set({ diagnostic: `Direktverbindung blockiert, Hintergrund-Browser liest mit (${how === 'dom' ? 'nur Chat aus der Seite' : 'Chat, Gifts und Likes'})` })
     } catch (e) {
       if (!this.wanted || this.state.username !== username) return
-      const hint = reasonA.kind === 'sign'
-        ? ' Tipp: kostenlosen EulerStream-Schlüssel als EULERSTREAM_API_KEY setzen oder TikFinity starten.'
-        : ''
-      this._retry(RETRY_OFFLINE_MS, 'waiting', `Engine A: ${reasonA.text} | Engine B: Relay ${RELAY_URL} nicht erreichbar.${hint}`)
+      const g = this.grabber; this.grabber = null
+      if (g) g.stop().catch(() => {})
+      this._retry(RETRY_OFFLINE_MS, 'waiting', `Direktverbindung: ${reasonA.text} | Hintergrund-Browser: ${String(e.message || e).slice(0, 110)}`)
     }
   }
 
@@ -243,8 +247,8 @@ class TikTokBridge extends EventEmitter {
     if (!this.wanted) return
     const c = this.conn; this.conn = null
     if (c) { try { c.removeAllListeners() } catch (_) {} try { Promise.resolve(c.disconnect()).catch(() => {}) } catch (_) {} }
-    const r = this.relay; this.relay = null
-    if (r) { try { r.removeAllListeners(); r.on('error', () => {}); r.close() } catch (_) {} }
+    const g = this.grabber; this.grabber = null
+    if (g) g.stop().catch(() => {})
     this._retry(ms, phase, why)
   }
 
@@ -274,45 +278,40 @@ class TikTokBridge extends EventEmitter {
     } catch (_) {}
   }
 
-  // ---------------------------------------------------------------- Engine B (lokales Relay)
-  _engineB (username) {
-    return new Promise((resolve, reject) => {
-      let settled = false
-      let ws
-      try { ws = new WebSocket(RELAY_URL, { handshakeTimeout: 2500 }) } catch (e) { return reject(e) }
-      const fail = e => { if (!settled) { settled = true; try { ws.removeAllListeners(); ws.on('error', () => {}); ws.close() } catch (_) {} reject(e || new Error('Relay nicht erreichbar')) } }
-      const to = setTimeout(() => fail(new Error('Relay-Timeout')), 3000)
-      ws.on('error', fail)
-      ws.on('open', () => {
-        clearTimeout(to)
-        if (settled) return
-        settled = true
-        if (!this.wanted || this.state.username !== username) { ws.close(); return resolve() }
-        this.relay = ws
-        ws.on('message', raw => {
-          let m
-          try { m = JSON.parse(raw.toString()) } catch (_) { return }
-          const d = m.data || {}
-          switch (m.event) {
-            case 'gift': this._onGift(d); break
-            case 'chat': this._onChat(d); break
-            case 'follow': this.emit('follow', { viewer: normViewer(d) }); break
-            case 'share': this.emit('share', { viewer: normViewer(d) }); break
-            case 'like': this.emit('like', { viewer: normViewer(d), count: d.likeCount || 1, total: d.totalLikeCount || 0 }); break
-            case 'roomUser': this._viewers(d.viewerCount); break
-            case 'streamEnd': this._dropped('Stream wurde beendet', RETRY_OFFLINE_MS, 'waiting'); break
+  // ---------------------------------------------------------------- Engine B (Hintergrund-Browser)
+  async _engineB (username, o = {}) {
+    const g = new BrowserGrabber()
+    this.grabber = g
+    g.on('message', (method, d) => {
+      try {
+        switch (method) {
+          case 'WebcastGiftMessage': this._onGift(d); break
+          case 'WebcastChatMessage': this._onChat(d); break
+          case 'WebcastLikeMessage': this.emit('like', { viewer: normViewer(d), count: d.likeCount || d.count || 1, total: d.totalLikeCount || d.total || 0 }); break
+          case 'WebcastSocialMessage': {
+            const t = String(d.displayType || (d.common && d.common.displayText && d.common.displayText.key) || d.action || '')
+            if (/share/i.test(t) || Number(d.action) === 3) this.emit('share', { viewer: normViewer(d) }); else this.emit('follow', { viewer: normViewer(d) })
+            break
           }
-        })
-        ws.on('close', () => { if (this.relay === ws) this._dropped('Relay-Verbindung getrennt', RETRY_DROP_MS, 'reconnecting') })
-        this._onLive('B')
-        resolve()
-      })
+          case 'WebcastRoomUserSeqMessage': this._viewers(Number(d.viewerCount ?? d.totalUser ?? d.total)); break
+          case 'WebcastControlMessage': if (Number(d.action) === 3) this._dropped('Stream wurde beendet', RETRY_OFFLINE_MS, 'waiting'); break
+        }
+      } catch (e) { this.emit('warn', 'Browser-Event: ' + e.message) }
     })
+    g.on('dom_chat', d => this._onChat(d))
+    g.on('closed', why => { if (this.grabber === g) this._dropped(why, RETRY_DROP_MS, 'reconnecting') })
+    g.on('socket_closed', () => { if (this.grabber === g) this._dropped('Live-Verbindung der Seite wurde geschlossen', RETRY_OFFLINE_MS, 'waiting') })
+    await g.start(username, o)
+    const how = await g.waitForSignal(o.signalMs || BROWSER_SIGNAL_MS)
+    if (this.grabber !== g) return null
+    if (!how) throw new Error('kein Live-Signal auf der Seite (Stream offline oder Seite verlangt Login/Captcha)')
+    this._onLive('B')
+    return how
   }
 
   // ---------------------------------------------------------------- Normalisierung
   _onChat (d) {
-    const text = d.comment || (d.content && d.content.text) || ''
+    const text = d.comment || (typeof d.content === 'string' ? d.content : (d.content && d.content.text)) || ''
     if (text) this.emit('chat', { viewer: normViewer(d), text: String(text).slice(0, 300) })
   }
 
@@ -322,7 +321,8 @@ class TikTokBridge extends EventEmitter {
     const name = det.giftName || d.giftName || det.name || `Gift ${giftId}`
     const coins = det.diamondCount || d.diamondCount || det.diamond_count || 0
     const type = det.giftType ?? d.giftType ?? det.type
-    const img = det.giftImage || det.icon || det.image
+    const hasUrl = i => i && (i.giftPictureUrl || (i.urls || i.url_list || i.urlList || []).length)
+    const img = [det.giftImage, det.image, det.icon].find(hasUrl)
     const icon = d.giftPictureUrl || (img && (img.giftPictureUrl || (img.urls || img.url_list || img.urlList || [])[0])) || this.giftIcons[String(name).toLowerCase()] || null
     if (icon && !this.giftIcons[String(name).toLowerCase()]) this.giftIcons[String(name).toLowerCase()] = icon
     const viewer = normViewer(d)

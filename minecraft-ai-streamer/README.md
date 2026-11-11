@@ -24,10 +24,16 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
 
+## Neu in Version 3
+
+- **TikTok ohne Fremd-App:** Scheitert die Direktverbindung, startet das Programm selbst einen unsichtbaren Hintergrund-Browser (dein installiertes Edge oder Chrome), öffnet deine Live-Seite und liest Chat, Gifts und Likes mit. TikFinity oder ein API-Schlüssel sind nicht nötig. Verlangt TikTok auf der Seite einen Login oder ein Captcha, wartet der Watchdog weiter und zeigt den Grund an.
+- **Wasser und Lava:** Der Bot läuft um Flüssigkeiten herum. Fällt er trotzdem hinein, schwimmt er oben, steuert das nächste Ufer an und setzt sich an steilen Kanten Blöcke unter die Füße. Ist er nach 4 Sekunden noch drin, wird er per Server-Befehl auf trockenen Boden gesetzt (braucht OP).
+- **Höhlen nur auf Knopfdruck:** Standard ist „An der Oberfläche spielen". Die Box „Bot-Steuerung" ganz oben im Dashboard und in der Handy-Remote hat die Knöpfe Oberfläche, Höhle (1 Trip), Höhle sofort abbrechen, Sofort-Rettung, Haus, Bett & Schlafen, Todes-Loot und Nur Kämpfen. Von selbst macht der Bot höchstens einen kurzen Höhlen-Trip, und erst wenn Holz, Werkzeug und gebratenes Essen da sind.
+
 ## Neu in Version 2
 
 - **TikTok oben links im Dashboard:** Name, `@name` oder die komplette Live-URL eingeben. Der Name wird gesäubert, in `config/settings.json` und im Browser gespeichert und beim nächsten Start automatisch verbunden. Ist der Stream noch offline, prüft der Watchdog alle 8 Sekunden weiter; bricht die Verbindung ab, folgt nach 2 Sekunden der Reconnect. Der genaue Grund steht unter dem Status-Feld.
-- **Zwei Wege zu TikTok:** Engine A verbindet direkt. Blockt TikTok die Signatur, übernimmt Engine B ein lokales Relay auf `ws://localhost:21213/` (z. B. TikFinity, muss dafür laufen). Ein kostenloser EulerStream-Schlüssel als Umgebungsvariable `EULERSTREAM_API_KEY` macht Engine A stabiler.
+- **Zwei Wege zu TikTok:** Engine A verbindet direkt, Engine B ist der eingebaute Hintergrund-Browser (siehe Version 3).
 - **Overlay-Designer:** `F2` im Overlay, `?designer=true` oder der Knopf im Dashboard. Widgets ziehen, am gelben Griff oder per Regler skalieren (50–200 %), ausblenden, Raster an/aus, Formate 16:9 / 9:16 / Split. Gespeichert in `config/overlay-layout.json`, OBS aktualisiert sich ohne Neuladen.
 - **Kamera-Regie:** Im Dashboard deinen Minecraft-Namen eintragen. Ego nutzt `/spectate` auf den Bot, die Freecam eine unsichtbare Kamera-Entity über der Schulter, Auto-Regie wechselt je nach Situation.
 - **Gift-Katalog:** 50 vorinstallierte Gifts, eigenes Geschenk mit Menge und HP-Multiplikator, unbekannte Live-Gifts werden automatisch aufgenommen. Original-Icons kommen live von TikTok; bis dahin steht ein Emoji.
@@ -53,6 +59,8 @@ modules/tts-engine.js        eine männliche Neural-Stimme (Conrad/Killian), Pro
 modules/gifts-catalog.js     50 TikTok-Gifts mit Coins und Standard-Aktion
 modules/gift-engine.js       Regeln -> native /summon-Befehle, Custom-Gifts, Auto-Discovery
 modules/tiktok-bridge.js     Dual-Engine-Connector mit Auto-Live-Watchdog
+modules/tiktok-browser-grabber.js  eingebauter Hintergrund-Browser (Engine B)
+modules/bot/liquid-escape.js Wasser-/Lava-Rettung in drei Stufen
 modules/tunnel.js            cloudflared / localtunnel + QR
 public/                      studio-overlay.html · index.html · mobile.html
 ```
@@ -60,7 +68,9 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 25 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 27 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
+node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)
 ```
 

@@ -30,6 +30,8 @@ const { BuildingPhase } = require('./bot/survival-building')
 const { EndgamePhase } = require('./bot/survival-endgame')
 const { Planner } = require('./bot/planner')
 const { CameraDirector } = require('./bot/camera-director')
+const { LiquidEscape } = require('./bot/liquid-escape')
+const { UNDERGROUND } = require('./bot/planner')
 
 const VIEWER_GOALS = {
   wood: { label: 'Holz holen', activity: 'wood', task: (ctx, t) => ctx.wood.gather(Math.ceil(ctx.crafting.woodValue() / 4) + 6, t) },
@@ -66,6 +68,22 @@ const VIEWER_GOALS = {
       return ok
     }
   },
+  cave: {
+    label: 'Höhlen-Trip: Erze holen',
+    activity: 'mine',
+    underground: true,
+    pre: ['woodPick'],
+    task: async (ctx, t) => {
+      // 1x Kohle/Eisen/Diamanten holen (je nach Spitzhacke) und danach automatisch wieder hoch
+      const a = ctx.actions
+      const tier = a.pickTier()
+      const res = tier >= 3 ? 'diamond' : tier >= 2 ? 'iron' : 'coal'
+      const start = { diamond: a.count('diamond'), iron: a.count('raw_iron'), coal: a.count('coal') }
+      const ok = await ctx.mining.mineFor(res, () => res === 'diamond' ? a.count('diamond') >= start.diamond + 3 : res === 'iron' ? a.count('raw_iron') >= start.iron + 10 : a.count('coal') >= start.coal + 8, t)
+      await ctx.mining.returnToSurface(t)
+      return ok
+    }
+  },
   sleep: { label: 'Schlafen gehen', activity: 'sleep', pre: ['bed'], task: (ctx, t) => ctx.building.sleepInBed(t) },
   bed: { label: 'Bett craften', facts: ['bed'] },
   corpse: { label: 'Loot zurückholen', activity: 'corpse', task: async (ctx, t) => ctx.corpseRun(t, true) },
@@ -97,6 +115,9 @@ class MinecraftAIBot extends EventEmitter {
     this.lastPlanKey = ''
     this.opWarned = false
     this.lastDeath = null
+    // Bot-Modus: 'surface' (Standard, kein Höhlen-Graben) · 'cave' (1 Trip freigegeben) · 'fight' (nur kämpfen)
+    this.mode = 'surface'
+    this.exitCaveRequested = false
     this.camera = new CameraDirector(this)
     // ---- EIN zentraler Game-Loop: 250 ms KI-Tick (Reflexe, Watchdog, Regie, Status, externe Ticker).
     //      Die 50-ms-Ebene ist der Physik-Tick von mineflayer (Blicksteuerung, Tasten-Sperre).
@@ -117,6 +138,7 @@ class MinecraftAIBot extends EventEmitter {
         // Kampf-Reflex: unterbricht JEDE laufende Routine, sobald eine Bedrohung auftaucht
         if (!this.paused && !ctx.combat.engaged && !(this.currentAction && this.currentAction.name === 'Combat') && ctx.combat.hasThreat()) this.interrupt('combat')
         ctx.watchdog.tick()
+        ctx.liquid.brainTick() // 4-Sekunden-Garantie gegen Wasser/Lava
         this.camera.tick()
         this.emit('pose', { yaw: bot.entity.yaw + ctx.look.headYawOffset, pitch: bot.entity.pitch + ctx.look.headPitchOffset, moveYaw: ctx.look.yaw, blocking: !!ctx.combat.blocking, onGround: bot.entity.onGround })
         if (n % 4 === 0) this.emit('status', this.status())
@@ -184,6 +206,7 @@ class MinecraftAIBot extends EventEmitter {
     this.commandQueue = []
     if (this.ctx) {
       try { this.ctx.watchdog.dispose() } catch (_) {}
+      try { this.ctx.liquid.dispose() } catch (_) {}
       try { this.ctx.look.dispose() } catch (_) {}
     }
     this.ctx = null
@@ -205,6 +228,7 @@ class MinecraftAIBot extends EventEmitter {
       explore: (token, dist) => this._explore(token, dist),
       isBaseBlock: pos => !!ctx.building && ctx.building.isBaseBlock(pos),
       corpseRun: (t, forced) => this._corpseRun(t, forced),
+      caveAllowed: () => this.mode === 'cave' || !!this.memory.caveTripActive,
       isPortalBlock: pos => !!ctx.endgame && ctx.endgame.isPortalBlock(pos)
     }
     ctx.look = new HumanLookController(bot)
@@ -220,6 +244,7 @@ class MinecraftAIBot extends EventEmitter {
     ctx.endgame = new EndgamePhase(ctx)
     ctx.watchdog = new StuckWatchdog(ctx)
     ctx.planner = new Planner(ctx)
+    ctx.liquid = new LiquidEscape(ctx, this)
     this.ctx = ctx
     this.connected = true
     this.exploreHeading = Math.random() * Math.PI * 2
@@ -301,6 +326,19 @@ class MinecraftAIBot extends EventEmitter {
         }
         if (this.paused) { this.setActivity('paused'); await sleep(400); continue }
 
+        // ---- Reflex 0: Wasser/Lava – sofort ans Ufer (Stufe 2; Stufe 3 läuft im 250-ms-Loop) ----
+        if (ctx.liquid.inLiquid()) {
+          this.setActivity('swim', { lava: ctx.liquid.inLava() })
+          await this._run({ name: 'LiquidEscape', label: ctx.liquid.inLava() ? 'Raus aus der Lava!' : 'Ans Ufer schwimmen', activity: 'swim' }, t => ctx.liquid.escape(t))
+          continue
+        }
+        // ---- Höhle sofort abbrechen & raus an die Oberfläche ----
+        if (this.exitCaveRequested) {
+          this.exitCaveRequested = false
+          this.setActivity('exit_cave')
+          await this._run({ name: 'ExitCave', label: 'Raus an die Oberfläche', activity: 'exit_cave' }, t => this._exitCave(t))
+          continue
+        }
         // ---- Reflex 1: Kampf ----
         if (ctx.combat.hasThreat()) {
           this.setActivity('combat', { count: ctx.combat.scan().length })
@@ -339,6 +377,12 @@ class MinecraftAIBot extends EventEmitter {
           await this._run({ name: 'RecoverStations', label: 'Werkbank einsammeln' }, t => ctx.crafting.recoverLeftStations(t))
         }
 
+        // ---- Modus "Nur Kämpfen": keine Aufgaben, nur wachsam in der Nähe bleiben ----
+        if (this.mode === 'fight') {
+          this.setActivity('guard')
+          await this._run({ name: 'Guard', label: 'Kampfbereit', activity: 'guard' }, async t => { await ctx.food.patrol(bot.entity.position.clone(), t); await sleep(800); return true })
+          continue
+        }
         // ---- GOAP ----
         let step
         if (ctx.endgame.inNether()) {
@@ -355,7 +399,22 @@ class MinecraftAIBot extends EventEmitter {
         }
         this.setActivity(step.action.activity || 'idle', { action: step.action.name, label: step.action.label, goal: step.goal.label })
         this._emit('action_start', { action: step.action.name, label: step.action.label, goal: step.goal.label })
-        const result = await this._run(step.action, t => step.action.oneShot ? step.action.run(ctx, t) : step.action.run(t))
+        // Untertage-Schritte: nur mit Freigabe; der eine Automatik-Trip wird hier verbucht
+        const under = UNDERGROUND.has(step.action.name) || !!(step.goal && step.goal.underground && step.action.oneShot)
+        if (under) {
+          if (step.autoCaveTrip) { this.memory.autoCaveTripUsed = true; this._emit('cave_start', { auto: true }) }
+          this.memory.caveTripActive = true
+        }
+        let result
+        try {
+          result = await this._run(step.action, t => step.action.oneShot ? step.action.run(ctx, t) : step.action.run(t))
+        } finally {
+          if (under) {
+            this.memory.caveTripActive = false
+            // "1x": nach dem Trip gilt wieder die Oberflächen-Regel
+            if (this.mode === 'cave' && result !== 'interrupted') { this.mode = 'surface'; this._emit('cave_done', { ok: !!result }) }
+          }
+        }
         if (!alive()) break
         if (result === 'interrupted') continue
         ctx.planner.report(step.action, step.goal, !!result)
@@ -366,6 +425,69 @@ class MinecraftAIBot extends EventEmitter {
         await sleep(500)
       }
     }
+  }
+
+  /** Bot steht unter Tage (kein freier Himmel über dem Kopf). */
+  isUnderground () { return !!this.ctx && !this.ctx.mining.isSurface() && !/nether|end/.test(this.bot.game.dimension || '') }
+
+  /**
+   * Modus setzen. 'cave' gibt genau einen Höhlen-Trip frei und startet ihn sofort.
+   * @param {'surface'|'cave'|'fight'} mode
+   */
+  setMode (mode) {
+    if (!['surface', 'cave', 'fight'].includes(mode)) return this.mode
+    const prev = this.mode
+    this.mode = mode
+    if (mode === 'cave') {
+      const r = this.pushGoal('cave', 'Regie')
+      if (!r.ok) this.mode = prev
+    } else if (prev === 'cave' || (mode === 'surface' && this.isUnderground())) {
+      return this.abortCave()
+    } else if (mode === 'fight') this.interrupt('mode')
+    this._emit('mode', { mode: this.mode })
+    return this.mode
+  }
+
+  /** 🚨 Höhle sofort abbrechen & raus an die Oberfläche. */
+  abortCave () {
+    this.mode = 'surface'
+    this.memory.caveTripActive = false
+    if (this.ctx) this.ctx.planner.goalStack = this.ctx.planner.goalStack.filter(g => g.id !== 'cave' && g.id !== 'mine')
+    this.exitCaveRequested = true
+    this.interrupt('cave_abort')
+    this._emit('mode', { mode: 'surface' })
+    return this.mode
+  }
+
+  async _exitCave (token) {
+    const { ctx, bot } = this
+    if (this.isUnderground()) {
+      this._emit('cave_exit_start', { y: Math.floor(bot.entity.position.y) })
+      // erst zu Fuß (eigene Treppe / freigraben), nach 45 s ohne Erfolg per Sofort-Rettung an die Oberfläche
+      const walked = await Promise.race([
+        ctx.mining.returnToSurface(token).catch(() => false),
+        sleep(45000).then(() => false)
+      ])
+      if (token.cancelled) token.check()
+      if (!walked || this.isUnderground()) {
+        token.cancel('exit_timeout')
+        ctx.actions.stopMoving()
+        ctx.actions._unlock()
+        ctx.liquid.hardRescue('surface')
+        await sleep(1500)
+      }
+    }
+    ctx.memory.mineEntrance = null
+    const sword = ctx.actions.bestTool('sword')
+    if (sword) await ctx.actions.equip(sword)
+    this._emit('cave_aborted', { y: Math.floor(bot.entity.position.y) })
+    return true
+  }
+
+  /** 💧 Sofort-Rettung: setzt den Bot auf sicheren, trockenen Boden in der Nähe. */
+  rescue () {
+    if (!this.ctx) return false
+    return this.ctx.liquid.hardRescue('manual')
   }
 
   _corpseRunDue () {
@@ -459,6 +581,9 @@ class MinecraftAIBot extends EventEmitter {
       activityData: this.activity.data || {},
       goal: this.currentAction ? this.currentAction.label : null,
       paused: this.paused,
+      mode: this.mode,
+      underground: this.isUnderground(),
+      inLiquid: ctx.liquid.inLiquid(),
       health: Math.round(bot.health * 10) / 10,
       food: bot.food,
       xpLevel: bot.experience ? bot.experience.level : 0,
@@ -510,13 +635,14 @@ class MinecraftAIBot extends EventEmitter {
     const def = VIEWER_GOALS[id]
     if (!def) return { ok: false, reason: 'unknown' }
     if (!this.ctx) return { ok: false, reason: 'offline', label: def.label }
+    if ((id === 'mine' || id === 'cave') && this.mode !== 'cave') return { ok: false, reason: 'cave_locked', label: def.label }
     if (id === 'corpse') return this.forceCorpseRun() ? { ok: true, label: def.label } : { ok: false, reason: 'no_loot', label: def.label }
     const ctx = this.ctx
     if (def.facts) {
       const facts = ctx.planner.facts()
       if (def.facts.every(f => facts[f])) return { ok: true, already: true, label: def.label }
     }
-    const goal = { id, label: def.label, by, facts: def.facts || null, pre: def.pre || [], activity: def.activity }
+    const goal = { id, label: def.label, by, facts: def.facts || null, pre: def.pre || [], activity: def.activity, underground: !!def.underground }
     if (def.task) goal.task = (c, t) => def.task(c, t)
     ctx.planner.pushGoal(goal)
     this.lastPlanKey = ''

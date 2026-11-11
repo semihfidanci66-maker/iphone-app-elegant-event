@@ -55,6 +55,18 @@ td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width:
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--cyan); }
 .hint { color: var(--dim); font-size: 12px; margin-top: 6px; }
 #plan { color: var(--lime); font-weight: 600; }
+#ctl { background: var(--panel); border: 2px solid #2b4a63; border-radius: var(--r); padding: 14px; margin-bottom: 14px; }
+#ctl h2 { font-size: 15px; color: var(--ink); letter-spacing: .02em; text-transform: none; }
+#ctl .big { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+#ctl .small { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+#ctl button { padding: 13px 12px; font-size: 14px; text-align: left; line-height: 1.3; white-space: normal; }
+#ctl button small { display: block; font-weight: 500; color: var(--dim); font-size: 12px; margin-top: 2px; }
+#ctl button.on { background: #12303a; color: var(--ink); border: 2px solid var(--cyan); }
+#ctl button.on small { color: #9fdff0; }
+#ctl button.alarm { background: #4a1420; border-color: #a03446; color: #ffd0d6; font-weight: 800; }
+#ctl button.alarm small { color: #f3a5b0; }
+#ctl button.water { background: #10293f; border-color: #2a5f8f; }
+#ctlState { margin-top: 10px; font-weight: 600; color: var(--lime); font-size: 13px; }
 #builder { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; margin-top: 10px; }
 </style>
 </head>
@@ -72,6 +84,19 @@ td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width:
     <span class="chip" id="cWs"><i></i><span>Server</span></span>
   </div>
 </header>
+<section id="ctl">
+  <h2>🎮 Bot-Steuerung: Was soll die KI machen?</h2>
+  <div class="big">
+    <button data-mode="surface">☀️ AN DER OBERFLÄCHE SPIELEN<small>Standard – kein Höhlen-Graben. Holz, Jagd, Haus, Kämpfe draußen.</small></button>
+    <button data-mode="cave">⛏️ JETZT IN DIE HÖHLE GEHEN<small>1x Erze &amp; Diamanten holen, danach automatisch wieder hoch.</small></button>
+    <button class="alarm" data-cmd="abort_cave">🚨 HÖHLE SOFORT ABBRECHEN &amp; RAUS AN DIE OBERFLÄCHE!<small>Bricht alles unter Tage ab und bringt den Bot nach oben.</small></button>
+    <button class="water" data-cmd="rescue">💧 Aus Wasser/Lava/Loch befreien<small>Sofort-Rettung auf sicheren, trockenen Boden.</small></button>
+  </div>
+  <div class="small">
+    <button data-goal="house">🏠 Haus bauen</button><button data-goal="sleep">🛏️ Bett bauen &amp; Schlafen</button><button data-cmd="corpse">💀 Todes-Loot holen</button><button data-mode="fight">⚔️ Nur Kämpfen</button>
+  </div>
+  <div id="ctlState"></div>
+</section>
 <main>
   <div class="col">
     <section>
@@ -140,7 +165,7 @@ const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash)
 let ws = null; let state = null; let rulesKey = ''
 const send = m => { if (DEMO) return demoSend(m); if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)) }
 const chip = (el, cls, text) => { el.className = 'chip ' + cls; el.lastElementChild.textContent = text }
-const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'Kampf', eat: 'Essen', sleep: 'Schlafen', corpse: 'Corpse-Run', explore: 'Erkunden', idle: 'Basis', paused: 'Pause', offline: 'Offline' }
+const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'Kampf', eat: 'Essen', sleep: 'Schlafen', corpse: 'Corpse-Run', swim: 'Im Wasser', guard: 'Kampfbereit', exit_cave: 'Raus aus der Höhle', explore: 'Erkunden', idle: 'Basis', paused: 'Pause', offline: 'Offline' }
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e }
 
 /* ---- TikTok oben links: säubern, dauerhaft merken (localStorage + Server), automatisch verbinden ---- */
@@ -190,6 +215,8 @@ function renderStatus (s) {
   const kv = $('kv'); kv.textContent = ''
   for (const [k, v] of cells) kv.appendChild(el('div', {}, el('b', { textContent: v ?? 0 }), el('span', { textContent: k })))
   $('bPause').textContent = s.paused ? 'Weiter' : 'Pause'
+  for (const b of document.querySelectorAll('#ctl [data-mode]')) b.classList.toggle('on', b.dataset.mode === (s.mode || 'surface'))
+  $('ctlState').textContent = !s.connected ? '' : `Modus: ${{ surface: 'Oberfläche', cave: 'Höhlen-Trip', fight: 'Nur Kämpfen' }[s.mode] || 'Oberfläche'} · ${s.inLiquid ? 'im Wasser/in Lava!' : s.underground ? 'unter Tage (Y ' + s.pos.y + ')' : 'an der Oberfläche (Y ' + s.pos.y + ')'}`
 }
 
 function renderRules () {
@@ -282,6 +309,9 @@ $('giveBtn').onclick = () => send({ type: 'BOT', cmd: 'give', item: $('giveItem'
 $('sayBtn').onclick = () => { if ($('sayTxt').value.trim()) { send({ type: 'SAY', text: $('sayTxt').value, emotion: $('sayEmo').value }); $('sayTxt').value = '' } }
 $('cfgBtn').onclick = () => send({ type: 'CONFIG_SET', minecraft: { host: $('mcHost').value, port: Number($('mcPort').value), username: $('mcUser').value, version: $('mcVer').value }, voice: $('voice').value })
 $('camPlayer').onchange = () => send({ type: 'CONFIG_SET', cameraPlayer: $('camPlayer').value.trim() })
+for (const b of document.querySelectorAll('#ctl [data-mode]')) b.onclick = () => send({ type: 'MODE', mode: b.dataset.mode })
+for (const b of document.querySelectorAll('#ctl [data-cmd]')) b.onclick = () => send({ type: 'BOT', cmd: b.dataset.cmd })
+for (const b of document.querySelectorAll('#ctl [data-goal]')) b.onclick = () => send({ type: 'BOT', cmd: 'goal', goal: b.dataset.goal })
 for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => send({ type: 'CAMERA', mode: b.dataset.cam })
 for (const b of document.querySelectorAll('[data-fmt]')) b.onclick = () => send({ type: 'LAYOUT_FORMAT', format: b.dataset.fmt })
 $('dzBtn').onclick = () => send({ type: 'DESIGNER', on: !(state && state.designer) })
@@ -327,6 +357,7 @@ function demoSend (m) {
   } else if (m.type === 'GIFT_REMOVE') { s.rules = s.rules.filter(r => r.id !== m.id); onMsg(s) } else if (m.type === 'SIM_GIFT') {
     const r = s.rules.find(x => x.id === m.ruleId); addFeed({ kind: 'gift', user: m.user, emoji: r.emoji, text: `${r.giftName} x${m.count} (${r.coins} Coins) → ${r.legend}` })
   } else if (m.type === 'SIM_CHAT') addFeed({ kind: 'chat', user: m.user, text: m.text, goal: /haus/i.test(m.text) ? 'house' : /nether/i.test(m.text) ? 'nether' : /schlaf/i.test(m.text) ? 'sleep' : /loot/i.test(m.text) ? 'corpse' : /diamant/i.test(m.text) ? 'diamonds' : null })
+  else if (m.type === 'MODE') { s.status.mode = m.mode; if (m.mode === 'cave') { s.status.underground = true; s.status.pos.y = 14; s.status.goal = 'Höhlen-Trip: Erze holen' } else if (m.mode === 'surface') { s.status.underground = false; s.status.pos.y = 66 } onMsg(s) } else if (m.type === 'BOT' && m.cmd === 'abort_cave') { Object.assign(s.status, { mode: 'surface', underground: false, goal: 'Raus an die Oberfläche' }); s.status.pos.y = 66; onMsg(s); onMsg({ type: 'TTS', emotion: 'hype', text: 'Alles klar, Höhle abgebrochen! Wir sind wieder oben an der frischen Luft, Chat!' }) } else if (m.type === 'BOT' && m.cmd === 'rescue') { s.status.inLiquid = false; onMsg(s); onMsg({ type: 'TTS', emotion: 'hype', text: 'Puh, gerettet! Wieder auf festem, trockenem Boden.' }) }
   else if (m.type === 'CAMERA') { s.config.cameraMode = m.mode; onMsg(s) } else if (m.type === 'DESIGNER') { s.designer = m.on; onMsg(s) } else if (m.type === 'LAYOUT_FORMAT') { s.layout = { format: m.format }; onMsg(s) } else addLog({ at: Date.now(), level: 'info', message: 'Vorschau: ' + JSON.stringify(m) })
 }
 function demo () {
@@ -335,7 +366,7 @@ function demo () {
   const R = (id, giftName, coins, emoji, action, legend, inLegend = false, amount = 1, hpMult = 1) => ({ id, giftName, match: [giftName.toLowerCase()], coins, emoji, icon: null, action, mob: null, amount, hpMult, legend, enabled: true, inLegend, custom: false })
   demoState = {
     type: 'STATE',
-    status: { connected: true, username: 'KI_Streamer', activity: 'mine', goal: 'Eisen suchen', health: 17, food: 16, pos: { x: 118, y: 16, z: -37 }, threats: 0, fighting: false, kills: 12, deaths: 1, paused: false, inv: { logs: 9, cobble: 71, iron: 4, diamonds: 0, food: 6, hasBed: true }, viewerGoals: [{ label: 'Haus bauen', by: 'Mia' }] },
+    status: { connected: true, username: 'KI_Streamer', mode: 'surface', underground: false, inLiquid: false, activity: 'wood', goal: 'Holz hacken', health: 17, food: 16, pos: { x: 118, y: 66, z: -37 }, threats: 0, fighting: false, kills: 12, deaths: 1, paused: false, inv: { logs: 9, cobble: 71, iron: 4, diamonds: 0, food: 6, hasBed: true }, viewerGoals: [{ label: 'Haus bauen', by: 'Mia' }] },
     botRunning: true,
     tiktok: { phase: 'idle', username: null, engine: null, viewers: 0, diagnostic: null, badge: '⚪ Nicht verbunden' },
     tunnel: { active: false, starting: false, url: null, qr: null, error: null },

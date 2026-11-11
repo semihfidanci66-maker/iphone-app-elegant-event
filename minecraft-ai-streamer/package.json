@@ -17,6 +17,7 @@
     "mineflayer": "^4.39.0",
     "mineflayer-pathfinder": "^2.4.5",
     "msedge-tts": "^2.1.1",
+    "puppeteer-core": "^25.17.0",
     "qrcode": "^1.5.4",
     "skinview3d": "^3.4.2",
     "tiktok-live-connector": "^2.5.0",

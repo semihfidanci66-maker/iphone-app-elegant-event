@@ -533,7 +533,7 @@ function setPanic (ms) { panicUntil = Math.max(panicUntil, performance.now() + m
 setInterval(() => { if (performance.now() > panicUntil) $('cam').classList.remove('panic') }, 300)
 
 /* ---------------------------------------------------------------- Status-Leiste der Facecam */
-const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen läuft', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'KAMPF', eat: 'Essen', sleep: 'Schlafen', explore: 'Erkunden', idle: 'Basis', recover: 'Loot holen', paused: 'Pause', offline: 'Offline' }
+const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen läuft', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'KAMPF', eat: 'Essen', sleep: 'Schlafen', swim: 'Im Wasser', guard: 'Kampfbereit', exit_cave: 'Raus aus der Höhle', corpse: 'Corpse-Run', explore: 'Erkunden', idle: 'Basis', recover: 'Loot holen', paused: 'Pause', offline: 'Offline' }
 const hpEl = $('hp')
 for (let i = 0; i < 10; i++) { const b = document.createElement('b'); b.appendChild(document.createElement('i')); hpEl.appendChild(b) }
 function setStatus (s) {
@@ -665,7 +665,7 @@ function onMessage (m) {
     case 'CHIME': chime(3); break
     case 'BOT_EVENT':
       if (m.event === 'swing') swing()
-      else if (m.event === 'hurt' || m.event === 'low_hp' || m.event === 'critical_hp') { hurt(m.event !== 'hurt'); if (m.event !== 'hurt') setPanic(3000) } else if (m.event === 'shield' || m.event === 'lava') { hurt(true); setPanic(2500) } else if (m.event === 'death' || m.event === 'corpse_run_start') { hurt(true); setPanic(5000) }
+      else if (m.event === 'hurt' || m.event === 'low_hp' || m.event === 'critical_hp') { hurt(m.event !== 'hurt'); if (m.event !== 'hurt') setPanic(3000) } else if (m.event === 'liquid_escape' && m.data && m.data.lava) { hurt(true); setPanic(4000) } else if (m.event === 'shield' || m.event === 'lava') { hurt(true); setPanic(2500) } else if (m.event === 'death' || m.event === 'corpse_run_start') { hurt(true); setPanic(5000) }
       break
   }
 }

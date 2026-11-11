@@ -8,6 +8,9 @@
  * - Nach JEDER Aktion wird neu geplant – Tod, Gifts oder Zuschauerwünsche ändern den Plan sofort.
  */
 
+// Aktionen, die unter Tage führen – nur mit Höhlen-Freigabe (Dashboard) oder als EIN automatischer Kurztrip
+const UNDERGROUND = new Set(['MineIron', 'MineDiamonds', 'MineLapis', 'MineObsidian4', 'MineObsidian10', 'GetGold'])
+
 const GOAL_LABEL = {
   woodKit: 'Holzwerkzeug', bed: 'Bett craften', stoneKit: 'Steinwerkzeug & Ofen', food: 'Essensvorrat', ironKit: 'Eisenausrüstung & Schild', waterBucket: 'Wassereimer', base: 'Haus bauen', diamondPick: 'Diamantspitzhacke', enchanted: 'Ausrüstung verzaubern', blazeRods: 'Nether & Lohenruten', diamonds: 'Diamanten', portal: 'Netherportal'
 }
@@ -258,6 +261,7 @@ class Planner {
       if (g.facts.every(f => facts[f])) { this.goalStack.shift(); this.ctx.emit('goal_done', { goal: g }); continue }
       const plan = this.planFor(g.facts, facts)
       if (!plan || !plan.steps.length) { this.goalStack.shift(); this.ctx.emit('goal_failed', { goal: g, reason: 'no_plan' }); continue }
+      if (UNDERGROUND.has(plan.steps[0].name) && !this.ctx.caveAllowed()) { this.goalStack.shift(); this.ctx.emit('goal_failed', { goal: g, reason: 'cave_locked' }); continue }
       return { action: plan.steps[0], goal: g, plan: plan.steps.map(s => s.label), facts }
     }
     // 2) Progression: erstes offenes Ziel, dessen erster Schritt nicht gesperrt ist
@@ -267,6 +271,11 @@ class Planner {
       const plan = this.planFor([fact], facts)
       if (!plan || !plan.steps.length) continue
       const res = { action: plan.steps[0], goal: { id: fact, label: GOAL_LABEL[fact] || fact, auto: true }, plan: plan.steps.map(s => s.label), facts }
+      if (UNDERGROUND.has(plan.steps[0].name) && !this.ctx.caveAllowed()) {
+        // genau EIN kurzer Automatik-Trip, und erst wenn Holz, Werkzeug und gebratenes Essen da sind
+        if (this.ctx.memory.autoCaveTripUsed || !(facts.woodKit && facts.stoneKit && facts.food)) continue
+        res.autoCaveTrip = true
+      }
       if (!this.onCooldown(plan.steps[0].name)) return res
       if (!fallback) fallback = res
     }
@@ -297,4 +306,4 @@ class Planner {
   }
 }
 
-module.exports = { Planner, GOAL_LABEL }
+module.exports = { Planner, GOAL_LABEL, UNDERGROUND }

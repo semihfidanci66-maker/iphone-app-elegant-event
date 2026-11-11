@@ -52,7 +52,7 @@ class HumanActions {
     walk.allowParkour = true
     walk.allowSprinting = true
     walk.canOpenDoors = true
-    walk.liquidCost = 4
+    walk.liquidCost = 1000 // Stufe 1: Wasser und Lava strikt umlaufen
     walk.dontCreateFlow = true
     this.walkMoves = walk
 

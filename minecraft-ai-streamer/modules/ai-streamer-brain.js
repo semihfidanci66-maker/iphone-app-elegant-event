@@ -136,6 +136,15 @@ const L = {
   goal_done: ['Check! {label} ist erledigt{by_part}!', '{label}: abgehakt{by_part}! Was kommt als Nächstes, Chat?'],
   goal_failed: ['Okay Leute, {label} hat gerade nicht geklappt. Ich versuch\'s später noch mal.'],
 
+  cave_aborted: ['Alles klar, Höhle abgebrochen! Wir sind wieder oben an der frischen Luft, Chat!'],
+  cave_start: { manual: ['Die Regie schickt mich in die Höhle! Einmal Erze holen und dann sofort wieder hoch.'], auto: ['Holz, Werkzeug und Essen sind da. Ich mach genau einen kurzen Abstecher unter Tage und komm direkt wieder hoch.'] },
+  cave_done: ['So, Höhlen-Trip erledigt. Zurück an die Oberfläche, hier oben seht ihr wenigstens alles!'],
+  cave_locked: ['In die Höhle geh ich nur, wenn die Regie es freigibt, {user}. Hier oben seht ihr einfach mehr!', 'Höhle ist gerade gesperrt, {user}. Wir bleiben an der Oberfläche!'],
+  cave_locked_self: ['Dafür müsste ich unter Tage, und das mach ich nur auf Ansage. Ich bleib erstmal hier oben.'],
+  mode_fight: ['Ab jetzt wird nur noch gekämpft, Chat! Schickt mir eure Monster!'],
+  mode_surface: ['Ich bleib ab jetzt schön an der Oberfläche. Kein Höhlen-Graben mehr.'],
+  liquid_escape: { water: ['Ich bin im Wasser! Kurz ans Ufer schwimmen.', 'Platsch. Okay, raus hier, ans nächste Ufer!'], lava: ['LAVA! Raus, raus, raus!', 'Ich brenne! Sofort raus aus der Lava!'] },
+  liquid_rescue: ['Puh, gerettet! Wieder auf festem, trockenem Boden.', 'Das war knapp, Chat. Ich steh wieder trocken.'],
   live_connected: ['So Chat, die Verbindung steht! Wir sind live drin – wehe, ihr eskaliert heute wieder mit den Rosen!'],
   gift_discovered: ['Oha, {gift} kannte ich noch gar nicht! Ist ab sofort im Katalog, danke {user}!'],
   callout_weapon: [
@@ -400,7 +409,7 @@ class StreamerBrain extends EventEmitter {
     const act = s.activity || 'offline'
     const mineReason = inv.pickTier >= 3 ? 'wir brauchen dringend Diamanten für die nächste Galaxie-Welle!' : inv.pickTier >= 2 ? 'ich such Eisen für Schwert und Schild!' : 'ich brauch erstmal Stein für vernünftiges Werkzeug!'
     const doing = { wood: 'in Ruhe Holz hacken', mine: 'in Ruhe minen', build: 'mein Haus zu Ende bauen', smelt: 'mein Eisen schmelzen', hunt: 'was zu essen jagen', craft: 'in Ruhe craften', enchant: 'verzaubern', portal: 'mein Portal bauen', nether: 'den Nether überleben', explore: 'die Gegend erkunden', eat: 'was essen', sleep: 'schlafen' }[act] || 'durchatmen'
-    const short = { wood: 'Holz hacken', mine: `Minen auf Ebene ${s.pos ? s.pos.y : '?'}`, build: 'Haus bauen', smelt: 'Sachen im Ofen schmelzen', hunt: 'Tiere jagen', craft: 'Werkzeug craften', enchant: 'Verzaubern', portal: 'Netherportal bauen', nether: 'Nether-Expedition', explore: 'Gegend erkunden', combat: 'Kämpfen', eat: 'Essen', sleep: 'Schlafen', idle: 'Basis-Alltag', recover: 'Loot zurückholen', offline: 'Neu verbinden', paused: 'Pause' }[act] || 'Überleben'
+    const short = { wood: 'Holz hacken', mine: `Minen auf Ebene ${s.pos ? s.pos.y : '?'}`, build: 'Haus bauen', swim: 'Aus dem Wasser retten', guard: 'Kampfbereit warten', exit_cave: 'Raus aus der Höhle', corpse: 'Loot zurückholen', smelt: 'Sachen im Ofen schmelzen', hunt: 'Tiere jagen', craft: 'Werkzeug craften', enchant: 'Verzaubern', portal: 'Netherportal bauen', nether: 'Nether-Expedition', explore: 'Gegend erkunden', combat: 'Kämpfen', eat: 'Essen', sleep: 'Schlafen', idle: 'Basis-Alltag', recover: 'Loot zurückholen', offline: 'Neu verbinden', paused: 'Pause' }[act] || 'Überleben'
     return {
       user: v.name || '',
       y: s.pos ? String(s.pos.y).replace('-', 'Minus ') : '?',
@@ -510,6 +519,7 @@ class StreamerBrain extends EventEmitter {
       const res = this.deps.pushGoal(goal, m.name) || { ok: false }
       m.goals++
       if (!res.ok && res.reason === 'offline') reply(this.line(L.goal_offline, vars), { priority: 3 })
+      else if (!res.ok && res.reason === 'cave_locked') reply(this.line(L.cave_locked, vars), { priority: 3 })
       else if (!res.ok && res.reason === 'no_loot') reply(this.line(L.corpse_run_none, vars), { priority: 3 })
       else if (res.already) reply(this.line(L.goal_already, { ...vars, label: res.label }), { priority: 3 })
       else if (res.ok && fighting) reply(this.line(L.goal_busy, vars), { priority: 3 })
@@ -587,6 +597,13 @@ class StreamerBrain extends EventEmitter {
       }
       case 'build_done': this.lastStage = -1; return say(L.build_done, d, { emotion: 'hype', priority: 3, cd: 600000 })
       case 'build_paused': return say(L.build_paused, { missing: (d.missing || []).map(k => KIND_DE[k] || k).join(' und ') || 'Material' }, { cd: 90000 })
+      case 'cave_aborted': return say(L.cave_aborted, d, { emotion: 'hype', priority: 5, cd: 3000, ttl: 20000 })
+      case 'cave_start': return say(d.auto ? L.cave_start.auto : L.cave_start.manual, d, { priority: 3, cd: 10000 })
+      case 'cave_done': return say(L.cave_done, d, { priority: 2, cd: 10000 })
+      case 'cave_locked': return say(L.cave_locked_self, d, { cd: 600000 })
+      case 'mode': if (d.mode === 'fight') say(L.mode_fight, d, { emotion: 'hype', priority: 3, cd: 5000 }); return
+      case 'liquid_escape': return say(d.lava ? L.liquid_escape.lava : L.liquid_escape.water, d, { emotion: d.lava ? 'panic' : 'hype', priority: d.lava ? 5 : 2, key: 'liquid', cd: d.lava ? 8000 : 40000 })
+      case 'liquid_rescue': return say(L.liquid_rescue, d, { emotion: 'hype', priority: 3, cd: 15000 })
       case 'sleep_start': return say(d.thunder ? L.sleep_thunder : L.sleep_start, d, { key: 'sleep_start', cd: 120000, priority: 3 })
       case 'sleep_failed': return say(L.sleep_failed, d, { cd: 120000 })
       case 'wake': return say(L.wake, d, { cd: 120000 })
@@ -624,7 +641,7 @@ class StreamerBrain extends EventEmitter {
       case 'day': return say(L.day, d, { cd: 300000 })
       case 'pickup': if (d.item === 'diamond') say(L.pickup_diamond, d, { cd: 60000, emotion: 'hype' }); return
       case 'goal_done': if (d.goal && !d.goal.auto) say(L.goal_done, { label: d.goal.label, by_part: d.goal.by ? `, danke für die Idee, ${d.goal.by}` : '' }, { key: 'goal_done:' + d.goal.id, cd: 5000, emotion: 'hype', priority: 2 }); return
-      case 'goal_failed': if (d.goal && !d.goal.auto) say(L.goal_failed, { label: d.goal.label }, { cd: 20000 }); return
+      case 'goal_failed': if (d.goal && !d.goal.auto) { if (d.reason === 'cave_locked') say(L.cave_locked, { user: d.goal.by || 'Chat' }, { cd: 20000 }); else say(L.goal_failed, { label: d.goal.label }, { cd: 20000 }) } return
       case 'warn': if (d.code === 'no_op') say(L.no_op, d, { cd: 600000 }); return
       default:
         void s

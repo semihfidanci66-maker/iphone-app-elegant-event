@@ -393,6 +393,9 @@ class MiningPhase {
     const { bot, ctx } = this
     const a = ctx.actions
     if (done()) return true
+    // SURFACE_SURVIVAL: ohne Freigabe kein Erzabbau unter Tage; Stein nur als flacher Steinbruch (nie unter Y 58)
+    const cave = ctx.caveAllowed()
+    if (!cave && resource !== 'stone') { ctx.emit('cave_locked', { resource }); return false }
     if (a.pickTier() < 1) return false
     await a.equip(a.bestTool('pickaxe'))
     // 1) Sichtbare Erze/Höhlen zuerst – kein Mensch gräbt, wenn das Erz offen in der Wand hängt
@@ -409,13 +412,15 @@ class MiningPhase {
     // 2) Treppe auf die richtige Ebene
     const level = this.levelFor(resource)
     const y = this.feet().y
-    const target = level === null || level === undefined ? y - 8 : Math.min(level, y - 4)
+    let target = level === null || level === undefined ? y - 8 : Math.min(level, y - 4)
+    if (!cave) { target = Math.max(target, 58); if (y - 2 < target) return done() }
     if (y > target) {
       const ok = await this.staircaseDown(target, token, done)
       if (done()) return true
       if (!ok && this.feet().y > target + 6) return false
     }
-    // 3) Stollen auf der Ebene
+    // 3) Stollen auf der Ebene (nur mit Höhlen-Freigabe)
+    if (!cave) return done()
     return this.branchMine(token, done, resource === 'diamond' ? 420 : 200)
   }
 
@@ -423,6 +428,7 @@ class MiningPhase {
   /** Obsidian mit Wassereimer an einem Lavasee erzeugen und mit der Diamantspitzhacke abbauen. */
   async harvestObsidian (count, token) {
     const { bot, ctx } = this
+    if (!ctx.caveAllowed()) return false
     const a = ctx.actions
     const obsId = ctx.mcData.blocksByName.obsidian.id
     const lavaId = ctx.mcData.blocksByName.lava.id
