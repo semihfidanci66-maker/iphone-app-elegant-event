@@ -35,11 +35,10 @@ if errorlevel 1 (
 )
 
 rem --- 2. Abhaengigkeiten ---
-if not exist node_modules (
-  echo  Installiere Abhaengigkeiten ...
-  call npm install --no-audit --no-fund
-  if errorlevel 1 ( echo  npm install ist fehlgeschlagen. & pause & exit /b 1 )
-)
+rem Bei jedem Start pruefen: neue Versionen bringen neue Pakete mit (dauert nur Sekunden, wenn alles da ist)
+echo  Pruefe Abhaengigkeiten ...
+call npm install --no-audit --no-fund
+if errorlevel 1 ( echo  npm install ist fehlgeschlagen. & pause & exit /b 1 )
 
 rem --- 3. Minecraft-Server (einmalig, fragt EULA und deinen Namen) ---
 if not exist mc-server\server.jar (
@@ -49,10 +48,17 @@ if not exist mc-server\server.jar (
 )
 
 rem --- 4. Server und KI starten ---
-echo  Starte Minecraft-Server in eigenem Fenster ...
-start "Minecraft-Server 1.21.1" /D "%~dp0mc-server" java -Xms2G -Xmx4G -jar server.jar nogui
-echo  Warte, bis der Server bereit ist (ca. 40 Sekunden) ...
-timeout /t 40 /nobreak >nul
+rem Laeuft schon ein Minecraft-Server (Port 25565)? Dann keinen zweiten starten.
+rem (Adresse statt Zustandswort pruefen: auf deutschem Windows heisst LISTENING "ABHOEREN")
+netstat -ano | findstr /C:"0.0.0.0:25565" /C:"[::]:25565" >nul
+if not errorlevel 1 (
+  echo  Minecraft-Server laeuft bereits - wird nicht noch einmal gestartet.
+) else (
+  echo  Starte Minecraft-Server in eigenem Fenster ...
+  start "Minecraft-Server 1.21.1" /D "%~dp0mc-server" java -Xms2G -Xmx4G -jar server.jar nogui
+  echo  Warte, bis der Server bereit ist ^(ca. 40 Sekunden^) ...
+  timeout /t 40 /nobreak >nul
+)
 
 echo.
 echo  Starte KI-Streamer. Das Dashboard oeffnet sich im Browser.

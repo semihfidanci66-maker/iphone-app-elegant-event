@@ -10,7 +10,11 @@
  * - Kostenbremse: Obergrenze in Dollar pro Sitzung und Anfragen pro Stunde
  * - Chat-Text ist fremder Inhalt: Er steht als Daten im Prompt, Anweisungen darin werden ignoriert
  */
-const Anthropic = require('@anthropic-ai/sdk')
+// Fehlt das Paket (alte Installation ohne npm install), läuft das Programm trotzdem weiter –
+// nur ohne Sprachmodell; der Streamer spricht dann seine festen Textbausteine.
+let Anthropic = null
+let sdkError = null
+try { Anthropic = require('@anthropic-ai/sdk') } catch (e) { sdkError = 'Paket @anthropic-ai/sdk fehlt – START.bat ausführen (installiert es)' }
 
 // Preise in Dollar pro 1 Mio. Tokens (Stand November 2026). Cache-Lesen kostet ein Zehntel des Eingabepreises.
 const MODELS = {
@@ -101,6 +105,7 @@ class LlmBrain {
   /** Schlüssel setzen (leer = entfernen). Ohne eigenen Schlüssel sucht das SDK in der Umgebung (ANTHROPIC_API_KEY). */
   setKey (key) {
     const k = String(key || '').trim()
+    if (!Anthropic) { this.client = null; this.hasKey = false; this.stats.lastError = sdkError; return false }
     try {
       // maxRetries 0: lieber sofort den Textbaustein als eine verspätete Antwort
       if (k) this.client = new Anthropic({ apiKey: k, maxRetries: 0, timeout: this.timeoutMs })
@@ -182,6 +187,7 @@ class LlmBrain {
 
   /** Fehler in einen Satz für das Dashboard übersetzen. */
   _explain (e) {
+    if (!Anthropic) return String((e && e.message) || e).slice(0, 140)
     if (e instanceof Anthropic.AuthenticationError) return 'API-Schlüssel ist ungültig'
     if (e instanceof Anthropic.PermissionDeniedError) return 'Schlüssel hat keinen Zugriff auf dieses Modell'
     if (e instanceof Anthropic.RateLimitError) return 'Zu viele Anfragen (Limit des Kontos erreicht)'
