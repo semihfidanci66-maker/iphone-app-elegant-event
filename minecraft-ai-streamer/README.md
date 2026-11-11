@@ -29,7 +29,7 @@ In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die St
 - **Overlay im TikTok-Hochformat (1080×1920) als Standard:** oben bleiben 230 px für Profil und Zuschauerzahl frei, unten links der Chat, ganz unten die Bedienleiste. In OBS die Browserquelle auf **1080 × 1920** stellen. 16:9 und Split bleiben im Reiter *Stream* wählbar.
 - **Gift-Leiste als Karussell:** vier Gift-Karten pro Seite (Bild, Name, Coins, Wirkung), alle 7 Sekunden klappen sie animiert zur nächsten Seite um. Bis zu 24 Gifts. Kommt ein Gift an, springt die Leiste auf dessen Seite und die Karte leuchtet auf.
 - **Dashboard ↔ Overlay sofort synchron:** Stellst du im Reiter *Gifts* z. B. die Rose von Zombie auf Creeper, steht im Overlay ohne Neuladen „Rose → Creeper“; die geänderte Karte blinkt kurz. Rechts im Reiter läuft das echte Overlay als Live-Vorschau mit.
-- **Echte TikTok-Gifts zum Anklicken:** Die Bibliothek im Reiter *Gifts* zeigt alle bekannten Gifts mit Coin-Preis. Sobald dein Live einmal verbunden ist, lädt das Programm die komplette Gift-Liste deiner Region mit Originalbildern und aktuellen Preisen von TikTok und speichert sie in `config/tiktok-gifts.json`. Bis dahin steht ein Emoji.
+- **Alle TikTok-Gifts für Deutschland zum Anklicken:** Die Bibliothek im Reiter *Gifts* enthält über 800 Gifts mit Originalbild und Coin-Preis (`modules/tiktok-gifts-de.json`, Stand November 2026, Quelle: streamtoearn.io/gifts?region=DE). Suche nach Name (deutsch oder englisch) oder Coins, Filter nach Preisbereich. Ist dein Live verbunden, gleicht das Programm Preise und neue Gifts automatisch mit TikTok ab und speichert Abweichungen in `config/tiktok-gifts.json`.
 - **Facecam mit Gefühlen:** Wut-Balken, der sich mit jedem Monster-Gift und jedem Treffer füllt. Die Figur wird sauer (Fäuste, rotes Gesicht, Zähne), rastet aus (stampft, schüttelt den Kopf, Rahmen bebt), gerät in Panik, ist nach dem Tod am Boden, jubelt bei Support-Gifts und Kills, schläft, hackt, isst und läuft sichtbar mit.
 
 ## Neu in Version 4
@@ -87,7 +87,7 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 30 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 31 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)

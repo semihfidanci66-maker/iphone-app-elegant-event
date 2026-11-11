@@ -9,6 +9,9 @@
  * - Kein eigener Timer: Bossbars werden über tick() aus dem zentralen Game-Loop gepflegt
  */
 const { buildDefaultRules, tierAction } = require('./gifts-catalog')
+/** Alle TikTok-Gifts für Deutschland: [Name, Coins, Bild-URL] */
+let GIFTS_DE = []
+try { GIFTS_DE = require('./tiktok-gifts-de.json') } catch (_) {}
 
 const ACTIONS = {
   zombie_fast: { label: 'Schneller Zombie', kind: 'mob', mob: 'zombie', tier: 1, spawnText: 'einen Zombie' },
@@ -63,6 +66,9 @@ class GiftEngine {
     this.library = new Map()
     this.libraryAt = 0
     for (const r of buildDefaultRules()) this.library.set(r.giftName.toLowerCase(), { key: r.giftName.toLowerCase(), name: r.giftName, coins: r.coins, emoji: r.emoji, icon: null, alt: r.match, live: false })
+    // mitgelieferte Deutschland-Liste: Originalbilder und Preise für alle Gifts, auch ohne Live-Verbindung
+    this.learnLibrary(GIFTS_DE.map(([name, coins, icon]) => ({ name, coins, icon })), false)
+    this.learned = new Set() // was erst live dazugelernt wurde (nur das wird gespeichert)
   }
 
   /** Gespeicherte Bibliothek (config/tiktok-gifts.json) wieder einlesen. */
@@ -88,8 +94,11 @@ class GiftEngine {
       const coins = Math.max(0, Math.min(100000, Math.round(Number(g.coins) || 0)))
       const icon = url(g.icon)
       // bekannter Katalog-Eintrag unter englischem Namen (z. B. "Finger Heart" -> "Fingerherz")
-      let e = this.library.get(key) || [...this.library.values()].find(x => !x.live && x.alt && x.alt.includes(key))
+      let e = this.library.get(key) || this.altIndex().get(key)
+      // gleicher Name, anderer Preis und anderes Bild = eigenes Gift (z. B. "Sports Car" 4999 und 7000)
+      if (e && !stamp && e.seeded && coins && icon && e.coins !== coins && e.icon !== icon) { const k2 = `${key}#${coins}`; e = this.library.get(k2) || null; if (!e) { e = { key: k2, name, coins, emoji: '🎁', icon, alt: [key], live: true, seeded: true }; this.library.set(k2, e); changed = true; continue } }
       if (!e) { e = { key, name, coins: coins || 1, emoji: '🎁', icon: null, alt: [key], live: true }; this.library.set(key, e); changed = true }
+      if (!stamp) e.seeded = true; else if (this.learned) this.learned.add(e.key)
       if (icon && e.icon !== icon) { e.icon = icon; changed = true }
       if (coins && e.coins !== coins) { e.coins = coins; changed = true }
       if (g.id != null && e.giftId !== String(g.id)) { e.giftId = String(g.id); changed = true }
@@ -104,24 +113,34 @@ class GiftEngine {
     return changed
   }
 
+  /** Katalog-Einträge über ihre englischen Namen finden ("finger heart" -> Fingerherz). */
+  altIndex () {
+    if (this._alt && this._altSize === this.library.size) return this._alt
+    this._alt = new Map(); this._altSize = this.library.size
+    for (const e of this.library.values()) if (!e.live) for (const a of e.alt || []) if (!this._alt.has(a)) this._alt.set(a, e)
+    return this._alt
+  }
+
   /** Bibliothek fürs Dashboard, nach Coins sortiert. `ruleId` zeigt, ob das Gift schon eine Regel hat. */
   libraryList () {
     return [...this.library.values()].sort((a, b) => a.coins - b.coins || a.name.localeCompare(b.name)).map(e => {
-      const rule = this.rules.find(r => r.match.includes(e.key) || (e.alt || []).some(a => r.match.includes(a)))
-      return { key: e.key, name: e.name, coins: e.coins, emoji: e.emoji, icon: e.icon, ruleId: rule ? rule.id : null }
+      const rule = e.key.includes('#') ? this.rules.find(r => r.id === 'tt_' + slug(e.key)) : this.rules.find(r => (r.match.includes(e.key) || (e.alt || []).some(a => r.match.includes(a))))
+      const alt = (e.alt || []).filter(a => a !== e.name.toLowerCase()).join(' ')
+      return { key: e.key, name: e.name, coins: e.coins, emoji: e.emoji, icon: e.icon, ruleId: rule ? rule.id : null, ...(alt ? { alt } : {}) }
     })
   }
 
-  librarySnapshot () { return { at: this.libraryAt, gifts: [...this.library.values()].filter(e => e.live || e.icon).map(e => ({ id: e.giftId, name: e.name, coins: e.coins, icon: e.icon })) } }
+  librarySnapshot () { return { at: this.libraryAt, gifts: [...this.library.values()].filter(e => this.learned.has(e.key)).map(e => ({ id: e.giftId, name: e.name, coins: e.coins, icon: e.icon })) } }
 
   /** Gift aus der Bibliothek als Regel anlegen (Aktion passend zum Coin-Wert, im Overlay sichtbar). */
   addFromLibrary (key) {
     const e = this.library.get(String(key || '').toLowerCase())
     if (!e) return null
-    const have = this.rules.find(r => r.match.includes(e.key))
+    const dup = e.key.includes('#')
+    const have = dup ? this.rules.find(r => r.id === 'tt_' + slug(e.key)) : this.rules.find(r => r.match.includes(e.key))
     if (have) { have.enabled = true; return have }
     const t = tierAction(e.coins || 1)
-    const rule = this.sanitizeRule({ id: 'tt_' + slug(e.name), giftName: e.name, match: e.alt, coins: e.coins, emoji: e.emoji, icon: e.icon, action: t.action, amount: t.amount, legend: t.legend, enabled: true, inLegend: true })
+    const rule = this.sanitizeRule({ id: 'tt_' + slug(dup ? e.key : e.name), giftName: e.name, match: e.alt, coins: e.coins, emoji: e.emoji, icon: e.icon, action: t.action, amount: t.amount, legend: t.legend, enabled: true, inLegend: true })
     this.rules.push(rule)
     return rule
   }
@@ -208,7 +227,7 @@ class GiftEngine {
 
   findRule (gift) {
     const name = String(gift.name || '').toLowerCase().trim()
-    return this.rules.find(r => r.id === gift.ruleId) || this.rules.find(r => r.match.includes(name)) || null
+    return this.rules.find(r => r.id === gift.ruleId) || (gift.coins && this.rules.find(r => r.match.includes(name) && r.coins === gift.coins)) || this.rules.find(r => r.match.includes(name)) || null
   }
 
   /** Live-Auto-Discovery: unbekanntes Gift in den Katalog aufnehmen, Aktion passend zum Coin-Wert. */

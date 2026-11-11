@@ -284,6 +284,7 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
       <section>
         <h2>1 · TikTok-Gift auswählen <small id="libInfo"></small></h2>
         <div class="row"><input id="libFilter" placeholder="Gift suchen, z. B. Rose oder 100 …" aria-label="TikTok-Gift suchen"><div class="seg" id="libSeg"><button data-lib="all" class="on">Alle</button><button data-lib="new">Noch nicht belegt</button><button data-lib="have">Belegt</button></div></div>
+        <div class="row"><div class="seg" id="libPrice"><button data-price="" class="on">Alle Preise</button><button data-price="1-9">1–9</button><button data-price="10-99">10–99</button><button data-price="100-999">100–999</button><button data-price="1000-9999">1.000–9.999</button><button data-price="10000-999999">ab 10.000</button></div></div>
         <div id="lib" style="margin-top:10px"></div>
         <div class="hint" id="libHint"></div>
       </section>
@@ -513,19 +514,22 @@ function renderSky (s) {
 }
 
 /* ---- TikTok-Bibliothek: echte Gifts zum Anklicken ---- */
-let library = { at: 0, gifts: [] }; let libMode = 'all'; let flashRule = null
+let library = { at: 0, gifts: [] }; let libMode = 'all'; let libPrice = null; let flashRule = null
+const LIB_MAX = 140 // mehr Karten auf einmal machen die Seite träge – Suche und Preisfilter grenzen ein
 function renderLib () {
   const q = $('libFilter').value.trim().toLowerCase()
   const box = $('lib'); box.textContent = ''
   const withIcon = library.gifts.filter(g => g.icon).length
   $('libInfo').textContent = `${library.gifts.length} Gifts`
-  $('libHint').textContent = withIcon
-    ? `${withIcon} Gifts mit Originalbild und aktuellem Coin-Preis direkt von TikTok${library.at ? ' (Stand ' + new Date(library.at).toLocaleDateString('de-DE') + ')' : ''}. Anklicken legt das Gift an oder springt zu seiner Zeile.`
-    : 'Namen und Coin-Preise sind hinterlegt. Die Originalbilder und die komplette Gift-Liste deiner Region lädt das Programm automatisch von TikTok, sobald dein Live einmal verbunden ist. Bis dahin steht ein Emoji.'
+  let shown = 0; let total = 0
   for (const g of library.gifts) {
-    if (q && !g.name.toLowerCase().includes(q) && String(g.coins) !== q) continue
+    if (q && !g.name.toLowerCase().includes(q) && !(g.alt || '').includes(q) && String(g.coins) !== q) continue
     if (libMode === 'new' && g.ruleId) continue
     if (libMode === 'have' && !g.ruleId) continue
+    if (libPrice && (g.coins < libPrice[0] || g.coins > libPrice[1])) continue
+    total++
+    if (shown >= LIB_MAX) continue
+    shown++
     const pic = g.icon ? el('img', { src: g.icon, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' }) : el('span', { className: 'emo', textContent: g.emoji })
     if (g.icon) pic.onerror = () => pic.replaceWith(el('span', { className: 'emo', textContent: g.emoji }))
     const b = el('button', { className: g.ruleId ? 'have' : '', title: g.ruleId ? 'Schon belegt – zur Zeile springen' : 'Hinzufügen' }, pic, el('span', { className: 'nm', textContent: g.name }), el('span', { className: 'co', textContent: '🪙 ' + g.coins }))
@@ -536,8 +540,10 @@ function renderLib () {
     box.appendChild(b)
   }
   if (!box.childElementCount) box.appendChild(el('div', { className: 'hint', textContent: 'Kein Gift gefunden.' }))
+  $('libHint').textContent = `${total > shown ? `Zeige ${shown} von ${total} – Suche oder Preisfilter benutzen. ` : `${total} Gifts. `}Alle TikTok-Gifts für Deutschland mit Originalbild und Coin-Preis (${withIcon} mit Bild). Anklicken legt das Gift an oder springt zu seiner Zeile. Preise aktualisieren sich von selbst, sobald dein Live verbunden ist.`
 }
 $('libFilter').oninput = renderLib
+for (const b of $$('[data-price]')) b.onclick = () => { libPrice = b.dataset.price ? b.dataset.price.split('-').map(Number) : null; for (const x of $$('[data-price]')) x.classList.toggle('on', x === b); renderLib(); $('lib').scrollTop = 0 }
 for (const b of $$('[data-lib]')) b.onclick = () => { libMode = b.dataset.lib; for (const x of $$('[data-lib]')) x.classList.toggle('on', x === b); renderLib() }
 /** Legendentext passend zur Aktion: "3× Creeper" bzw. der Name der Aktion. */
 function autoLegend (action, mob, amount) {
@@ -748,7 +754,7 @@ function demoSend (m) {
       break
     }
     case 'GIFT_REMOVE': s.rules = s.rules.filter(r => r.id !== m.id); break
-    case 'GIFT_ADD_LIBRARY': { const g = library.gifts.find(x => x.key === m.key); s.rules.push({ id: 'tt_' + g.key, giftName: g.name, match: [g.key], coins: g.coins, emoji: g.emoji, icon: null, action: 'zombie_fast', mob: null, amount: 1, hpMult: 1, legend: 'Zombie', enabled: true, inLegend: true, custom: false }); g.ruleId = 'tt_' + g.key; renderLib(); break }
+    case 'GIFT_ADD_LIBRARY': { const g = library.gifts.find(x => x.key === m.key); if (!g || g.ruleId) break; s.rules.push({ id: 'tt_' + g.key, giftName: g.name, match: [g.key], coins: g.coins, emoji: g.emoji, icon: null, action: 'zombie_fast', mob: null, amount: 1, hpMult: 1, legend: 'Zombie', enabled: true, inLegend: true, custom: false }); g.ruleId = 'tt_' + g.key; renderLib(); break }
     case 'SIM_GIFT': { const r = s.rules.find(x => x.id === m.ruleId); addFeed({ kind: 'gift', user: m.user, emoji: r.emoji, text: `${r.giftName} x${m.count} (${r.coins} Coins) → ${r.legend}` }); return }
     case 'SIM_CHAT': addFeed({ kind: 'chat', user: m.user, text: m.text, goal: /haus/i.test(m.text) ? 'house' : /nether/i.test(m.text) ? 'nether' : /schlaf/i.test(m.text) ? 'sleep' : /loot/i.test(m.text) ? 'corpse' : /diamant/i.test(m.text) ? 'diamonds' : null }); return
     case 'MODE': st.mode = m.mode; if (m.mode === 'cave') { st.underground = true; st.pos.y = 14; st.goal = 'Höhlen-Trip: Erze holen' } else { st.underground = false; st.pos.y = 66; st.goal = m.mode === 'fight' ? 'Kampfbereit' : 'Holz hacken' } break

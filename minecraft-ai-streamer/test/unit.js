@@ -237,6 +237,18 @@ t('Stimme: nur männliche Neural-Stimmen, nie ein Browser-Fallback', () => {
   const files = [...walk(path.join(__dirname, '..', 'public')), ...walk(path.join(__dirname, '..', 'modules')), path.join(__dirname, '..', 'server.js')]
   for (const f of files) if (/\.(js|html)$/.test(f)) assert(!/speechSynthesis\s*[.(]|SpeechSynthesisUtterance\s*\(/.test(fs.readFileSync(f, 'utf8')), 'speechSynthesis-Aufruf in ' + f)
 })
+t('Gift-Bibliothek: Deutschland-Liste ist eingebaut, jede Startregel hat Originalbild und echten Preis', () => {
+  const list = require('../modules/tiktok-gifts-de.json')
+  assert(list.length > 700, 'Liste unvollständig: ' + list.length)
+  for (const [name, coins, icon] of list) assert(name && coins >= 1 && /^https:\/\/p\d+-webcast\.tiktokcdn\.com\//.test(icon), name)
+  const { g } = mkGifts()
+  assert.deepStrictEqual(g.rules.filter(r => !r.icon).map(r => r.giftName), [])
+  const real = new Map(list.map(x => [x[0].toLowerCase(), x[1]]))
+  for (const r of g.rules) assert(r.match.some(m => real.has(m)), 'kein echtes Gift: ' + r.giftName)
+  assert.strictEqual(g.rules.find(r => r.id === 'galaxy').coins, 1000); assert.strictEqual(g.rules.find(r => r.id === 'rosa').coins, 10)
+  const lib = g.libraryList(); assert(lib.length > 700); assert(lib.every(x => x.icon))
+  assert.strictEqual(g.librarySnapshot().gifts.length, 0, 'mitgelieferte Gifts werden nicht doppelt gespeichert')
+})
 t('Gift-Bibliothek: echte TikTok-Liste liefert Bild und Preis, Auswahl legt eine Regel an', () => {
   const { g } = mkGifts()
   const before = g.libraryList().length
@@ -244,7 +256,7 @@ t('Gift-Bibliothek: echte TikTok-Liste liefert Bild und Preis, Auswahl legt eine
   assert.strictEqual(g.rules.find(r => r.id === 'rose').icon, 'https://p16-webcast.tiktokcdn.com/img/rose.png')
   assert.strictEqual(g.rules.find(r => r.id === 'finger_heart').icon, 'https://p16-webcast.tiktokcdn.com/img/fh.png', 'englischer Name trifft den deutschen Katalog-Eintrag')
   const lib = g.libraryList()
-  assert.strictEqual(lib.length, before + 1); assert.strictEqual(lib[lib.length - 2].name === 'Drachenflamme' || lib.some(x => x.name === 'Drachenflamme' && x.icon === null && x.ruleId === null), true)
+  assert.strictEqual(lib.length, before + 1); assert(lib.some(x => x.name === 'Drachenflamme' && x.icon === null && x.ruleId === null))
   const r = g.addFromLibrary('drachenflamme'); assert.strictEqual(r.coins, 26999); assert.strictEqual(r.action, 'boss_warden'); assert(r.inLegend)
   assert.strictEqual(g.libraryList().find(x => x.name === 'Drachenflamme').ruleId, r.id)
   assert.strictEqual(g.learnLibrary([{ name: 'Rose', coins: 1, icon: 'https://p16-webcast.tiktokcdn.com/img/rose.png' }]), false, 'nichts Neues -> keine Änderung')

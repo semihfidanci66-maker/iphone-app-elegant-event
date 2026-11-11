@@ -243,10 +243,10 @@ function handle (m) {
     }
     case 'TIKTOK_DISCONNECT': tiktok.stop(); break
     case 'GIFT_RULES_SET': gifts.setRules(m.rules); saveConfig(); syncGiftConfig(); broadcastState(); break
-    case 'GIFT_UPSERT': { const r = gifts.upsertRule(m.rule || {}); if (r) { log('info', `Gift gespeichert: ${r.giftName} (${r.coins}) -> ${r.legend}`); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break }
+    case 'GIFT_UPSERT': { const r = gifts.upsertRule(m.rule || {}); if (r) { log('info', `Gift gespeichert: ${r.giftName} (${r.coins}) -> ${r.legend}`); saveConfig(); syncGiftConfig(); broadcastState() } break }
     case 'GIFT_REMOVE': if (gifts.removeRule(String(m.id))) { saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break
     case 'GIFT_ADD_LIBRARY': { const r = gifts.addFromLibrary(m.key); if (r) { log('info', `Gift hinzugefügt: ${r.giftName} (${r.coins} Coins) -> ${r.legend}`); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break }
-    case 'GIFT_RULES_RESET': gifts.resetRules(); gifts.learnLibrary(gifts.librarySnapshot().gifts, false); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState(); break
+    case 'GIFT_RULES_RESET': gifts.resetRules(); gifts.learnLibrary(gifts.libraryList().map(g => ({ name: g.name, coins: g.coins, icon: g.icon })), false); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState(); break
     case 'DESIGNER': designerOn = !!m.on; broadcast({ type: 'DESIGNER', on: designerOn }); broadcastState(); break
     case 'LAYOUT_FORMAT': if (['16:9', '9:16', 'custom'].includes(m.format)) { layout = sanitizeLayout({ ...(layout || {}), format: m.format }); writeLater(LAYOUT_FILE, () => layout); broadcast({ type: 'LAYOUT', layout }); broadcastState() } break
     case 'LAYOUT_RESET': layout = null; try { fs.unlinkSync(LAYOUT_FILE) } catch (_) {} broadcast({ type: 'LAYOUT', layout: null, reset: true }); broadcastState(); break
