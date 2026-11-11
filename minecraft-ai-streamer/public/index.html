@@ -160,6 +160,12 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
 .qr { width: 156px; height: 156px; border-radius: 10px; background: #fff; flex: none; }
 .phone { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
 .phone > div { flex: 1 1 200px; min-width: 0; }
+#login { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; place-items: center; padding: 20px; }
+#login[hidden] { display: none; }
+#login form { display: grid; gap: 12px; justify-items: center; width: min(340px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 24px; text-align: center; }
+#login input, #login button { width: 100%; }
+#login p { margin: 0; color: var(--dim); }
+.view iframe { display: block; width: min(100%, 330px); margin: 0 auto; aspect-ratio: 9 / 16; border: 1px solid var(--line); border-radius: var(--rs); background: repeating-conic-gradient(#1a2330 0 25%, #121923 0 50%) 0 0 / 24px 24px; }
 #toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #05080c; border: 1px solid var(--line2); padding: 9px 16px; border-radius: 99px; font-weight: 600; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; z-index: 50; }
 #toast.on { opacity: 1; }
 </style>
@@ -219,6 +225,12 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
       </section>
     </div>
     <div class="stack c5">
+      <section class="view">
+        <h2>Stream-Ansicht <small><button class="sm" id="viewSound">🔇 Ton aus</button> <button class="sm" id="viewBtn">Anzeigen</button></small></h2>
+        <iframe id="view" title="Stream-Ansicht" allow="autoplay" hidden></iframe>
+        <div class="row" id="viewLinks"><button class="sm" id="viewTik">TikTok-Live öffnen</button></div>
+        <div class="hint" id="viewHint">Zeigt live, was die Zuschauer über dem Spiel sehen: Facecam, Gifts, Likes und Untertitel – auf Wunsch mit der Stimme. Das Spielbild selbst siehst du im TikTok-Live.</div>
+      </section>
       <section>
         <h2>Live-Feed <small>Chat · Gifts · Follows</small></h2>
         <div id="feed" aria-live="off"></div>
@@ -343,17 +355,24 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
     </div>
     <div class="stack c6">
       <section>
-        <h2>📱 Handy-Fernbedienung</h2>
+        <h2>📱 Fernzugriff</h2>
         <h3>Zuhause im selben WLAN</h3>
         <div class="phone">
           <img class="qr" id="lanQr" alt="QR-Code für das Handy im WLAN" hidden>
           <div><div id="lanTxt" class="hint" style="margin-top:0"></div><div class="mono" id="lanUrl" style="margin-top:8px"></div><div class="row" style="margin-top:8px"><button class="sm" id="lanCopy" hidden>Link kopieren</button></div></div>
         </div>
-        <h3>Unterwegs (mobiles Netz)</h3>
+        <h3>Von überall (Arbeit, unterwegs)</h3>
         <div class="phone">
           <img class="qr" id="qr" alt="QR-Code für die Handy-Fernbedienung über das Internet" hidden>
-          <div><button id="tunBtn">Internet-Zugang starten</button><div class="mono" id="tunUrl" style="margin-top:8px"></div><div class="hint" id="tunHint"></div></div>
+          <div><button id="tunBtn">Internet-Zugang starten</button><div class="hint" id="tunHint"></div>
+            <div id="tunLinks" hidden style="margin-top:8px"><div class="hint" style="margin:0">Dashboard:</div><div class="mono" id="tunDash"></div><div class="hint" style="margin:6px 0 0">Handy-Fernbedienung:</div><div class="mono" id="tunUrl"></div><div class="row" style="margin-top:8px"><button class="sm" id="tunCopy">Dashboard-Link kopieren</button></div></div></div>
         </div>
+        <div class="switch" style="margin-top:10px"><span>Internet-Zugang bei jedem Programmstart automatisch öffnen</span><div class="seg"><button data-auto="1">An</button><button data-auto="0">Aus</button></div></div>
+        <div class="switch"><span>Neue Adresse als Push aufs Handy schicken (ntfy-App)</span><div class="seg"><button data-push="1">An</button><button data-push="0">Aus</button></div></div>
+        <div id="pushBox" hidden><div class="hint">1. App „ntfy“ aufs Handy laden. 2. Dort dieses Thema abonnieren. 3. „Test senden“ drücken. Die Nachricht enthält nur die Adresse, nie den Zugangscode.</div><div class="row"><span class="mono" id="pushTopic"></span><button class="sm" id="pushCopy">Kopieren</button><button class="sm" id="pushTest">Test senden</button></div></div>
+        <h3>Zugangscode</h3>
+        <div class="row"><input id="pwNew" type="text" placeholder="Neuer Zugangscode (mind. 8 Zeichen)" autocomplete="off" spellcheck="false" aria-label="Neuer Zugangscode"><button id="pwSet">Ändern</button><button class="sm" id="pwShow">Aktuellen zeigen</button></div>
+        <div class="hint" id="pwHint">Von außen fragt die Seite nach diesem Code. Wer Adresse und Code hat, kann alles steuern – gib ihn nicht weiter. Ändern geht nur hier am PC.</div>
         <div class="hint">Tipp: Seite am Handy öffnen, dann „Teilen → Zum Home-Bildschirm“. So startet die Fernbedienung wie eine App.</div>
       </section>
       <section>
@@ -404,6 +423,7 @@ td .mobSel { margin-left: 4px; max-width: 120px; }
   </div>
 </div>
 </div>
+<div id="login" hidden><form id="loginForm"><img src="icon.svg" alt="" width="56" height="56"><h2 style="justify-content:center">KI-Streamer Regie</h2><p id="loginTxt">Bitte den Zugangscode eingeben.</p><input id="loginPw" type="password" placeholder="Zugangscode" autocomplete="current-password"><button class="pri" type="submit">Anmelden</button></form></div>
 <div id="toast" role="status"></div>
 
 <script>
@@ -698,9 +718,16 @@ function renderState (s) {
   $('lanTxt').textContent = lan.urls[0] ? 'QR-Code mit der Handy-Kamera scannen. Handy und PC müssen im selben WLAN sein. Fragt Windows beim ersten Mal nach der Firewall, „Zugriff zulassen“ wählen.' : 'Kein WLAN/Netzwerk gefunden. Verbinde den PC mit deinem Router.'
   const tn = s.tunnel
   $('qr').hidden = !tn.qr; if (tn.qr) $('qr').src = tn.qr
-  $('tunUrl').textContent = tn.url || ''
+  $('tunLinks').hidden = !tn.active
+  $('tunUrl').textContent = tn.base ? tn.base + '/mobile.html' : ''
+  $('tunDash').textContent = tn.base ? tn.base + '/' : ''
+  const rm = s.remote || {}
+  for (const b of $$('[data-auto]')) b.classList.toggle('on', (b.dataset.auto === '1') === !!rm.autoTunnel)
+  for (const b of $$('[data-push]')) b.classList.toggle('on', (b.dataset.push === '1') === !!rm.notify)
+  $('pushBox').hidden = !rm.notify
+  $('pushTopic').textContent = rm.notifyTopic || ''
   $('tunBtn').textContent = tn.active ? 'Internet-Zugang stoppen' : tn.starting ? 'Startet …' : 'Internet-Zugang starten'
-  $('tunHint').textContent = tn.error ? tn.error : tn.active ? `Aktiv über ${tn.provider}. QR-Code mit dem Handy scannen.` : 'Erzeugt einen geschützten Link, der auch über 5G funktioniert.'
+  $('tunHint').textContent = tn.error ? tn.error : tn.active ? `Aktiv über ${tn.provider}. Die Adresse ändert sich bei jedem Start – am einfachsten per Push aufs Handy schicken lassen.` : 'Öffnet eine verschlüsselte Adresse, über die du Dashboard und Fernbedienung von überall erreichst.'
 }
 
 function trim (box, max) { while (box.childElementCount > max) box.firstChild.remove() }
@@ -723,7 +750,7 @@ function onMsg (m) {
   else if (m.type === 'FEED') addFeed(m.item)
   else if (m.type === 'GIFT_LIBRARY') { library = m; renderLib() }
   else if (m.type === 'TTS') addLog({ at: Date.now(), level: 'info', message: `🎙 (${m.emotion}) ${m.text}` })
-  else if (m.type === 'DENIED') { toast('Kein Zugriff: Schlüssel fehlt'); ws.onclose = null; chip($('cWs'), 'bad', 'Kein Zugriff') }
+  else if (m.type === 'DENIED') { ws.onclose = null; chip($('cWs'), 'bad', 'Kein Zugriff'); $('loginTxt').textContent = m.reason + '. Den Zugangscode siehst du am PC im Dashboard (Reiter Stream).'; $('login').hidden = false; $('loginPw').focus() }
 }
 
 /* ---- Knöpfe ---- */
@@ -749,6 +776,20 @@ $('dzBtn').onclick = () => send({ type: 'DESIGNER', on: !(state && state.designe
 $('ovOpen').onclick = () => open('studio-overlay.html', '_blank', 'noopener')
 confirmTap($('dzReset'), () => send({ type: 'LAYOUT_RESET' }, 'Layout zurückgesetzt'))
 $('tunBtn').onclick = () => send({ type: state && state.tunnel.active ? 'TUNNEL_STOP' : 'TUNNEL_START' })
+const copy = (t, msg) => navigator.clipboard && navigator.clipboard.writeText(t).then(() => toast(msg), () => toast('Kopieren nicht möglich'))
+$('tunCopy').onclick = () => copy($('tunDash').textContent, 'Link kopiert')
+for (const b of $$('[data-auto]')) b.onclick = () => send({ type: 'REMOTE_SET', remote: { autoTunnel: b.dataset.auto === '1' } }, b.dataset.auto === '1' ? 'Startet ab jetzt automatisch' : 'Automatik aus')
+for (const b of $$('[data-push]')) b.onclick = () => send({ type: 'REMOTE_SET', remote: { notify: b.dataset.push === '1' } }, b.dataset.push === '1' ? 'Push an' : 'Push aus')
+$('pushCopy').onclick = () => copy($('pushTopic').textContent, 'Thema kopiert')
+$('pushTest').onclick = () => send({ type: 'REMOTE_TEST' }, 'Test wird gesendet')
+$('pwSet').onclick = () => { const v = $('pwNew').value.trim(); if (v.length < 8) return toast('Mindestens 8 Zeichen'); send({ type: 'REMOTE_SET', remote: { password: v } }, 'Zugangscode geändert'); $('pwNew').value = '' }
+$('pwShow').onclick = () => { const u = state && state.lan && state.lan.urls[0]; const k = u ? new URL(u).searchParams.get('k') : null; $('pwHint').textContent = k ? 'Aktueller Zugangscode: ' + k : 'Der Code wird nur am PC selbst angezeigt.' }
+// Stream-Ansicht (Overlay live, auf Wunsch mit Ton)
+let viewSound = false
+const viewLoad = () => { const v = $('view'); v.hidden = false; v.src = 'studio-overlay.html?format=9:16' + (viewSound ? '' : '&mute=1') + (DEMO ? '#demo' : ''); $('viewBtn').textContent = 'Ausblenden' }
+$('viewBtn').onclick = () => { const v = $('view'); if (v.hidden) viewLoad(); else { v.hidden = true; v.removeAttribute('src'); $('viewBtn').textContent = 'Anzeigen' } }
+$('viewSound').onclick = () => { viewSound = !viewSound; $('viewSound').textContent = viewSound ? '🔊 Ton an' : '🔇 Ton aus'; $('viewSound').classList.toggle('on', viewSound); viewLoad() }
+$('viewTik').onclick = () => { const n = state && state.config.tiktokUsername; if (!n) return toast('Erst im Reiter Stream den TikTok-Namen eintragen'); open('https://www.tiktok.com/@' + encodeURIComponent(n) + '/live', '_blank', 'noopener') }
 $('lanCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText($('lanUrl').textContent).then(() => toast('Link kopiert'), () => toast('Kopieren nicht möglich'))
 confirmTap($('resetRules'), () => send({ type: 'GIFT_RULES_RESET' }, 'Gifts zurückgesetzt'))
 $('pvReload').onclick = () => { $('pv').src = $('pv').src }
@@ -801,6 +842,7 @@ $('chatBtn').onclick = () => { if ($('chatTxt').value.trim()) { chat($('chatTxt'
 for (const [inp, btn] of [['chatTxt', 'chatBtn'], ['sayTxt', 'sayBtn'], ['cmdTxt', 'cmdBtn'], ['giveItem', 'giveBtn']]) $(inp).addEventListener('keydown', e => { if (e.key === 'Enter') $(btn).click() })
 for (const q of ['Was machst du gerade?', "Wie geht's?", 'Bau ein Haus', 'Geh schlafen', 'Hol deinen Loot', 'Geh Diamanten farmen', 'Geh in den Nether']) { const b = el('button', { className: 'sm', textContent: q }); b.onclick = () => chat(q); $('chatQuick').appendChild(b) }
 
+$('loginForm').onsubmit = e => { e.preventDefault(); const v = $('loginPw').value.trim(); if (!v) return; store.set('remoteKey', v); $('loginPw').value = ''; $('login').hidden = true; connect() }
 function connect () {
   let k = new URLSearchParams(location.search).get('k')
   if (k) store.set('remoteKey', k); else k = store.get('remoteKey')
@@ -854,7 +896,8 @@ function demoSend (m) {
     case 'CAMERA': s.config.cameraMode = m.mode; break
     case 'DESIGNER': s.designer = m.on; break
     case 'LAYOUT_FORMAT': s.layout = { format: m.format }; break
-    case 'TUNNEL_START': case 'TUNNEL_STOP': s.tunnel.active = m.type === 'TUNNEL_START'; s.tunnel.provider = 'Vorschau'; break
+    case 'TUNNEL_START': case 'TUNNEL_STOP': s.tunnel.active = m.type === 'TUNNEL_START'; s.tunnel.provider = 'Vorschau'; s.tunnel.base = s.tunnel.active ? 'https://beispiel-adresse.trycloudflare.com' : null; break
+    case 'REMOTE_SET': Object.assign(s.remote, Object.fromEntries(Object.entries(m.remote).filter(([k]) => k !== 'password'))); break
     default: addLog({ at: Date.now(), level: 'info', message: 'Vorschau: ' + JSON.stringify(m) })
   }
   onMsg(s)
@@ -868,7 +911,8 @@ function demo () {
     status: { connected: true, username: 'KI_Streamer', mode: 'surface', underground: false, inLiquid: false, activity: 'wood', goal: 'Holz hacken', health: 17, food: 16, pos: { x: 118, y: 66, z: -37 }, threats: 0, fighting: false, kills: 12, deaths: 1, paused: false, world: { time: 9000, raining: false, thunder: false, difficulty: 'normal' }, inv: { logs: 9, cobble: 71, iron: 4, diamonds: 0, food: 6, hasBed: true }, viewerGoals: [{ label: 'Haus bauen', by: 'Mia' }] },
     botRunning: true,
     tiktok: { phase: 'idle', username: null, engine: null, viewers: 0, diagnostic: null, badge: '⚪ Nicht verbunden' },
-    tunnel: { active: false, starting: false, url: null, qr: null, error: null },
+    tunnel: { active: false, starting: false, base: null, url: null, qr: null, error: null },
+    remote: { autoTunnel: false, notify: false, notifyTopic: 'ki-streamer-Beispiel123' },
     lan: { urls: ['http://192.168.178.20:3000/mobile.html?k=Beispiel'], qr: null },
     mc: { installed: true, phase: 'running', own: true, error: null },
     llm: { enabled: true, hasKey: true, model: 'claude-haiku-5-5', budgetUsd: 0.5, maxPerHour: 300, monologues: true, models: [A('claude-haiku-5-5', 'Claude Haiku 5.5 (schnell, günstig)'), A('claude-sonnet-5-5', 'Claude Sonnet 5.5 (wortgewandter, ca. 20× teurer)')], calls: 142, ok: 139, failed: 3, costUsd: 0.036, avgMs: 900, lastError: null, budgetHit: false },

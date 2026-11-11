@@ -10,7 +10,7 @@ class Tunnel {
   constructor (port, onChange = () => {}) {
     this.port = port
     this.onChange = onChange
-    this.state = { active: false, starting: false, provider: null, url: null, qr: null, error: null }
+    this.state = { active: false, starting: false, provider: null, base: null, url: null, qr: null, error: null }
     this.proc = null
     this.lt = null
   }
@@ -30,7 +30,7 @@ class Tunnel {
     }
     const full = `${url}/mobile.html?k=${encodeURIComponent(key)}`
     const qr = await QRCode.toDataURL(full, { margin: 1, width: 360, color: { dark: '#0b0f14', light: '#ffffff' } })
-    this._set({ active: true, starting: false, provider, url: full, qr })
+    this._set({ active: true, starting: false, provider, base: url, url: full, qr })
     return this.state
   }
 
@@ -47,7 +47,7 @@ class Tunnel {
       p.stdout.on('data', scan)
       p.stderr.on('data', scan)
       p.on('error', e => { if (!done) { done = true; clearTimeout(timer); reject(new Error('nicht installiert')) } })
-      p.on('exit', () => { if (!done) { done = true; clearTimeout(timer); reject(new Error('beendet')) } else if (this.proc === p) { this.proc = null; this._set({ active: false, url: null, qr: null, error: 'Tunnel wurde beendet' }) } })
+      p.on('exit', () => { if (!done) { done = true; clearTimeout(timer); reject(new Error('beendet')) } else if (this.proc === p) { this.proc = null; this._set({ active: false, base: null, url: null, qr: null, error: 'Tunnel wurde beendet' }) } })
     })
   }
 
@@ -55,7 +55,7 @@ class Tunnel {
     const localtunnel = require('localtunnel')
     const t = await Promise.race([localtunnel({ port: this.port }), new Promise((resolve, reject) => setTimeout(() => reject(new Error('Timeout')), 20000))])
     this.lt = t
-    t.on('close', () => { if (this.lt === t) { this.lt = null; this._set({ active: false, url: null, qr: null }) } })
+    t.on('close', () => { if (this.lt === t) { this.lt = null; this._set({ active: false, base: null, url: null, qr: null, error: 'Tunnel wurde beendet' }) } })
     t.on('error', () => {})
     return t.url
   }
@@ -63,7 +63,7 @@ class Tunnel {
   stop () {
     if (this.proc) { try { this.proc.kill() } catch (_) {} this.proc = null }
     if (this.lt) { try { this.lt.close() } catch (_) {} this.lt = null }
-    this._set({ active: false, starting: false, url: null, qr: null, provider: null })
+    this._set({ active: false, starting: false, base: null, url: null, qr: null, provider: null, error: null })
   }
 }
 

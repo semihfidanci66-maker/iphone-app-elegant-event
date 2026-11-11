@@ -1171,7 +1171,8 @@ function botEvent (ev, d) {
 
 let ws = null; let retry = 600
 function connect () {
-  try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=overlay`) } catch (_) { return setTimeout(connect, 2000) }
+  let k = QS.get('k'); try { k = k || localStorage.getItem('remoteKey') } catch (_) {}
+  try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=overlay${k ? '&k=' + encodeURIComponent(k) : ''}`) } catch (_) { return setTimeout(connect, 2000) }
   ws.onopen = () => { retry = 600 }
   ws.onmessage = e => { try { onMessage(JSON.parse(e.data)) } catch (_) {} }
   ws.onclose = () => { setTimeout(connect, retry); retry = Math.min(5000, retry * 1.6) }

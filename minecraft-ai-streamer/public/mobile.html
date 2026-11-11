@@ -75,7 +75,7 @@ button:disabled { opacity: .4; }
 </head>
 <body>
 <div class="top"><b>KI-Streamer Remote</b><span class="dot" id="conn"><i></i><span>verbinde …</span></span></div>
-<div id="denied" hidden>Kein Zugriff. Bitte den QR-Code im Dashboard neu scannen – der Link enthält den geheimen Schlüssel.</div>
+<div id="denied" hidden><div class="card"><h2>Anmelden</h2><p id="deniedTxt" style="margin:0 0 10px">Bitte den Zugangscode eingeben.</p><input id="pw" type="password" placeholder="Zugangscode" autocomplete="current-password" enterkeyhint="go"><div class="row"><div style="flex:1"></div><button class="big" id="pwBtn">Anmelden</button></div></div></div>
 <div id="app">
   <div class="card">
     <div id="act">–</div>
@@ -300,10 +300,13 @@ function connect () {
   ws.onopen = () => { $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'verbunden' }
   ws.onmessage = e => {
     let m; try { m = JSON.parse(e.data) } catch (_) { return }
-    if (m.type === 'DENIED') { $('denied').hidden = false; $('app').hidden = true; ws.onclose = null; $('conn').lastElementChild.textContent = 'kein Zugriff' } else if (m.type === 'FEED') feed(m.item); else if (m.type === 'STATE') { status(m.status); world(m); markCam(m.config.cameraMode); if (!built) for (const f of m.feed || []) feed(f); if (!built) { built = true; build(m.goals, m.rules.filter(r => r.inLegend || r.custom)) } } else if (m.type === 'STATUS') status(m.status)
+    if (m.type === 'DENIED') { $('denied').hidden = false; $('app').hidden = true; $('deniedTxt').textContent = m.reason + '. Den Zugangscode siehst du am PC im Dashboard (Reiter Stream).'; ws.onclose = null; $('conn').lastElementChild.textContent = 'kein Zugriff' } else if (m.type === 'FEED') feed(m.item); else if (m.type === 'STATE') { status(m.status); world(m); markCam(m.config.cameraMode); if (!built) for (const f of m.feed || []) feed(f); if (!built) { built = true; build(m.goals, m.rules.filter(r => r.inLegend || r.custom)) } } else if (m.type === 'STATUS') status(m.status)
   }
   ws.onclose = () => { $('conn').className = 'dot'; $('conn').lastElementChild.textContent = 'getrennt'; setTimeout(connect, 1500) }
 }
+const login = () => { const v = $('pw').value.trim(); if (!v) return; key = v; try { localStorage.setItem('remoteKey', v) } catch (_) {} $('denied').hidden = true; $('app').hidden = false; $('pw').value = ''; connect() }
+$('pwBtn').onclick = login
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') login() })
 if (DEMO) {
   $('conn').className = 'dot ok'; $('conn').lastElementChild.textContent = 'Vorschau'
   markCam('auto')

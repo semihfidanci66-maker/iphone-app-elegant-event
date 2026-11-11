@@ -28,6 +28,12 @@ if errorlevel 1 (
   pause & exit /b 0
 )
 
+where cloudflared >nul 2>nul
+if errorlevel 1 (
+  echo  Installiere cloudflared fuer den Zugriff von unterwegs ...
+  winget install -e --id Cloudflare.cloudflared --accept-source-agreements --accept-package-agreements
+)
+
 rem --- 2. Abhaengigkeiten ---
 if not exist node_modules (
   echo  Installiere Abhaengigkeiten ...

@@ -24,6 +24,15 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
 
+## Neu in Version 9
+
+- **Fernzugriff von überall:** Das komplette Dashboard (nicht nur die Handy-Fernbedienung) ist über den Internet-Zugang erreichbar. Von außen fragt die Seite nach dem **Zugangscode**; am PC selbst nicht. Einstellen im Reiter *Stream* → *Fernzugriff*.
+- **Automatisch:** „Internet-Zugang bei jedem Programmstart automatisch öffnen“ – bricht er ab, wird er nach 15 Sekunden neu aufgebaut.
+- **Adresse aufs Handy:** Die Adresse ändert sich bei jedem Start. Mit „Push aufs Handy“ schickt das Programm sie über die kostenlose App *ntfy* (nur die Adresse, nie den Code).
+- **Schutz:** eigener Zugangscode (mind. 8 Zeichen), nach 8 falschen Versuchen ist die Anmeldung von außen 10 Minuten gesperrt, Zugangscode und Fernzugriff lassen sich nur am PC selbst ändern.
+- **Stream-Ansicht im Reiter Live:** das Overlay live im Dashboard (Facecam, Gifts, Likes, Untertitel), auf Wunsch mit der Stimme. Das Spielbild selbst läuft im TikTok-Live.
+- `ALLES-STARTEN.bat` installiert `cloudflared` mit (der stabilere der beiden Tunnel).
+
 ## Neu in Version 8
 
 - **Sprachmodell für Chat-Antworten (optional):** Mit einem Anthropic-API-Schlüssel formuliert der Streamer seine Antworten frei – er liest die Nachricht vor und kontert passend zum Spielstand. Einrichten im Reiter *System* → *Sprachmodell*: Schlüssel von console.anthropic.com eintragen, „Testen“ drücken. Standard ist Claude Haiku 5.5 (grob 15–20 Cent pro 3-Stunden-Stream).

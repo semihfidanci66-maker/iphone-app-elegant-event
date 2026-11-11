@@ -45,6 +45,8 @@ function loadConfig () {
   cfg.world = sanitizeWorld(cfg.world)
   cfg.likes = sanitizeLikes(cfg.likes)
   cfg.llm = sanitizeLlm(cfg.llm)
+  const r = cfg.remote && typeof cfg.remote === 'object' ? cfg.remote : {}
+  cfg.remote = { autoTunnel: !!r.autoTunnel, notify: !!r.notify, notifyTopic: /^[A-Za-z0-9_-]{8,64}$/.test(r.notifyTopic || '') ? r.notifyTopic : 'ki-streamer-' + crypto.randomBytes(9).toString('base64url') }
   return cfg
 }
 const config = loadConfig()
@@ -63,7 +65,7 @@ function writeLater (file, getData, delay = 250) {
   }, delay))
 }
 function saveConfig () {
-  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, likes: likes.config, llm: llm.config, anthropicKey: config.anthropicKey || undefined, world: config.world, mcRamGb: mc.ramGb }))
+  writeLater(SETTINGS_FILE, () => ({ minecraft: config.minecraft, tiktokUsername: config.tiktokUsername, voice: config.voice, remoteKey: config.remoteKey, autoStartBot: config.autoStartBot, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode, giftRules: gifts.rules, likes: likes.config, remote: config.remote, llm: llm.config, anthropicKey: config.anthropicKey || undefined, world: config.world, mcRamGb: mc.ramGb }))
 }
 function sanitizeLayout (l) {
   if (!l || typeof l !== 'object') return null
@@ -96,7 +98,38 @@ const gifts = new GiftEngine({
 gifts.loadLibrary(readJson(LIBRARY_FILE, null))
 const likes = new LikeGoal(config.likes)
 likes.setConfig({}, ACTIONS, MOBS)
-const tunnel = new Tunnel(PORT, () => broadcastState())
+// ---- Fernzugriff übers Internet: Tunnel startet auf Wunsch von selbst, läuft nach einem Abbruch wieder an
+//      und schickt die neue Adresse per Push aufs Handy (ohne Zugangscode – den gibt man auf der Seite ein).
+let tunnelWas = false
+let tunnelStopped = false // von Hand gestoppt -> nicht von selbst wieder öffnen
+let tunnelRetry = null
+const tunnel = new Tunnel(PORT, st => {
+  if (st.active && !tunnelWas) { log('info', `Fernzugriff aktiv: ${st.base}/  (über ${st.provider})`); notifyRemote(`KI-Streamer ist online. Dashboard: ${st.base}/  Handy: ${st.base}/mobile.html`) }
+  if (!st.active && !st.starting && tunnelWas && config.remote.autoTunnel && !tunnelStopped && !closing) {
+    log('warn', 'Fernzugriff unterbrochen – neuer Versuch in 15 Sekunden')
+    clearTimeout(tunnelRetry); tunnelRetry = setTimeout(() => tunnel.start(config.remoteKey), 15000)
+  }
+  tunnelWas = st.active
+  broadcastState()
+})
+/** Push-Nachricht über ntfy (nur wenn im Dashboard eingeschaltet). Enthält nie den Zugangscode. */
+async function notifyRemote (text) {
+  if (!config.remote.notify) return false
+  try {
+    const res = await fetch('https://ntfy.sh/' + config.remote.notifyTopic, { method: 'POST', headers: { Title: 'KI-Streamer', Tags: 'video_game' }, body: text, signal: AbortSignal.timeout(8000) })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    return true
+  } catch (e) { log('warn', 'Push-Nachricht konnte nicht gesendet werden: ' + e.message); return false }
+}
+// Schutz gegen Durchprobieren des Zugangscodes von außen
+const authFails = []
+let authLockedUntil = 0
+function authFailed () {
+  const now = Date.now()
+  authFails.push(now)
+  while (authFails.length && now - authFails[0] > 600000) authFails.shift()
+  if (authFails.length >= 8 && now > authLockedUntil) { authLockedUntil = now + 600000; authFails.length = 0; log('warn', 'Fernzugriff: zu viele falsche Zugangscodes – Anmeldung von außen für 10 Minuten gesperrt') }
+}
 const mc = new McServer({ dir: path.join(ROOT, 'mc-server'), port: config.minecraft.port, ramGb: config.mcRamGb })
 bot.noSleep = config.world.timeLock === 'night'
 mc.on('state', () => broadcastState())
@@ -196,6 +229,7 @@ function fullState () {
     botRunning: bot.running,
     tiktok: tiktok.state,
     tunnel: tunnel.state,
+    remote: { autoTunnel: config.remote.autoTunnel, notify: config.remote.notify, notifyTopic: config.remote.notifyTopic },
     lan,
     mc: mc.state,
     likes: { config: likes.config, ...likes.state(), legend: likeLegend() },
@@ -231,7 +265,9 @@ wss.on('connection', (ws, req) => {
   // Steuerung von außerhalb (Tunnel) nur mit Schlüssel; das Overlay empfängt nur
   ws.canControl = ws.role !== 'overlay' && (local || keyOk)
   ws.canLayout = local || keyOk
-  if (!local && !keyOk) { send(ws, { type: 'DENIED', reason: 'Schlüssel fehlt oder ist falsch' }); ws.close(); return }
+  const locked = !local && Date.now() < authLockedUntil
+  if (!local && (!keyOk || locked)) { if (!locked && url.searchParams.get('k')) authFailed(); send(ws, { type: 'DENIED', reason: locked ? 'Zu viele Fehlversuche. Bitte in 10 Minuten noch einmal.' : url.searchParams.get('k') ? 'Zugangscode ist falsch' : 'Zugangscode fehlt' }); ws.close(); return }
+  ws.isLocal = local
   clients.add(ws)
   ws.on('close', () => clients.delete(ws))
   ws.on('error', () => clients.delete(ws))
@@ -245,13 +281,32 @@ wss.on('connection', (ws, req) => {
     if (!m || typeof m.type !== 'string') return
     if (m.type === 'LAYOUT_SET' && ws.canLayout) { const l = sanitizeLayout(m.layout); if (l) { layout = l; writeLater(LAYOUT_FILE, () => layout); broadcast({ type: 'LAYOUT', layout }, c => c !== ws) } return }
     if (!ws.canControl) return
-    try { handle(m) } catch (e) { log('error', `Befehl ${m.type}: ${e.message}`) }
+    try { handle(m, ws) } catch (e) { log('error', `Befehl ${m.type}: ${e.message}`) }
   })
 })
 
 // ------------------------------------------------------------------ Befehle (Dashboard / Handy)
-function handle (m) {
+function handle (m, ws = { isLocal: true }) {
   switch (m.type) {
+    case 'REMOTE_SET': {
+      // Fernzugriff einstellen geht nur am PC selbst – von außen lässt sich der Zugang nicht umbauen
+      if (!ws.isLocal) { log('warn', 'Fernzugriff-Einstellungen lassen sich nur am PC selbst ändern'); break }
+      const p = m.remote || {}
+      if (typeof p.autoTunnel === 'boolean') { config.remote.autoTunnel = p.autoTunnel; if (p.autoTunnel && !tunnel.state.active && !tunnel.state.starting) tunnel.start(config.remoteKey) }
+      if (typeof p.notify === 'boolean') config.remote.notify = p.notify
+      if (typeof p.password === 'string') {
+        const pw = p.password.trim()
+        if (pw.length < 8 || pw.length > 64) { log('warn', 'Zugangscode muss 8 bis 64 Zeichen lang sein'); break }
+        config.remoteKey = pw
+        log('info', 'Neuer Zugangscode gespeichert. Geräte von außen müssen sich neu anmelden.')
+        for (const c of clients) if (!c.isLocal) c.close()
+        lan.urls = []; refreshLan()
+        if (tunnel.state.active) { tunnel.stop(); tunnel.start(config.remoteKey) }
+      }
+      saveConfig(); broadcastState()
+      break
+    }
+    case 'REMOTE_TEST': if (ws.isLocal) notifyRemote(tunnel.state.active ? `Test: KI-Streamer ist erreichbar unter ${tunnel.state.base}/` : 'Test: Push funktioniert. Der Internet-Zugang ist gerade aus.').then(ok => log(ok ? 'info' : 'warn', ok ? 'Push-Test gesendet' : 'Push-Test fehlgeschlagen (ist Push eingeschaltet?)')); break
     case 'TIKTOK_CONNECT': {
       // Eingabe säubern (@, Leerzeichen, komplette URLs), dauerhaft speichern, Watchdog starten
       const name = sanitizeUsername(m.username)
@@ -352,8 +407,8 @@ function handle (m) {
         case 'ram': mc.ramGb = Math.max(1, Math.min(32, Number(m.gb) || 4)); saveConfig(); break
       }
       break
-    case 'TUNNEL_START': tunnel.start(config.remoteKey); break
-    case 'TUNNEL_STOP': tunnel.stop(); break
+    case 'TUNNEL_START': tunnelStopped = false; tunnel.start(config.remoteKey); break
+    case 'TUNNEL_STOP': tunnelStopped = true; clearTimeout(tunnelRetry); tunnel.stop(); break
     case 'BOT':
       switch (m.cmd) {
         case 'start': bot.start(); break
@@ -505,6 +560,7 @@ server.listen(PORT, () => {
   console.log('  Handy:           QR-Code im Dashboard scannen (gleiches WLAN) oder Tunnel für unterwegs starten')
   console.log('')
   refreshLan()
+  if (config.remote.autoTunnel) tunnel.start(config.remoteKey)
   if (config.autoStartBot) bot.start()
   // Gespeicherter TikTok-Name: Watchdog startet ohne einen einzigen Klick
   if (config.tiktokUsername) tiktok.start(config.tiktokUsername)
