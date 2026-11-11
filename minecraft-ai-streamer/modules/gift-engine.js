@@ -58,6 +58,72 @@ class GiftEngine {
     this.rules = this.sanitizeRules(rules && rules.length ? rules : buildDefaultRules())
     this.seq = 0
     this.bosses = new Map() // tag -> { bar, started }
+    // TikTok-Bibliothek: alle bekannten echten Gifts (Name, Coins, Bild). Start = eingebauter Katalog,
+    // sobald ein Live verbunden ist, kommen die echte Gift-Liste des Raums und die Originalbilder dazu.
+    this.library = new Map()
+    this.libraryAt = 0
+    for (const r of buildDefaultRules()) this.library.set(r.giftName.toLowerCase(), { key: r.giftName.toLowerCase(), name: r.giftName, coins: r.coins, emoji: r.emoji, icon: null, alt: r.match, live: false })
+  }
+
+  /** Gespeicherte Bibliothek (config/tiktok-gifts.json) wieder einlesen. */
+  loadLibrary (saved) {
+    if (!saved || !Array.isArray(saved.gifts)) return
+    this.learnLibrary(saved.gifts, false)
+    this.libraryAt = Number(saved.at) || 0
+  }
+
+  /**
+   * Echte Gift-Liste von TikTok übernehmen: neue Gifts landen in der Bibliothek, bekannte bekommen
+   * Originalbild und aktuellen Coin-Preis. Regeln mit passendem Namen werden mit aktualisiert.
+   * @param {{id?: string, name: string, coins?: number, icon?: string}[]} list
+   * @returns {boolean} true, wenn sich etwas geändert hat
+   */
+  learnLibrary (list, stamp = true) {
+    let changed = false
+    const url = u => (typeof u === 'string' && /^https:\/\//.test(u) && u.length <= 400 ? u : null)
+    for (const g of Array.isArray(list) ? list : []) {
+      const name = String((g && g.name) || '').trim().slice(0, 40)
+      if (!name) continue
+      const key = name.toLowerCase()
+      const coins = Math.max(0, Math.min(100000, Math.round(Number(g.coins) || 0)))
+      const icon = url(g.icon)
+      // bekannter Katalog-Eintrag unter englischem Namen (z. B. "Finger Heart" -> "Fingerherz")
+      let e = this.library.get(key) || [...this.library.values()].find(x => !x.live && x.alt && x.alt.includes(key))
+      if (!e) { e = { key, name, coins: coins || 1, emoji: '🎁', icon: null, alt: [key], live: true }; this.library.set(key, e); changed = true }
+      if (icon && e.icon !== icon) { e.icon = icon; changed = true }
+      if (coins && e.coins !== coins) { e.coins = coins; changed = true }
+      if (g.id != null && e.giftId !== String(g.id)) { e.giftId = String(g.id); changed = true }
+      for (const r of this.rules) {
+        if (!r.match.includes(key) && !r.match.includes(e.key)) continue
+        if (icon && r.icon !== icon) { r.icon = icon; changed = true }
+        if (coins && !r.custom && r.coins !== coins) { r.coins = coins; changed = true }
+      }
+      if (this.library.size >= 1500) break
+    }
+    if (changed && stamp) this.libraryAt = Date.now()
+    return changed
+  }
+
+  /** Bibliothek fürs Dashboard, nach Coins sortiert. `ruleId` zeigt, ob das Gift schon eine Regel hat. */
+  libraryList () {
+    return [...this.library.values()].sort((a, b) => a.coins - b.coins || a.name.localeCompare(b.name)).map(e => {
+      const rule = this.rules.find(r => r.match.includes(e.key) || (e.alt || []).some(a => r.match.includes(a)))
+      return { key: e.key, name: e.name, coins: e.coins, emoji: e.emoji, icon: e.icon, ruleId: rule ? rule.id : null }
+    })
+  }
+
+  librarySnapshot () { return { at: this.libraryAt, gifts: [...this.library.values()].filter(e => e.live || e.icon).map(e => ({ id: e.giftId, name: e.name, coins: e.coins, icon: e.icon })) } }
+
+  /** Gift aus der Bibliothek als Regel anlegen (Aktion passend zum Coin-Wert, im Overlay sichtbar). */
+  addFromLibrary (key) {
+    const e = this.library.get(String(key || '').toLowerCase())
+    if (!e) return null
+    const have = this.rules.find(r => r.match.includes(e.key))
+    if (have) { have.enabled = true; return have }
+    const t = tierAction(e.coins || 1)
+    const rule = this.sanitizeRule({ id: 'tt_' + slug(e.name), giftName: e.name, match: e.alt, coins: e.coins, emoji: e.emoji, icon: e.icon, action: t.action, amount: t.amount, legend: t.legend, enabled: true, inLegend: true })
+    this.rules.push(rule)
+    return rule
   }
 
   sanitizeRule (r) {
@@ -128,8 +194,8 @@ class GiftEngine {
   publicConfig () {
     const act = r => ACTIONS[r.action]
     let list = this.rules.filter(r => r.enabled && r.action !== 'none' && r.inLegend)
-    if (!list.length) list = this.rules.filter(r => r.enabled && r.action !== 'none').slice(0, 7)
-    return list.sort((a, b) => a.coins - b.coins).slice(0, 9).map(r => ({
+    if (!list.length) list = this.rules.filter(r => r.enabled && r.action !== 'none').slice(0, 8)
+    return list.sort((a, b) => a.coins - b.coins).slice(0, 24).map(r => ({
       id: r.id, name: r.giftName, coins: r.coins, emoji: r.emoji, legend: r.legend, kind: act(r).kind, tier: act(r).tier, icon: r.icon
     }))
   }

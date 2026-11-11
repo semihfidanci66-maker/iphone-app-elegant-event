@@ -269,12 +269,16 @@ class TikTokBridge extends EventEmitter {
       if (!fn) return
       const res = await fn.call(conn)
       const gifts = Array.isArray(res) ? res : (res && (res.gifts || res.giftList)) || []
+      const list = []
       for (const g of gifts) {
         const img = g.image || g.icon || g.giftImage
         const url = (img && ((img.url_list || img.urlList || img.urls || [])[0] || img.giftPictureUrl)) || g.giftPictureUrl
         if (g.name && url) this.giftIcons[String(g.name).toLowerCase()] = url
+        if (g.name) list.push({ id: g.id ?? g.giftId, name: g.name, coins: Number(g.diamond_count ?? g.diamondCount) || 0, icon: url || null })
       }
       this.emit('gift_icons', this.giftIcons)
+      // komplette, echte Gift-Liste des Raums (Name, Coins, Originalbild) für die Bibliothek im Dashboard
+      if (list.length) this.emit('gift_list', list)
     } catch (_) {}
   }
 

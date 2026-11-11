@@ -63,8 +63,8 @@ const RAW = [
 
 const AMOUNTS = { friendship_necklace: 3, butterfly: 3, paper_crane: 3, sunglasses: 3, ski_goggles: 5, boxing_gloves: 5, campfire: 3, coral: 8, swan: 4, private_jet: 2, lion: 2, fireworks: 8, confetti: 6 }
 const HPMULT = { corgi: 1, private_jet: 1.5, yacht: 1.2, falcon: 1.4, planet: 1.6, whale_diving: 1.8, lion: 2, tiktok_universe: 3 }
-// Diese sieben stehen standardmäßig in der Overlay-Legende
-const LEGEND = new Set(['rose', 'ice_cream', 'finger_heart', 'donut', 'hand_heart', 'money_gun', 'galaxy'])
+// Diese acht (zwei volle Seiten im Overlay) stehen standardmäßig in der Overlay-Legende
+const LEGEND = new Set(['rose', 'ice_cream', 'finger_heart', 'rosa', 'donut', 'hand_heart', 'money_gun', 'galaxy'])
 
 function buildDefaultRules () {
   return RAW.map(([id, giftName, alt, coins, emoji, actionSpec, legend]) => {

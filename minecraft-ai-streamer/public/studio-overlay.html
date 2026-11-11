@@ -6,7 +6,7 @@
 <title>Studio Overlay</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@500;600;700;800&display=swap">
 <style>
-/* Layout: 1920x1080-Bühne, Mitte bleibt frei. Facecam unten links, Legende rechts, Alerts oben mittig. */
+/* Layout: Standard ist 1080x1920 hochkant (TikTok LIVE): Gift-Leiste oben, Facecam rechts, Untertitel als Sprechblase daneben. 16:9 und Split bleiben wählbar. */
 :root {
   color-scheme: dark; /* gleiches Schema wie die einbettende Seite -> iframe bleibt transparent */
   --ink: #f4f7fb;
@@ -49,29 +49,56 @@ body.designer #dz { display: flex; }
 #dzSel { color: var(--gold); font-family: var(--display); min-width: 86px; }
 
 /* ---------- Facecam ---------- */
-#cam { width: 340px; height: 384px; }
+#cam { width: 360px; height: 452px; }
 #camFrame {
-  position: absolute; inset: 0; border-radius: 22px; overflow: hidden;
-  background: linear-gradient(160deg, rgba(20, 34, 60, .78), rgba(8, 12, 22, .82));
-  border: 2px solid var(--glass-edge);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 28px rgba(70, 224, 255, .35), inset 0 0 40px rgba(70, 224, 255, .08);
-  transition: box-shadow .2s, border-color .2s;
+  position: absolute; inset: 0; border-radius: 26px; overflow: hidden;
+  background: linear-gradient(165deg, rgba(24, 40, 70, .86), rgba(8, 12, 22, .9));
+  border: 3px solid var(--edge, rgba(140, 220, 255, .45));
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 0 30px var(--glow, rgba(70, 224, 255, .35)), inset 0 0 44px var(--inner, rgba(70, 224, 255, .08));
+  transition: box-shadow .25s, border-color .25s;
 }
 #camFrame::before { /* Scan-Raster wie bei einer echten Kamera */
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 3;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 4px);
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .03) 0 1px, transparent 1px 4px);
 }
-#camGlow { position: absolute; inset: 0; z-index: 1; background: radial-gradient(120% 80% at 50% 110%, rgba(70, 224, 255, .28), transparent 60%); transition: background .25s; }
-#skin { position: absolute; inset: 0; width: 100% !important; height: 100% !important; z-index: 2; }
+#camGlow { position: absolute; inset: 0; z-index: 1; background: radial-gradient(120% 80% at 50% 112%, var(--glow, rgba(70, 224, 255, .3)), transparent 62%); transition: background .3s; }
+#camRays { position: absolute; inset: -40%; z-index: 1; opacity: 0; background: repeating-conic-gradient(from 0deg at 50% 62%, rgba(255, 255, 255, .11) 0 7deg, transparent 7deg 18deg); animation: rays 9s linear infinite; transition: opacity .3s; }
+@keyframes rays { to { transform: rotate(360deg); } }
+#skin { position: absolute; inset: 0; width: 100% !important; height: 100% !important; z-index: 2; transition: filter .4s; }
 #camFlash { position: absolute; inset: 0; z-index: 4; background: radial-gradient(circle, rgba(255, 60, 80, .15), rgba(255, 30, 60, .7)); opacity: 0; pointer-events: none; }
-#cam.speaking #camFrame { border-color: rgba(157, 255, 106, .75); box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 34px rgba(157, 255, 106, .45), inset 0 0 40px rgba(157, 255, 106, .1); }
-#cam.panic #camFrame { border-color: rgba(255, 77, 94, .9); box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 40px rgba(255, 77, 94, .6), inset 0 0 50px rgba(255, 77, 94, .16); }
-#cam.panic #camGlow { background: radial-gradient(120% 80% at 50% 110%, rgba(255, 77, 94, .4), transparent 60%); }
+#camVig { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .3s; box-shadow: inset 0 0 70px 18px var(--vig, rgba(255, 40, 60, .7)); }
+#camFx { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
+#camFx span { position: absolute; font-size: 38px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .6)); animation: fxRise var(--d, 1.3s) ease-out forwards; }
+#camFx span.pop { animation: fxPop .7s cubic-bezier(.2, 1.6, .4, 1) forwards; font-size: 54px; }
+#camFx span.fall { animation: fxFall 1s ease-in forwards; font-size: 26px; }
+@keyframes fxRise { 0% { opacity: 0; transform: translate(0, 10px) scale(.5) rotate(var(--r0, 0deg)); } 18% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx, 0), -150px) scale(1.25) rotate(var(--r1, 20deg)); } }
+@keyframes fxPop { 0% { opacity: 0; transform: scale(.2) rotate(-25deg); } 30% { opacity: 1; transform: scale(1.3) rotate(8deg); } 75% { opacity: 1; transform: scale(1) rotate(0); } 100% { opacity: 0; transform: scale(.8); } }
+@keyframes fxFall { 0% { opacity: 0; transform: translateY(-6px); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(120px); } }
+/* Stimmungen färben Rahmen, Licht und Vignette */
+#cam.speaking { --edge: rgba(157, 255, 106, .8); --glow: rgba(157, 255, 106, .42); --inner: rgba(157, 255, 106, .1); }
+#cam[data-mood=happy] { --edge: rgba(255, 210, 87, .95); --glow: rgba(255, 210, 87, .55); --inner: rgba(255, 210, 87, .14); }
+#cam[data-mood=happy] #camRays { opacity: 1; }
+#cam[data-mood=angry] { --edge: rgba(255, 120, 60, .95); --glow: rgba(255, 90, 50, .6); --inner: rgba(255, 80, 40, .16); --vig: rgba(255, 70, 30, .55); }
+#cam[data-mood=furious] { --edge: #ff2b3f; --glow: rgba(255, 30, 50, .85); --inner: rgba(255, 30, 50, .25); --vig: rgba(255, 20, 40, .8); }
+#cam[data-mood=angry] #camVig { opacity: .7; }
+#cam[data-mood=furious] #camVig { opacity: 1; animation: vigPulse .45s ease-in-out infinite alternate; }
+#cam[data-mood=furious] #camFrame { animation: rage .16s linear infinite; }
+#cam[data-mood=scared] { --edge: rgba(120, 190, 255, .95); --glow: rgba(90, 150, 255, .6); --inner: rgba(90, 150, 255, .16); --vig: rgba(40, 80, 200, .65); }
+#cam[data-mood=scared] #camVig { opacity: .85; }
+#cam[data-mood=scared] #camFrame { animation: tremble .12s linear infinite; }
+#cam[data-mood=sad] { --edge: rgba(150, 165, 190, .7); --glow: rgba(120, 135, 160, .3); --inner: rgba(0, 0, 0, .25); --vig: rgba(10, 20, 40, .85); }
+#cam[data-mood=sad] #camVig { opacity: 1; }
+#cam[data-mood=sad] #skin { filter: saturate(.45) brightness(.82); }
+#cam[data-mood=sleep] { --edge: rgba(150, 130, 255, .7); --glow: rgba(120, 100, 255, .35); --vig: rgba(10, 10, 50, .8); }
+#cam[data-mood=sleep] #camVig { opacity: .9; }
+#cam[data-mood=sleep] #skin { filter: brightness(.7) saturate(.8); }
+@keyframes vigPulse { from { opacity: .65; } to { opacity: 1; } }
+@keyframes rage { 0% { transform: translate(-3px, 1px) rotate(-.5deg); } 25% { transform: translate(3px, -2px) rotate(.5deg); } 50% { transform: translate(-2px, 2px) rotate(-.3deg); } 75% { transform: translate(2px, 1px) rotate(.4deg); } 100% { transform: translate(-3px, -1px) rotate(-.5deg); } }
+@keyframes tremble { 0% { transform: translate(-1px, 0); } 50% { transform: translate(1px, 1px); } 100% { transform: translate(-1px, -1px); } }
 #cam.hurt #camFlash { animation: flash .45s ease-out; }
 #cam.hurt #camFrame { animation: shake .45s cubic-bezier(.36, .07, .19, .97); }
-#cam.hype #camFrame { border-color: rgba(255, 210, 87, .9); box-shadow: 0 0 0 1px rgba(0, 0, 0, .5), 0 0 38px rgba(255, 210, 87, .55), inset 0 0 44px rgba(255, 210, 87, .12); }
-.chroma { position: absolute; z-index: 4; width: 7px; height: 7px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 8px var(--gold); bottom: 40px; animation: chroma 1.1s ease-out forwards; pointer-events: none; }
-@keyframes chroma { to { transform: translate(var(--dx), -330px) rotate(300deg); opacity: 0; } }
+.chroma { position: absolute; z-index: 4; width: 7px; height: 7px; border-radius: 2px; background: var(--gold); box-shadow: 0 0 8px var(--gold); bottom: 60px; animation: chroma 1.1s ease-out forwards; pointer-events: none; }
+@keyframes chroma { to { transform: translate(var(--dx), -360px) rotate(300deg); opacity: 0; } }
 @keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
 @keyframes shake { 10%, 90% { transform: translate(-3px, 1px) rotate(-.6deg); } 20%, 80% { transform: translate(6px, -2px) rotate(.8deg); } 30%, 50%, 70% { transform: translate(-9px, 3px) rotate(-1deg); } 40%, 60% { transform: translate(9px, -1px) rotate(1deg); } }
 
@@ -80,17 +107,25 @@ body.designer #dz { display: flex; }
 #camTag .live i { width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: pulse 1.2s infinite; }
 #camTag .ki { background: rgba(0, 0, 0, .55); padding: 3px 9px; border-radius: 6px; color: var(--cyan); border: 1px solid rgba(70, 224, 255, .4); }
 @keyframes pulse { 50% { opacity: .25; } }
-#camBar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; padding: 26px 14px 12px; background: linear-gradient(transparent, rgba(4, 8, 16, .92)); display: flex; flex-direction: column; gap: 7px; }
+#camMood { position: absolute; left: 50%; bottom: 104px; z-index: 5; transform: translateX(-50%) scale(.6); opacity: 0; white-space: nowrap; font: 700 19px var(--display); letter-spacing: .06em; padding: 4px 14px; border-radius: 99px; background: rgba(0, 0, 0, .7); border: 2px solid var(--edge, #fff); color: #fff; transition: opacity .2s, transform .25s cubic-bezier(.2, 1.6, .4, 1); }
+#camMood.on { opacity: 1; transform: translateX(-50%) scale(1); }
+#camBar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; padding: 30px 14px 12px; background: linear-gradient(transparent, rgba(4, 8, 16, .94) 45%); display: flex; flex-direction: column; gap: 7px; }
 #camName { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: .03em; text-shadow: 0 2px 6px #000; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-#camAct { font-family: var(--body); font-size: 13px; font-weight: 600; color: var(--lime); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#camAct { font-family: var(--body); font-size: 13.5px; font-weight: 700; color: var(--lime); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #hp { display: flex; gap: 3px; }
-#hp b { width: 22px; height: 9px; border-radius: 3px; background: rgba(255, 255, 255, .14); overflow: hidden; }
-#hp b i { display: block; height: 100%; background: linear-gradient(180deg, #ff7b88, #e8203a); }
+#hp b { flex: 1; height: 10px; border-radius: 3px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+#hp b i { display: block; height: 100%; background: linear-gradient(180deg, #ff7b88, #e8203a); transition: width .25s; }
+#rage { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; font: 700 12px var(--display); letter-spacing: .12em; color: #ffb199; }
+#rage div { height: 10px; border-radius: 99px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+#rage i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, #ffd257, #ff7a2f 55%, #ff2b3f); box-shadow: 0 0 10px rgba(255, 90, 40, .8); }
+#rage.max { color: #fff; animation: pulse .4s infinite; }
 #meter { position: absolute; right: 14px; top: 10px; z-index: 5; display: flex; gap: 3px; align-items: flex-end; height: 34px; }
 #meter i { width: 4px; border-radius: 2px; background: var(--lime); height: 4px; opacity: .85; }
 
 /* ---------- Untertitel ---------- */
 #subs { width: 760px; min-height: 112px; display: flex; align-items: flex-start; }
+#stage.f916 #subs { width: 640px; min-height: 190px; align-items: flex-end; justify-content: flex-end; }
+#stage.f916 #subBox { font-size: 31px; border-radius: 22px 22px 6px 22px; border-width: 2px; }
 #subBox { background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 16px; padding: 14px 20px; font-size: 30px; line-height: 1.28; font-weight: 800; letter-spacing: .005em; text-shadow: 0 2px 4px rgba(0, 0, 0, .9); backdrop-filter: blur(8px); opacity: 0; transform: translateY(8px); transition: opacity .18s, transform .18s; max-width: 100%; }
 #subBox.on { opacity: 1; transform: none; }
 #subBox .w { color: rgba(244, 247, 251, .34); transition: color .08s; }
@@ -99,25 +134,60 @@ body.designer #dz { display: flex; }
 #subBox.panic .w.now { color: var(--red); }
 #subBox.hype .w.now { color: var(--lime); }
 
-/* ---------- Gift-Legende ---------- */
-#legend { width: 292px; background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 20px; padding: 14px 12px 12px; backdrop-filter: blur(10px); box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
-#legend h2 { font-family: var(--display); font-size: 16px; letter-spacing: .16em; text-transform: uppercase; color: var(--cyan); text-align: center; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, .1); margin-bottom: 6px; }
-.gift { display: grid; grid-template-columns: 54px 1fr; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 12px; transition: background .25s; }
-.gift.hit { background: rgba(255, 210, 87, .2); }
-.gift + .gift { border-top: 1px solid rgba(255, 255, 255, .06); }
-.g3d { width: 54px; height: 54px; perspective: 260px; }
-.g3d .disc { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-size: 30px; background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .5), rgba(120, 190, 255, .16) 46%, rgba(10, 16, 28, .6)); border: 1px solid rgba(255, 255, 255, .28); box-shadow: 0 8px 14px rgba(0, 0, 0, .45), inset 0 -6px 10px rgba(0, 0, 0, .35); animation: float3d 4.2s ease-in-out infinite; transform-style: preserve-3d; }
-.g3d img { width: 40px; height: 40px; object-fit: contain; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6)); }
-.gift:nth-child(odd) .disc { animation-delay: -1.4s; }
-.gift:nth-child(3n) .disc { animation-delay: -2.6s; }
-@keyframes float3d { 0%, 100% { transform: translateY(2px) rotateY(-22deg) rotateX(6deg); } 50% { transform: translateY(-5px) rotateY(22deg) rotateX(-4deg); } }
-.gname { font-weight: 700; font-size: 17px; display: flex; align-items: center; gap: 8px; }
-.coin { font-family: var(--display); font-size: 13px; font-weight: 700; color: #3b2a00; background: linear-gradient(180deg, #ffe58a, #f0b21a); border-radius: 20px; padding: 1px 8px 1px 6px; display: inline-flex; align-items: center; gap: 4px; }
+/* ---------- Gift-Legende (Karussell: 4 Gifts pro Seite, wechselt animiert) ---------- */
+#legend { width: 300px; background: var(--glass); border: 1px solid var(--glass-edge); border-radius: 22px; padding: 12px 12px 12px; backdrop-filter: blur(10px); box-shadow: 0 10px 40px rgba(0, 0, 0, .45); }
+#lgHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; }
+#lgTitle { font-family: var(--display); font-size: 16px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--cyan); white-space: nowrap; }
+#lgTitle b { color: var(--gold); }
+#legend:not(.strip) #lgTitle b { display: none; }
+#legend:not(.strip) #lgTitle { font-size: 15px; }
+#lgDots { display: flex; gap: 6px; }
+#lgDots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255, 255, 255, .22); transition: background .3s, width .3s; }
+#lgDots i.on { background: var(--gold); width: 24px; border-radius: 99px; }
+#lgBar { height: 3px; border-radius: 99px; background: rgba(255, 255, 255, .1); margin: 9px 2px 8px; overflow: hidden; }
+#lgBar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--gold)); }
+#lgBar i.run { animation: lgBar var(--page, 7s) linear forwards; }
+@keyframes lgBar { to { width: 100%; } }
+#legendList { display: grid; grid-template-columns: 1fr; grid-auto-rows: 76px; gap: 6px; height: 322px; perspective: 900px; }
+.gift { position: relative; display: grid; grid-template-columns: 62px 1fr; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 14px; background: rgba(4, 8, 16, .5); border: 1px solid rgba(255, 255, 255, .09); min-width: 0; --fx: var(--red); }
+.gift.support { --fx: var(--lime); } .gift.boss { --fx: var(--violet); }
+.gift.in { animation: gIn .55s cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: calc(var(--i) * 90ms); }
+.gift.out { animation: gOut .32s ease-in both; animation-delay: calc(var(--i) * 55ms); }
+@keyframes gIn { 0% { opacity: 0; transform: translateY(-34px) rotateX(-80deg) scale(.7); } 100% { opacity: 1; transform: none; } }
+@keyframes gOut { 100% { opacity: 0; transform: translateY(30px) rotateX(75deg) scale(.8); } }
+.gift.hit { animation: gHit .9s ease-out; border-color: var(--gold); box-shadow: 0 0 26px rgba(255, 210, 87, .75); }
+@keyframes gHit { 0% { transform: scale(1); } 18% { transform: scale(1.12) rotate(-2deg); } 36% { transform: scale(.97) rotate(1.5deg); } 100% { transform: scale(1); } }
+.gift.changed { animation: gChanged 1.4s ease-out; }
+@keyframes gChanged { 0%, 40% { box-shadow: 0 0 0 3px var(--cyan), 0 0 30px rgba(70, 224, 255, .8); transform: scale(1.06); } 100% { box-shadow: none; transform: none; } }
+.g3d { width: 62px; height: 62px; perspective: 260px; }
+.g3d .disc { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-size: 34px; background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .42), rgba(120, 190, 255, .14) 46%, rgba(10, 16, 28, .55)); border: 1px solid rgba(255, 255, 255, .24); box-shadow: 0 8px 14px rgba(0, 0, 0, .45), inset 0 -6px 10px rgba(0, 0, 0, .35); animation: float3d 4.2s ease-in-out infinite; animation-delay: calc(var(--i) * -1.1s); transform-style: preserve-3d; }
+.g3d img { width: 78%; height: 78%; object-fit: contain; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .6)); }
+@keyframes float3d { 0%, 100% { transform: translateY(2px) rotateY(-20deg) rotateX(6deg); } 50% { transform: translateY(-5px) rotateY(20deg) rotateX(-4deg); } }
+.gtxt { min-width: 0; }
+.gname { font-weight: 800; font-size: 17px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.gname span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coin { flex: none; font-family: var(--display); font-size: 13px; font-weight: 700; color: #3b2a00; background: linear-gradient(180deg, #ffe58a, #f0b21a); border-radius: 20px; padding: 1px 8px 1px 6px; display: inline-flex; align-items: center; gap: 4px; }
 .coin::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: #fff3c0; border: 2px solid #b97d00; }
-.gfx { font-size: 14.5px; font-weight: 600; color: var(--ink-dim); margin-top: 2px; }
-.gfx b { color: var(--red); font-weight: 700; }
-.gift.support .gfx b { color: var(--lime); }
-.gift.boss .gfx b { color: var(--violet); }
+.gfx { font-size: 15px; font-weight: 800; color: var(--fx); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gfx::before { content: '➜ '; color: var(--ink-dim); }
+/* Hochformat: breite Leiste mit vier großen Karten nebeneinander */
+#legend.strip { width: 1020px; padding: 14px 16px 16px; border-radius: 28px; border-width: 2px; }
+#legend.strip #lgTitle { font-size: 25px; }
+#legend.strip #lgDots i { width: 12px; height: 12px; } #legend.strip #lgDots i.on { width: 34px; }
+#legend.strip #lgBar { height: 5px; margin: 12px 2px 14px; }
+#legend.strip #legendList { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 262px; gap: 12px; height: 262px; }
+#legend.strip .gift { grid-template-columns: 1fr; grid-template-rows: 122px auto; justify-items: center; align-content: start; gap: 6px; padding: 12px 8px 0; border-radius: 20px; overflow: hidden; border-width: 2px; border-color: color-mix(in srgb, var(--fx) 45%, transparent); background: linear-gradient(180deg, rgba(10, 16, 30, .82), rgba(4, 8, 16, .9)); }
+#legend.strip .g3d { width: 118px; height: 118px; }
+#legend.strip .g3d .disc { font-size: 68px; }
+#legend.strip .gtxt { width: 100%; text-align: center; display: grid; gap: 4px; }
+#legend.strip .gname { flex-direction: column; gap: 4px; font-size: 23px; line-height: 1.1; }
+#legend.strip .gname span:first-child { max-width: 100%; }
+#legend.strip .coin { font-size: 19px; padding: 2px 12px 2px 8px; }
+#legend.strip .coin::before { width: 13px; height: 13px; }
+#legend.strip .gfx { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 8px 6px 9px; font-size: 21px; color: #0a0e14; background: var(--fx); text-align: center; letter-spacing: .01em; }
+#legend.strip .gfx::before { content: ''; }
+#legend.strip .gfx.long { font-size: 17px; padding-block: 11px; }
+#legend.strip .gift.support .gfx::before { content: '💚 '; } #legend.strip .gift.boss .gfx::before { content: '☠️ '; }
 
 /* ---------- Gift-Alert ---------- */
 #alerts { width: 760px; height: 150px; pointer-events: none; }
@@ -151,7 +221,7 @@ body.designer #dz { display: flex; }
 @keyframes bump { 0% { transform: scale(1.7) rotate(-6deg); } 100% { transform: scale(1) rotate(0); } }
 .spark { position: absolute; width: 10px; height: 10px; border-radius: 2px; background: var(--gold); animation: spark .8s ease-out forwards; }
 @keyframes spark { to { transform: translate(var(--dx), var(--dy)) rotate(260deg) scale(.2); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .g3d .disc, .aspin > div { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .g3d .disc, .aspin > div, #camRays { animation: none; } }
 </style>
 </head>
 <body>
@@ -174,18 +244,23 @@ body.designer #dz { display: flex; }
     <div id="hudCam"><span id="hCamTxt">👁️ Ego-Perspektive</span><em id="hLoot"></em></div>
   </aside>
 
-  <aside id="legend" class="wg" data-w="legend" data-name="Gift-Legende"><h2>Gifts steuern das Spiel</h2><div id="legendList"></div></aside>
+  <aside id="legend" class="wg" data-w="legend" data-name="Gift-Legende"><div id="lgHead"><span id="lgTitle">🎁 Schick ein Gift <b>➜ das passiert</b></span><span id="lgDots"></span></div><div id="lgBar"><i></i></div><div id="legendList"></div></aside>
 
   <section id="cam" class="wg" data-w="cam" data-name="Facecam">
     <div id="camFrame">
       <div id="camGlow"></div>
-      <canvas id="skin" width="680" height="768"></canvas>
+      <div id="camRays"></div>
+      <canvas id="skin" width="720" height="904"></canvas>
+      <div id="camVig"></div>
+      <div id="camFx"></div>
       <div id="camFlash"></div>
+      <div id="camMood"></div>
       <div id="camTag"><span class="live"><i></i>LIVE</span><span class="ki">KI-STREAMER</span></div>
       <div id="meter"><i></i><i></i><i></i><i></i><i></i></div>
       <div id="camBar">
         <div id="camName"><span id="nameTxt">KI_Streamer</span><span id="camAct"></span></div>
         <div id="hp"></div>
+        <div id="rage"><span>🔥 WUT</span><div><i id="rageFill"></i></div></div>
       </div>
     </div>
   </section>
@@ -207,13 +282,17 @@ const stage = $('stage')
 const WIDGETS = [...document.querySelectorAll('.wg')]
 const FORMATS = { '16:9': [1920, 1080], '9:16': [1080, 1920], custom: [1920, 1080] }
 const DEFAULTS = {
-  '16:9': { alerts: { x: 580, y: 34, s: 1 }, hud: { x: 36, y: 36, s: 1 }, legend: { x: 1600, y: 250, s: 1 }, cam: { x: 36, y: 528, s: 1 }, subs: { x: 36, y: 932, s: 1 } },
-  // 9:16: unten und rechts bleibt Platz für die TikTok-Bedienelemente
-  '9:16': { alerts: { x: 160, y: 190, s: 1 }, hud: { x: 30, y: 60, s: 0.9 }, legend: { x: 770, y: 420, s: 0.95 }, cam: { x: 30, y: 960, s: 1.1 }, subs: { x: 30, y: 1400, s: 1 } },
+  '16:9': { alerts: { x: 580, y: 34, s: 1 }, hud: { x: 36, y: 36, s: 1 }, legend: { x: 1584, y: 250, s: 1 }, cam: { x: 36, y: 460, s: 1 }, subs: { x: 36, y: 932, s: 1 } },
+  // 9:16 (TikTok LIVE): oben 230 px frei für Profil/Zuschauerzahl, unten links frei für den Chat,
+  // ganz unten frei für die Bedienleiste. Gift-Leiste oben, Facecam rechts über dem Herz-Knopf.
+  '9:16': { legend: { x: 30, y: 236, s: 1 }, hud: { x: 30, y: 616, s: 0.92 }, alerts: { x: 160, y: 760, s: 1 }, subs: { x: 30, y: 1030, s: 1 }, cam: { x: 690, y: 1040, s: 1 } },
   // Split: linke Spalte Streamer, rechte Spalte Gifts, Mitte komplett frei
-  custom: { alerts: { x: 580, y: 880, s: 0.9 }, hud: { x: 36, y: 30, s: 1 }, legend: { x: 1580, y: 30, s: 1.05 }, cam: { x: 36, y: 180, s: 1.25 }, subs: { x: 36, y: 690, s: 0.78 } }
+  custom: { alerts: { x: 580, y: 880, s: 0.9 }, hud: { x: 36, y: 30, s: 1 }, legend: { x: 1580, y: 30, s: 1.05 }, cam: { x: 36, y: 180, s: 1.1 }, subs: { x: 36, y: 700, s: 0.78 } }
 }
-let layout = { format: '16:9', formats: {} }
+const QS = new URLSearchParams(location.search)
+const MUTE = QS.has('mute') // eingebettete Vorschau im Dashboard: kein Ton
+const FORCE_FORMAT = QS.get('format')
+let layout = { format: '9:16', formats: {} }
 let fitScale = 1
 function fit () {
   const [W, H] = FORMATS[layout.format]
@@ -230,10 +309,14 @@ function applyLayout () {
     el.classList.toggle('off', !!w.h)
   }
   for (const [id, f] of [['dz169', '16:9'], ['dz916', '9:16'], ['dzCustom', 'custom']]) $(id).classList.toggle('on', layout.format === f)
+  stage.classList.toggle('f916', layout.format === '9:16')
+  const strip = layout.format === '9:16'
+  if ($('legend').classList.contains('strip') !== strip) { $('legend').classList.toggle('strip', strip); if (typeof showPage === 'function') showPage(lg.page, false) }
   fit(); syncSel()
 }
 function setLayout (l) {
-  layout = l && l.formats ? { format: FORMATS[l.format] ? l.format : '16:9', formats: l.formats } : { format: '16:9', formats: {} }
+  layout = l && l.formats ? { format: FORMATS[l.format] ? l.format : '9:16', formats: l.formats } : { format: '9:16', formats: {} }
+  if (FORMATS[FORCE_FORMAT]) layout.format = FORCE_FORMAT
   applyLayout()
 }
 let saveT = null
@@ -300,7 +383,8 @@ addEventListener('keydown', e => { if (e.key === 'F2') { e.preventDefault(); set
 // Einbettende Seite (Dashboard/Vorschau) kann Designer und Format per postMessage schalten
 addEventListener('message', e => { const m = e.data || {}; if (m.type === 'designer') setDesigner(m.on); else if (m.type === 'format') setFormat(m.format) })
 addEventListener('resize', fit)
-try { const saved = JSON.parse(localStorage.getItem('overlayLayout')); if (saved) layout = { format: FORMATS[saved.format] ? saved.format : '16:9', formats: saved.formats || {} } } catch (_) {}
+try { const saved = JSON.parse(localStorage.getItem('overlayLayout')); if (saved) layout = { format: FORMATS[saved.format] ? saved.format : '9:16', formats: saved.formats || {} } } catch (_) {}
+if (FORMATS[FORCE_FORMAT]) layout.format = FORCE_FORMAT
 
 /* ---------------------------------------------------------------- Skin (prozedural, 64x64) */
 const FACE = { x: 8, y: 8 }
@@ -334,12 +418,12 @@ let viewer = null; let rig = null; let faceBase = null; let lastMouth = -1; let 
 function initCam () {
   if (!window.skinview3d) return
   const canvas = $('skin')
-  viewer = new skinview3d.SkinViewer({ canvas, width: 340, height: 384, pixelRatio: 2, skin: drawSkin() })
+  viewer = new skinview3d.SkinViewer({ canvas, width: 360, height: 452, pixelRatio: 2, skin: drawSkin() })
   viewer.animation = null
   viewer.controls.enableRotate = false; viewer.controls.enableZoom = false; viewer.controls.enablePan = false
   viewer.fov = 30
-  viewer.camera.position.set(-7, 18, 50)
-  viewer.controls.target.set(0, 15.2, 0)
+  viewer.camera.position.set(-9, 15, 74)
+  viewer.controls.target.set(0, 10.5, 0)
   viewer.controls.update()
   viewer.globalLight.intensity = 2.6
   viewer.cameraLight.intensity = 1.1
@@ -352,22 +436,46 @@ function initCam () {
 function grabFace () {
   try { faceBase = viewer.skinCanvas.getContext('2d').getImageData(FACE.x, FACE.y, 8, 8); lastMouth = -1 } catch (_) { faceBase = null }
 }
-/** Mund/Kiefer und Blinzeln direkt in die Skin-Textur malen (0 = zu … 3 = weit offen). */
-function paintFace (mouth, blink) {
-  if (!viewer || !faceBase || (mouth === lastMouth && blink === lastBlink)) return
-  lastMouth = mouth; lastBlink = blink
+/**
+ * Gesicht direkt in die Skin-Textur malen: Mund (0 = zu … 3 = weit offen), Blinzeln und Ausdruck.
+ * Gesicht ist 8x8: Zeile 3 Augenbrauen, 4 Augen, 5 Nase/Wangen, 6–7 Mund.
+ */
+let lastExpr = ''
+function paintFace (mouth, blink, ex) {
+  if (!viewer || !faceBase || (mouth === lastMouth && blink === lastBlink && ex === lastExpr)) return
+  lastMouth = mouth; lastBlink = blink; lastExpr = ex
   const g = viewer.skinCanvas.getContext('2d')
   g.putImageData(faceBase, FACE.x, FACE.y)
   const R = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(FACE.x + x, FACE.y + y, w, h) }
-  if (blink) { R(1, 4, 2, 1, '#cf9a74'); R(5, 4, 2, 1, '#cf9a74') }
-  if (mouth === 0) R(3, 6, 2, 1, '#8a4a3c')
-  else if (mouth === 1) { R(3, 6, 2, 1, '#3b1512') } else if (mouth === 2) { R(2, 6, 4, 1, '#3b1512'); R(3, 7, 2, 1, '#3b1512'); R(3, 6, 2, 1, '#ffffff') } else { R(2, 6, 4, 2, '#3b1512'); R(2, 6, 4, 1, '#f5f5f5'); R(3, 7, 2, 1, '#d8525e') }
+  const SK = '#e8b48c'; const SD = '#cf9a74'; const DK = '#3b1512'; const BR = '#2b1d14'
+  const angry = ex === 'angry' || ex === 'furious'
+  if (angry) {
+    g.globalAlpha = ex === 'furious' ? 0.42 : 0.22; R(0, 3, 8, 5, '#ff2a1a'); g.globalAlpha = 1 // rot anlaufen
+    R(1, 3, 2, 1, SD); R(5, 3, 2, 1, SD); R(2, 3, 1, 1, BR); R(5, 3, 1, 1, BR) // Brauen innen runtergezogen
+    R(1, 4, 1, 1, BR); R(6, 4, 1, 1, BR); R(2, 4, 1, 1, ex === 'furious' ? '#ff3b30' : '#1d6bff'); R(5, 4, 1, 1, ex === 'furious' ? '#ff3b30' : '#1d6bff') // zusammengekniffene Augen
+  } else if (ex === 'scared') {
+    R(1, 3, 2, 2, '#fff'); R(5, 3, 2, 2, '#fff'); R(2, 4, 1, 1, '#10151f'); R(5, 4, 1, 1, '#10151f') // weit aufgerissene Augen
+    R(7, 3, 1, 2, '#6fd0ff'); R(0, 5, 1, 1, '#6fd0ff') // Schweiß
+  } else if (ex === 'sad') {
+    R(1, 3, 2, 1, SK); R(5, 3, 2, 1, SK); R(1, 3, 1, 1, BR); R(6, 3, 1, 1, BR) // Brauen außen hängend
+    R(1, 5, 1, 2, '#6fd0ff') // Träne
+  } else if (ex === 'happy') {
+    R(1, 4, 2, 1, BR); R(5, 4, 2, 1, BR); R(0, 5, 1, 1, '#f08a7a'); R(7, 5, 1, 1, '#f08a7a') // lachende Augen, rote Wangen
+  }
+  if ((blink || ex === 'sleep') && ex !== 'scared' && ex !== 'happy') { R(1, 4, 2, 1, SD); R(5, 4, 2, 1, SD) }
+  if (mouth === 0) {
+    if (angry) { R(2, 6, 4, 1, '#f5f5f5'); R(2, 7, 4, 1, DK); R(3, 6, 1, 1, '#c9c9c9') } // Zähne zusammengebissen
+    else if (ex === 'scared') R(3, 6, 2, 2, DK)
+    else if (ex === 'sad') { R(3, 6, 2, 1, '#8a4a3c'); R(2, 7, 1, 1, '#8a4a3c'); R(5, 7, 1, 1, '#8a4a3c') } else if (ex === 'happy') { R(2, 6, 4, 1, DK); R(3, 7, 2, 1, '#d8525e') } else if (ex === 'sleep') R(3, 6, 1, 1, DK)
+    else R(3, 6, 2, 1, '#8a4a3c')
+  } else if (mouth === 1) { R(3, 6, 2, 1, DK) } else if (mouth === 2) { R(2, 6, 4, 1, DK); R(3, 7, 2, 1, DK); R(3, 6, 2, 1, '#ffffff') } else { R(2, 6, 4, 2, DK); R(2, 6, 4, 1, '#f5f5f5'); R(3, 7, 2, 1, '#d8525e') }
   viewer.skinTexture.needsUpdate = true
 }
 
 /* ---------------------------------------------------------------- Audio + Lip-Sync */
 let actx = null; let analyser = null; let timeBuf = null; let curSrc = null
 function audio () {
+  if (MUTE) return null
   if (!actx) {
     try {
       actx = new (window.AudioContext || window.webkitAudioContext)()
@@ -455,37 +563,88 @@ function tickSubs (now) {
   if (t > speech.dur + 350) { speech.active = false; subBox.classList.remove('on'); $('cam').classList.remove('speaking') }
 }
 
+/* ---------------------------------------------------------------- Stimmung (Wut, Freude, Angst, Trauer) */
+const mood = { rage: 0, joy: 0, fear: 0, sad: 0 }
+const DECAY = { rage: 0.028, joy: 0.1, fear: 0.15, sad: 0.2 } // pro Sekunde
+const feel = (k, v) => { mood[k] = Math.max(0, Math.min(1, mood[k] + v)) }
+const bot = { activity: 'idle', sleeping: false, connected: false, fighting: false }
+const MOOD_TXT = { furious: '🤬 RASTET AUS', angry: '😡 SAUER', scared: '😱 PANIK', sad: '😭 AM BODEN', happy: '😄 GUT DRAUF', sleep: '😴 SCHLÄFT' }
+function currentExpr () {
+  if (bot.sleeping) return 'sleep'
+  if (mood.sad > 0.3) return 'sad'
+  if (mood.fear > 0.45 && mood.fear > mood.rage - 0.25) return 'scared'
+  if (mood.rage > 0.85) return 'furious'
+  if (mood.rage > 0.5) return 'angry'
+  if (mood.joy > 0.3) return 'happy'
+  return 'neutral'
+}
+const camFx = $('camFx')
+function fx (emoji, cls = '', x = null, y = null) {
+  if (camFx.childElementCount > 14) return
+  const el = document.createElement('span'); el.textContent = emoji; el.className = cls
+  el.style.left = (x ?? 30 + Math.random() * 260) + 'px'; el.style.top = (y ?? 90 + Math.random() * 110) + 'px'
+  el.style.setProperty('--dx', (Math.random() * 90 - 45) + 'px'); el.style.setProperty('--r0', (Math.random() * 40 - 20) + 'deg'); el.style.setProperty('--r1', (Math.random() * 80 - 40) + 'deg'); el.style.setProperty('--d', (1 + Math.random() * 0.7) + 's')
+  camFx.appendChild(el); setTimeout(() => el.remove(), 1800)
+}
+const FX_RATE = { furious: [170, ['💢', '💨', '🔥', '💢']], angry: [520, ['💢', '💨']], scared: [330, ['💦', '❗', '💦']], happy: [300, ['✨', '💛', '⭐']], sleep: [1100, ['💤']] }
+
 /* ---------------------------------------------------------------- Avatar-Animation */
-const pose = { yaw: 0, pitch: 0, head: 0, blocking: false, at: 0, turn: 0 }
+const pose = { yaw: 0, pitch: 0, head: 0, blocking: false, at: 0, turn: 0, speed: 0, air: false }
 function setPose (p) {
   let d = p.moveYaw - pose.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI
   pose.turn = Math.max(-0.5, Math.min(0.5, d * 0.6)); pose.yaw = p.moveYaw
   let h = p.yaw - p.moveYaw; while (h > Math.PI) h -= 2 * Math.PI; while (h < -Math.PI) h += 2 * Math.PI
   pose.head = Math.max(-1.1, Math.min(1.1, h)); pose.pitch = Math.max(-1.2, Math.min(1.2, p.pitch)); pose.blocking = !!p.blocking; pose.at = performance.now()
+  pose.speed = Math.max(0, Math.min(1, (Number(p.speed) || 0) / 0.2)); pose.air = p.onGround === false
 }
-const track = { yaw: 0, pitch: 0, block: 0 }
-let lastChroma = 0
-const anim = { swing: 0, swingArm: 'right', hurt: 0, startle: 0, blinkAt: performance.now() + 2500, blinkUntil: 0, lookX: 0, lookY: 0, lookT: 0, tx: 0, ty: 0 }
+const track = { yaw: 0, pitch: 0, block: 0, walk: 0, air: 0 }
+// weiche Überblendung zwischen den Ausdrücken (0..1)
+const W = { angry: 0, furious: 0, scared: 0, sad: 0, happy: 0, sleep: 0, work: 0, eat: 0 }
+let lastChroma = 0; let lastFx = 0; let lastFrame = performance.now(); let expr = 'neutral'; let walkPhase = 0
+const anim = { swing: 0, hurt: 0, startle: 0, pump: 0, facepalm: 0, cheer: 0, blinkAt: performance.now() + 2500, blinkUntil: 0, lookX: 0, lookY: 0, lookT: 0, tx: 0, ty: 0 }
 const meterBars = [...$('meter').children]
+const BASE_Y = 10.5
 function frame (now) {
   requestAnimationFrame(frame)
+  const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now
   const lv = measure(now)
   tickSubs(now)
   const cam = $('cam')
+  for (const k in DECAY) mood[k] = Math.max(0, mood[k] - DECAY[k] * dt)
+  if (speech.active && speech.emotion === 'panic') feel('fear', 0.5 * dt)
+  const ex = currentExpr()
+  if (ex !== expr) {
+    expr = ex; cam.dataset.mood = ex
+    const chip = $('camMood'); chip.textContent = MOOD_TXT[ex] || ''; chip.classList.toggle('on', !!MOOD_TXT[ex])
+    if (ex === 'furious') fx('💢', 'pop', 230, 70)
+    else if (ex === 'scared') fx('❗', 'pop', 240, 70)
+    else if (ex === 'sad') fx('💔', 'pop', 150, 80)
+  }
+  $('rageFill').style.width = Math.round(mood.rage * 100) + '%'
+  $('rage').classList.toggle('max', mood.rage > 0.85)
   cam.classList.toggle('speaking', speech.active && lv > 0.05)
   const hype = speech.active && speech.emotion === 'hype'
-  cam.classList.toggle('hype', hype)
   if (hype && lv > 0.25 && now - lastChroma > 90) {
     lastChroma = now
-    const c = document.createElement('i'); c.className = 'chroma'; c.style.left = (20 + Math.random() * 300) + 'px'; c.style.setProperty('--dx', (Math.random() * 80 - 40) + 'px')
+    const c = document.createElement('i'); c.className = 'chroma'; c.style.left = (20 + Math.random() * 320) + 'px'; c.style.setProperty('--dx', (Math.random() * 80 - 40) + 'px')
     $('camFrame').appendChild(c); setTimeout(() => c.remove(), 1150)
   }
+  const rate = FX_RATE[ex]
+  if (rate && now - lastFx > rate[0]) { lastFx = now; fx(rate[1][Math.floor(Math.random() * rate[1].length)]) }
+  if (ex === 'sad' && now - lastFx > 700) { lastFx = now; fx('💧', 'fall', 150 + Math.random() * 60, 150) }
   meterBars.forEach((b, i) => { b.style.height = (4 + Math.max(0, lv * 30 * (1 - Math.abs(i - 2) * 0.22) * (0.75 + 0.25 * Math.sin(now / 60 + i)))) + 'px' })
   if (!rig) return
   const t = now / 1000
-  // Blinzeln
+  const S = Math.sin
+  // Überblendgewichte
+  const tgt = { angry: ex === 'angry' || ex === 'furious' ? 1 : 0, furious: ex === 'furious' ? 1 : 0, scared: ex === 'scared' ? 1 : 0, sad: ex === 'sad' ? 1 : 0, happy: ex === 'happy' ? 1 : 0, sleep: ex === 'sleep' ? 1 : 0, work: 0, eat: 0 }
+  const calm = ex === 'neutral' && !speech.active && !bot.fighting
+  if (calm && ['mine', 'wood', 'build', 'craft', 'portal'].includes(bot.activity)) tgt.work = 1
+  if (calm && bot.activity === 'eat') tgt.eat = 1
+  for (const k in W) W[k] += (tgt[k] - W[k]) * Math.min(1, dt * 7)
+  // Blinzeln + Gesicht
   if (now > anim.blinkAt) { anim.blinkUntil = now + 120; anim.blinkAt = now + 2200 + Math.random() * 3500 }
-  paintFace(lv < 0.08 ? 0 : lv < 0.3 ? 1 : lv < 0.58 ? 2 : 3, now < anim.blinkUntil)
+  paintFace(lv < 0.08 ? 0 : lv < 0.3 ? 1 : lv < 0.58 ? 2 : 3, now < anim.blinkUntil, ex)
   // Blickziel wandert (schaut in den "Chat", zurück ins Spiel …)
   if (now > anim.lookT) { anim.lookT = now + 1400 + Math.random() * 2600; anim.tx = (Math.random() - 0.5) * 0.5; anim.ty = (Math.random() - 0.4) * 0.22 }
   anim.lookX += (anim.tx - anim.lookX) * 0.05; anim.lookY += (anim.ty - anim.lookY) * 0.05
@@ -496,30 +655,76 @@ function frame (now) {
   track.yaw += ((pose.head + pose.turn) * live - track.yaw) * 0.14
   track.pitch += (pose.pitch * live - track.pitch) * 0.14
   track.block += ((pose.blocking && live ? 1 : 0) - track.block) * 0.25
-  const panicJit = cam.classList.contains('panic') ? Math.sin(t * 23) * 0.05 : 0
-  // Kopf nickt im Takt der Silben
-  rig.head.rotation.x = anim.lookY * (1 - live) - track.pitch * 0.75 - lv * 0.2 * energy + Math.sin(t * 1.3) * 0.02 - startle * 0.35
-  rig.head.rotation.y = anim.lookX * (1 - live) + track.yaw * 0.8 + panicJit + Math.sin(t * 0.7) * 0.04 + (speech.active ? Math.sin(t * 5.1) * 0.035 * energy * lv : 0)
-  rig.head.rotation.z = Math.sin(t * 0.9) * 0.02 + (speech.active ? Math.sin(t * 3.3) * 0.04 * lv : 0)
-  // Oberkörper atmet / gestikuliert
-  rig.body.rotation.y = Math.sin(t * 0.6) * 0.03 + anim.lookX * 0.25
+  track.walk += ((live ? pose.speed : 0) - track.walk) * 0.15
+  track.air += ((pose.air && live ? 1 : 0) - track.air) * 0.3
+  walkPhase += dt * (5 + track.walk * 6)
   const gest = speech.active ? lv * energy : 0
-  let rx = Math.sin(t * 1.1) * 0.04 - gest * (0.5 + 0.25 * Math.sin(t * 6.3))
-  const lx = -Math.sin(t * 1.1) * 0.04 - gest * (0.35 + 0.25 * Math.sin(t * 5.1 + 1))
-  let rz = -0.06 - gest * 0.16; const lz = 0.06 + gest * 0.2
+  const walk = track.walk * (1 - W.sleep)
+
+  // ---- Kopf
+  let hx = anim.lookY * (1 - live) - track.pitch * 0.75 - lv * 0.2 * energy + S(t * 1.3) * 0.02 - startle * 0.35
+  let hy = anim.lookX * (1 - live) + track.yaw * 0.8 + S(t * 0.7) * 0.04 + (speech.active ? S(t * 5.1) * 0.035 * energy * lv : 0)
+  let hz = S(t * 0.9) * 0.02 + (speech.active ? S(t * 3.3) * 0.04 * lv : 0)
+  hy += W.angry * S(t * (9 + W.furious * 8)) * (0.1 + W.furious * 0.16) // wütendes Kopfschütteln
+  hx += W.angry * 0.16 // Kinn runter, von unten anfunkeln
+  hy += W.scared * S(t * 17) * 0.22; hx -= W.scared * 0.12 // hektisch umsehen
+  hx += W.sad * 0.55; hz += W.sad * S(t * 1.2) * 0.06 // Kopf hängt
+  hz += W.happy * S(t * 6) * 0.12; hx -= W.happy * 0.12
+  hx += W.sleep * (0.42 + S(t * 1.1) * 0.05); hz += W.sleep * 0.3
+  hx += W.work * (0.18 + S(t * 6.5) * 0.05) + W.eat * 0.12
+  rig.head.rotation.set(hx, hy, hz)
+
+  // ---- Arme (Grundhaltung + Gestik beim Sprechen + Laufen)
+  let rx = S(t * 1.1) * 0.04 - gest * (0.5 + 0.25 * S(t * 6.3)) + S(walkPhase) * 0.55 * walk
+  let lx = -S(t * 1.1) * 0.04 - gest * (0.35 + 0.25 * S(t * 5.1 + 1)) - S(walkPhase) * 0.55 * walk
+  let rz = -0.06 - gest * 0.16; let lz = 0.06 + gest * 0.2
+  const mix = (cur, target, w) => cur + (target - cur) * w
+  // sauer: Fäuste ballen und schütteln; richtig wütend: beide Fäuste über dem Kopf
+  rx = mix(rx, -1.25 + S(t * 24) * 0.12, W.angry * (1 - W.furious)); rz = mix(rz, -0.25, W.angry * (1 - W.furious))
+  lx = mix(lx, -0.5 + S(t * 24 + 1) * 0.08, W.angry * (1 - W.furious)); lz = mix(lz, 0.3, W.angry * (1 - W.furious))
+  rx = mix(rx, -2.75 + S(t * 19) * 0.3, W.furious); rz = mix(rz, -0.35 + S(t * 19) * 0.1, W.furious)
+  lx = mix(lx, -2.75 + S(t * 19 + 1.6) * 0.3, W.furious); lz = mix(lz, 0.35 - S(t * 19 + 1.6) * 0.1, W.furious)
+  // Panik: Hände schützend vors Gesicht
+  rx = mix(rx, -2.55 + S(t * 28) * 0.06, W.scared); rz = mix(rz, 0.12, W.scared)
+  lx = mix(lx, -2.55 + S(t * 28 + 2) * 0.06, W.scared); lz = mix(lz, -0.12, W.scared)
+  // traurig: Arme hängen schlaff
+  rx = mix(rx, 0.12, W.sad); lx = mix(lx, 0.12, W.sad); rz = mix(rz, -0.03, W.sad); lz = mix(lz, 0.03, W.sad)
+  // Freude: Arme hoch und winken
+  rx = mix(rx, -2.9 + S(t * 9) * 0.2, W.happy); rz = mix(rz, -0.45 + S(t * 9) * 0.25, W.happy)
+  lx = mix(lx, -2.9 + S(t * 9 + 1) * 0.2, W.happy * 0.8); lz = mix(lz, 0.45 - S(t * 9 + 1) * 0.25, W.happy * 0.8)
+  // Arbeiten (Hacken/Bauen) und Essen in ruhigen Momenten
+  rx = mix(rx, -1.35 + S(t * 6.5) * 0.75, W.work); rz = mix(rz, -0.12, W.work)
+  rx = mix(rx, -1.95 + S(t * 9) * 0.12, W.eat); rz = mix(rz, 0.42, W.eat)
+  rx = mix(rx, 0.1, W.sleep); lx = mix(lx, 0.1, W.sleep)
   // Schwertschlag: Arm holt aus und schlägt durch
-  if (anim.swing > now) {
-    const p = 1 - (anim.swing - now) / 320
-    rx = -2.2 * Math.sin(p * Math.PI) - 0.2
-    rz = -0.1 - 0.45 * Math.sin(p * Math.PI)
-    rig.body.rotation.y += -0.3 * Math.sin(p * Math.PI)
-  }
+  let bodyTwist = 0
+  if (anim.swing > now) { const p = 1 - (anim.swing - now) / 320; rx = -2.2 * S(p * Math.PI) - 0.2; rz = -0.1 - 0.45 * S(p * Math.PI); bodyTwist = -0.3 * S(p * Math.PI) }
+  // Kill: Siegerfaust
+  if (anim.pump > now) { const p = 1 - (anim.pump - now) / 900; rx = -2.9 + S(p * Math.PI * 4) * 0.35; rz = -0.2 }
+  // Tod: Hand vors Gesicht
+  if (anim.facepalm > now) { const p = Math.min(1, (1 - (anim.facepalm - now) / 2600) * 5); lx = mix(lx, -2.2, p); lz = mix(lz, -0.75, p) }
   if (startle > 0) { rx -= startle * 1.0; rz -= startle * 0.5 }
   rig.rightArm.rotation.x = rx; rig.rightArm.rotation.z = rz
   // Schildblock: linker Arm geht vor den Körper
   rig.leftArm.rotation.x = (lx - (startle > 0 ? startle : 0)) * (1 - track.block) - 1.25 * track.block
   rig.leftArm.rotation.z = (lz + (startle > 0 ? startle * 0.5 : 0)) * (1 - track.block) - 0.55 * track.block
-  viewer.playerObject.position.y = 8 + Math.sin(t * 1.8) * 0.08 + gest * 0.12 - startle * 0.5
+
+  // ---- Beine: Laufen, Stampfen, Springen
+  const stomp = W.furious * Math.max(0, S(t * 13))
+  rig.rightLeg.rotation.x = -S(walkPhase) * 0.7 * walk - stomp * 0.9 - track.air * 0.5 + W.scared * S(t * 30) * 0.06
+  rig.leftLeg.rotation.x = S(walkPhase) * 0.7 * walk - W.furious * Math.max(0, S(t * 13 + Math.PI)) * 0.9 + track.air * 0.35 - W.scared * S(t * 30) * 0.06
+  rig.rightLeg.rotation.z = W.happy * 0.12; rig.leftLeg.rotation.z = -W.happy * 0.12
+
+  // ---- Oberkörper und ganzer Körper
+  rig.body.rotation.y = S(t * 0.6) * 0.03 + anim.lookX * 0.25 + bodyTwist + S(walkPhase) * 0.08 * walk
+  rig.body.rotation.x = W.work * S(t * 6.5) * 0.06
+  const po = viewer.playerObject
+  const hop = W.happy * Math.abs(S(t * 7.5)) * 2.2 + W.furious * Math.abs(S(t * 13)) * 0.9 + track.air * 1.6
+  po.position.y = BASE_Y + S(t * 1.8) * 0.08 * (1 + W.sleep * 2) + gest * 0.12 - startle * 0.5 + hop + Math.abs(S(walkPhase)) * 0.35 * walk - W.sad * 0.9 - W.scared * 0.5
+  po.position.x = W.scared * S(t * 41) * 0.22 + W.furious * S(t * 33) * 0.25
+  po.rotation.x = W.angry * 0.16 - W.scared * 0.14 + W.sad * 0.2 + W.sleep * 0.1 + walk * 0.06
+  po.rotation.y = track.yaw * 0.25 + pose.turn * live * 0.5 + W.angry * S(t * 5) * 0.08
+  po.rotation.z = W.sleep * 0.08 + W.sad * S(t * 0.9) * 0.03
 }
 function swing () { anim.swing = performance.now() + 320 }
 function hurt (strong) {
@@ -528,9 +733,8 @@ function hurt (strong) {
   anim.startle = performance.now() + (strong ? 800 : 500)
   setTimeout(() => cam.classList.remove('hurt'), 500)
 }
-let panicUntil = 0
-function setPanic (ms) { panicUntil = Math.max(panicUntil, performance.now() + ms); $('cam').classList.add('panic') }
-setInterval(() => { if (performance.now() > panicUntil) $('cam').classList.remove('panic') }, 300)
+/** Kompatibel zu früher: "Panik" speist jetzt die Angst. */
+function setPanic (ms) { feel('fear', Math.min(0.9, ms / 3500)) }
 
 /* ---------------------------------------------------------------- Status-Leiste der Facecam */
 const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen läuft', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'KAMPF', eat: 'Essen', sleep: 'Schlafen', swim: 'Im Wasser', guard: 'Kampfbereit', exit_cave: 'Raus aus der Höhle', corpse: 'Corpse-Run', explore: 'Erkunden', idle: 'Basis', recover: 'Loot holen', paused: 'Pause', offline: 'Offline' }
@@ -538,13 +742,14 @@ const hpEl = $('hp')
 for (let i = 0; i < 10; i++) { const b = document.createElement('b'); b.appendChild(document.createElement('i')); hpEl.appendChild(b) }
 function setStatus (s) {
   if (!s) return
+  Object.assign(bot, { activity: s.connected ? s.activity : 'offline', sleeping: !!(s.connected && s.sleeping), connected: !!s.connected, fighting: !!s.fighting })
   if (s.username) $('nameTxt').textContent = s.username
   const act = s.connected ? (ACT[s.activity] || '') : 'Offline'
   $('camAct').textContent = act + (s.connected && s.activity === 'mine' && s.pos ? ` · Y ${s.pos.y}` : '')
   $('camAct').style.color = s.fighting ? 'var(--red)' : ''
   const hp = s.connected ? (s.health ?? 20) : 0
   ;[...hpEl.children].forEach((b, i) => { b.firstChild.style.width = Math.max(0, Math.min(1, (hp - i * 2) / 2)) * 100 + '%' })
-  if (s.connected && (hp <= 8 || (s.threats || 0) >= 4)) setPanic(1500)
+  if (s.connected && (hp <= 6 || (s.threats || 0) >= 5)) feel('fear', 0.25)
   $('hudGoal').textContent = s.connected ? (s.goal || act || '–') : 'Bot offline'
   $('hudGoal').style.color = s.fighting ? 'var(--red)' : ''
   $('hY').textContent = s.connected && s.pos ? s.pos.y : '–'; $('hFood').textContent = s.connected ? Math.round((s.food ?? 20) / 2) : '–'
@@ -554,32 +759,76 @@ function setStatus (s) {
   $('hLoot').textContent = s.lastDeath ? `Loot: ${s.lastDeath.secondsLeft}s` : (s.sleeping ? '💤 schläft' : '')
 }
 
-/* ---------------------------------------------------------------- Gift-Legende */
+/* ---------------------------------------------------------------- Gift-Legende (Karussell) */
+const PER_PAGE = 4; const PAGE_MS = 7000
 let giftCfg = []
-function renderLegend (list) {
-  giftCfg = list || []
+const lg = { page: 0, pages: 1, timer: null, busy: false }
+const giftSig = g => [g.name, g.coins, g.legend, g.kind, g.tier, g.icon, g.emoji].join('|')
+function giftCard (g, i, cls) {
+  const row = document.createElement('div')
+  row.className = 'gift ' + cls + (g.kind === 'support' ? ' support' : g.tier >= 5 ? ' boss' : '')
+  row.dataset.id = g.id; row.style.setProperty('--i', i)
+  const d3 = document.createElement('div'); d3.className = 'g3d'
+  const disc = document.createElement('div'); disc.className = 'disc'
+  if (g.icon) { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.alt = ''; im.onerror = () => { disc.textContent = g.emoji }; im.src = g.icon; disc.appendChild(im) } else disc.textContent = g.emoji
+  d3.appendChild(disc)
+  const txt = document.createElement('div'); txt.className = 'gtxt'
+  const nm = document.createElement('div'); nm.className = 'gname'
+  const n = document.createElement('span'); n.textContent = g.name
+  const c = document.createElement('span'); c.className = 'coin'; c.textContent = g.coins
+  nm.append(n, c)
+  const fxl = document.createElement('div'); fxl.className = 'gfx' + (String(g.legend).length > 15 ? ' long' : ''); fxl.textContent = g.legend
+  txt.append(nm)
+  row.append(d3, txt, fxl)
+  if (!$('legend').classList.contains('strip')) txt.append(fxl)
+  return row
+}
+function drawDots () {
+  const d = $('lgDots'); d.textContent = ''
+  if (lg.pages < 2) return
+  for (let i = 0; i < lg.pages; i++) { const el = document.createElement('i'); if (i === lg.page) el.className = 'on'; d.appendChild(el) }
+}
+function armTimer () {
+  clearTimeout(lg.timer)
+  const bar = $('lgBar').firstElementChild
+  bar.classList.remove('run'); bar.style.width = '0'
+  if (lg.pages < 2) return
+  void bar.offsetWidth; bar.style.setProperty('--page', PAGE_MS + 'ms'); bar.classList.add('run')
+  lg.timer = setTimeout(() => showPage((lg.page + 1) % lg.pages, true), PAGE_MS)
+}
+/** Seite anzeigen. animate: alte Karten klappen weg, neue klappen nacheinander herein. */
+function showPage (i, animate = true, changed = null) {
+  lg.pages = Math.max(1, Math.ceil(giftCfg.length / PER_PAGE))
+  lg.page = ((i % lg.pages) + lg.pages) % lg.pages
   const root = $('legendList')
-  root.textContent = ''
-  for (const g of giftCfg.slice(0, 9)) {
-    const row = document.createElement('div')
-    row.className = 'gift' + (g.kind === 'support' ? ' support' : g.tier >= 5 ? ' boss' : '')
-    row.dataset.id = g.id
-    const d3 = document.createElement('div'); d3.className = 'g3d'
-    const disc = document.createElement('div'); disc.className = 'disc'
-    if (g.icon) { const im = new Image(); im.src = g.icon; im.alt = ''; im.onerror = () => { disc.textContent = g.emoji }; disc.appendChild(im) } else disc.textContent = g.emoji
-    d3.appendChild(disc)
-    const txt = document.createElement('div')
-    const nm = document.createElement('div'); nm.className = 'gname'
-    const n = document.createElement('span'); n.textContent = g.name
-    const c = document.createElement('span'); c.className = 'coin'; c.textContent = g.coins
-    nm.append(n, c)
-    const fx = document.createElement('div'); fx.className = 'gfx'
-    const b = document.createElement('b'); b.textContent = g.legend
-    fx.append('= ', b)
-    txt.append(nm, fx)
-    row.append(d3, txt)
-    root.appendChild(row)
-  }
+  const items = giftCfg.slice(lg.page * PER_PAGE, lg.page * PER_PAGE + PER_PAGE)
+  const fill = () => { root.textContent = ''; items.forEach((g, n) => root.appendChild(giftCard(g, n, animate ? 'in' : (changed && changed.has(g.id) ? 'changed' : '')))); lg.busy = false }
+  drawDots(); armTimer()
+  if (animate && root.childElementCount) {
+    lg.busy = true
+    ;[...root.children].forEach(c => { c.classList.remove('in', 'hit', 'changed'); c.classList.add('out') })
+    setTimeout(fill, 320 + root.childElementCount * 55)
+  } else fill()
+}
+/** Neue Konfiguration vom Dashboard: Seite bleibt stehen, geänderte Karten blinken kurz auf. */
+function renderLegend (list) {
+  const old = new Map(giftCfg.map(g => [g.id, giftSig(g)]))
+  const first = !giftCfg.length
+  giftCfg = (list || []).slice(0, 24)
+  const changed = new Set(giftCfg.filter(g => old.get(g.id) !== giftSig(g)).map(g => g.id))
+  if (first) return showPage(0, true)
+  // Wurde genau ein Gift geändert, springt das Karussell auf dessen Seite, damit man die Änderung sofort sieht
+  let page = lg.page
+  if (changed.size && changed.size <= 2) { const idx = giftCfg.findIndex(g => changed.has(g.id)); if (idx >= 0) page = Math.floor(idx / PER_PAGE) }
+  showPage(page, page !== lg.page, changed)
+}
+/** Kommt ein Gift an, springt das Karussell auf dessen Seite und die Karte leuchtet auf. */
+function hitLegend (name) {
+  const idx = giftCfg.findIndex(g => g.name === name)
+  if (idx < 0) return
+  const page = Math.floor(idx / PER_PAGE)
+  const flash = () => { const row = [...document.querySelectorAll('#legendList .gift')].find(r => r.dataset.id === giftCfg[idx].id); if (row) { row.classList.remove('in', 'hit'); void row.offsetWidth; row.classList.add('hit'); setTimeout(() => row.classList.remove('hit'), 950) } }
+  if (page !== lg.page) { showPage(page, true); setTimeout(flash, 900) } else { flash(); armTimer() }
 }
 
 /* ---------------------------------------------------------------- Gift-Alerts + Combo */
@@ -598,8 +847,9 @@ function chime (tier) {
 }
 function giftAlert (a) {
   const key = a.uniqueId + '|' + a.gift.name
-  const row = [...document.querySelectorAll('.gift')].find(r => giftCfg.find(g => g.id === r.dataset.id && g.name === a.gift.name))
-  if (row) { row.classList.add('hit'); setTimeout(() => row.classList.remove('hit'), 900) }
+  hitLegend(a.gift.name)
+  // Stimmung: Monster-Gifts machen ihn sauer, Support macht ihn glücklich
+  if (a.kind === 'support') { feel('joy', 0.6); feel('rage', -0.25); anim.cheer = performance.now() + 1500 } else if (a.kind !== 'none') { feel('rage', 0.14 + (a.tier || 1) * 0.07); if (a.tier >= 4) feel('fear', 0.5) }
   if (curAlert && curAlert.key === key) { bumpCombo(curAlert, a.count); return }
   const q = alertQueue.find(x => x.key === key)
   if (q) { q.count = Math.max(q.count, a.count); return }
@@ -644,7 +894,6 @@ function nextAlert () {
   curAlert = { ...a, el, comboEl: combo, timer: setTimeout(() => endAlert(curAlert), a.tier >= 4 ? 5200 : 3400) }
   sparks(el, a.tier >= 4 ? 22 : 10)
   chime(a.tier || 1)
-  if (a.tier >= 4 && a.kind !== 'support') setPanic(2500)
 }
 function endAlert (al) {
   if (!al || al !== curAlert) return
@@ -657,16 +906,36 @@ function onMessage (m) {
   switch (m.type) {
     case 'GIFT_CONFIG_SYNC': renderLegend(m.gifts); break
     case 'GIFT_ALERT': giftAlert(m); break
-    case 'TTS': playTTS(m); if (m.emotion === 'panic') setPanic(m.durationMs || 2000); break
+    case 'TTS': playTTS(m); break
     case 'STATUS': setStatus(m.status); break
     case 'POSE': setPose(m.pose); break
     case 'LAYOUT': if (!document.body.classList.contains('designer') || m.reset) setLayout(m.layout); break
     case 'DESIGNER': setDesigner(m.on); break
     case 'CHIME': chime(3); break
     case 'BOT_EVENT':
-      if (m.event === 'swing') swing()
-      else if (m.event === 'hurt' || m.event === 'low_hp' || m.event === 'critical_hp') { hurt(m.event !== 'hurt'); if (m.event !== 'hurt') setPanic(3000) } else if (m.event === 'liquid_escape' && m.data && m.data.lava) { hurt(true); setPanic(4000) } else if (m.event === 'shield' || m.event === 'lava') { hurt(true); setPanic(2500) } else if (m.event === 'death' || m.event === 'corpse_run_start') { hurt(true); setPanic(5000) }
+      botEvent(m.event, m.data || {})
       break
+  }
+}
+
+/** Spielereignisse -> Reaktion der Figur. */
+function botEvent (ev, d) {
+  const now = performance.now()
+  switch (ev) {
+    case 'swing': swing(); break
+    case 'hurt': hurt(false); feel('rage', 0.1); feel('fear', 0.08); break
+    case 'low_hp': hurt(true); feel('fear', 0.6); break
+    case 'critical_hp': hurt(true); feel('fear', 0.9); break
+    case 'shield': hurt(true); feel('fear', 0.2); break
+    case 'lava': hurt(true); feel('fear', 1); break
+    case 'liquid_escape': if (d.lava) { hurt(true); feel('fear', 1) } else feel('fear', 0.35); break
+    case 'combat_start': feel('rage', 0.12); break
+    case 'kill': anim.pump = now + 900; feel('joy', 0.4); feel('rage', -0.12); feel('fear', -0.3); fx('💥', 'pop', 220, 90); break
+    // Tod: erst am Boden zerstört (Hand vors Gesicht), danach kocht die Wut hoch
+    case 'death': hurt(true); mood.sad = 1; mood.fear = 0; mood.joy = 0; anim.facepalm = now + 2600; setTimeout(() => feel('rage', 1), 2400); fx('💀', 'pop', 150, 70); break
+    case 'respawn': feel('rage', 0.3); break
+    case 'corpse_run_done': case 'build_done': case 'enchanted': case 'portal_lit': feel('joy', 0.9); feel('rage', -0.5); fx('🎉', 'pop', 150, 70); break
+    case 'ate': feel('joy', 0.15); break
   }
 }
 
@@ -688,6 +957,7 @@ function demo () {
     { id: 'rose', name: 'Rose', coins: 1, emoji: '🌹', legend: 'Zombie', kind: 'mob', tier: 1 },
     { id: 'ice', name: 'Eistüte', coins: 1, emoji: '🍦', legend: 'Heilung', kind: 'support', tier: 1 },
     { id: 'fh', name: 'Fingerherz', coins: 5, emoji: '💖', legend: 'Skelett-Schütze', kind: 'mob', tier: 2 },
+    { id: 'rosa', name: 'Rosa-Traum', coins: 15, emoji: '🌸', legend: 'Bett', kind: 'support', tier: 1 },
     { id: 'donut', name: 'Donut', coins: 30, emoji: '🍩', legend: 'TNT-Regen', kind: 'mob', tier: 3 },
     { id: 'hh', name: 'Handherz', coins: 100, emoji: '🫶', legend: 'Baby-Zombie-Squad', kind: 'mob', tier: 4 },
     { id: 'mg', name: 'Money Gun', coins: 500, emoji: '💸', legend: 'Hit-Squad x10', kind: 'mob', tier: 4 },
@@ -698,7 +968,7 @@ function demo () {
   onMessage({ type: 'STATUS', status: st })
   const alertFor = (g, user, count) => onMessage({ type: 'GIFT_ALERT', user, uniqueId: user, avatar: null, gift: { name: g.name, emoji: g.emoji, coins: g.coins, icon: null }, count, legend: g.legend, kind: g.kind, tier: g.tier })
   const status = p => { Object.assign(st, p); onMessage({ type: 'STATUS', status: st }) }
-  setInterval(() => { const t = Date.now() / 1000; onMessage({ type: 'POSE', pose: { moveYaw: Math.sin(t / 3) * 2, yaw: Math.sin(t / 3) * 2 + (Math.sin(t / 2.3) > 0.8 ? 0.9 : 0), pitch: st.activity === 'mine' ? -0.5 + Math.sin(t) * 0.1 : Math.sin(t / 1.7) * 0.15, blocking: Date.now() < demoBlock } }) }, 250)
+  setInterval(() => { const t = Date.now() / 1000; onMessage({ type: 'POSE', pose: { moveYaw: Math.sin(t / 3) * 2, yaw: Math.sin(t / 3) * 2 + (Math.sin(t / 2.3) > 0.8 ? 0.9 : 0), pitch: st.activity === 'mine' ? -0.5 + Math.sin(t) * 0.1 : Math.sin(t / 1.7) * 0.15, blocking: Date.now() < demoBlock, onGround: true, speed: st.activity === 'explore' ? 0.2 : 0 } }) }, 250)
   const fight = (ms) => { const end = Date.now() + ms; const iv = setInterval(() => { if (Date.now() > end) return clearInterval(iv); onMessage({ type: 'BOT_EVENT', event: 'swing' }) }, 625) }
   const script = [
     [600, () => say('So Leute, das Fundament steht! Jetzt kommen die Wände, Block für Block.')],
@@ -706,10 +976,14 @@ function demo () {
     [7000, () => onMessage({ type: 'BOT_EVENT', event: 'hurt' })],
     [11500, () => { status({ activity: 'build', fighting: false, threats: 0, health: 17 }); let c = 1; const iv = setInterval(() => { c += 1 + Math.floor(Math.random() * 3); alertFor(gifts[0], 'Lukas', c); if (c >= 14) clearInterval(iv) }, 260); say('Lukas schon wieder! Bruder, hast du heute ein persönliches Problem mit mir?! Lass mich doch erstmal mein Haus zu Ende bauen!', 'hype') }],
     [19500, () => { alertFor(gifts[1], 'Mia', 1); status({ health: 20 }); say('Mia, du bist ein Ehrenmann! Die Eistüte kommt genau richtig, danke dir!', 'hype') }],
-    [25500, () => { alertFor(gifts[6], 'DerEchteTom', 1); status({ activity: 'combat', fighting: true, threats: 5, health: 9 }); onMessage({ type: 'BOT_EVENT', event: 'low_hp' }); say('NEIN! Tom schickt die Galaxie! Tausend Coins! Chat, der Endboss kommt, das war es mit meinem Haus!', 'panic'); fight(7000) }],
+    [25500, () => { alertFor(gifts[7], 'DerEchteTom', 1); status({ activity: 'combat', fighting: true, threats: 5, health: 9 }); onMessage({ type: 'BOT_EVENT', event: 'low_hp' }); say('NEIN! Tom schickt die Galaxie! Tausend Coins! Chat, der Endboss kommt, das war es mit meinem Haus!', 'panic'); fight(7000) }],
     [28500, () => { demoBlock = Date.now() + 1800; onMessage({ type: 'BOT_EVENT', event: 'shield' }) }],
-    [34500, () => { status({ activity: 'mine', fighting: false, threats: 0, health: 14, pos: { x: 118, y: -54, z: -37 } }); say('Puh. Überlebt. Ich grab mich jetzt auf Ebene Minus 54 runter, wir brauchen dringend Diamanten.') }],
-    [41000, () => {}]
+    [31000, () => { onMessage({ type: 'BOT_EVENT', event: 'kill' }) }],
+    [33500, () => { status({ health: 0, fighting: false, threats: 0 }); onMessage({ type: 'BOT_EVENT', event: 'death' }); say('Nein... das war es. Mein ganzes Inventar. Tom, das verzeih ich dir nie!', 'panic') }],
+    [40500, () => { status({ activity: 'explore', health: 20, goal: 'Loot zurückholen' }); onMessage({ type: 'BOT_EVENT', event: 'respawn' }); say('Okay. Tief durchatmen. Ich hol mir jetzt alles zurück.') }],
+    [46000, () => { status({ activity: 'mine', goal: 'Diamanten suchen', health: 14, pos: { x: 118, y: -54, z: -37 } }); onMessage({ type: 'GIFT_CONFIG_SYNC', gifts: gifts.map(g => g.id === 'rose' ? { ...g, legend: 'Creeper' } : g) }) }],
+    [52000, () => { onMessage({ type: 'GIFT_CONFIG_SYNC', gifts }) }],
+    [54000, () => {}]
   ]
   let timers = []
   const run = () => { timers.forEach(clearTimeout); timers = script.map(([t, fn]) => setTimeout(fn, t)); timers.push(setTimeout(run, script[script.length - 1][0])) }
@@ -718,6 +992,8 @@ function demo () {
 
 initCam()
 applyLayout()
+if (QS.get('solo')) { const el = WIDGETS.find(w => w.dataset.w === QS.get('solo')); if (el) { for (const w of WIDGETS) w.classList.toggle('off', w !== el); el.style.left = '10px'; el.style.top = '10px'; el.style.transform = 'none'; stage.style.transform = 'none'; stage.style.left = stage.style.top = '0' } }
+if (QS.get('mood')) setInterval(() => { const m = QS.get('mood'); if (m === 'sleep') bot.sleeping = true; else if (m === 'furious') mood.rage = 1; else if (m === 'angry') mood.rage = 0.7; else if (m === 'scared') mood.fear = 1; else if (m === 'sad') mood.sad = 1; else if (m === 'happy') mood.joy = 1 }, 100)
 requestAnimationFrame(frame)
 if (/[?&]designer=(true|1)/.test(location.search) || /designer/.test(location.hash)) setDesigner(true)
 if (DEMO) demo(); else connect()

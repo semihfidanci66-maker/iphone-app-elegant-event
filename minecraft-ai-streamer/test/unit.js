@@ -76,7 +76,7 @@ t('Gifts: Katalog mit 45+ echten TikTok-Gifts, alle mit Aktion', () => {
   assert.strictEqual(g.rules.length, CATALOG_SIZE)
   for (const r of g.rules) assert(ACTIONS[r.action] && r.action !== 'none' && r.coins >= 1, r.id)
   for (const [n, c] of [['Rose', 1], ['Donut', 30], ['Galaxie', 1000], ['Money Gun', 500], ['TikTok Universe', 44999], ['Löwe', 29999]]) assert.strictEqual(g.findRule({ name: n }).coins, c, n)
-  assert.strictEqual(g.publicConfig().length, 7)
+  assert.strictEqual(g.publicConfig().length, 8)
 })
 t('Gifts: alle Befehle < 256 Zeichen, native Entities, Helm + Namensschild', () => {
   const { g } = mkGifts()
@@ -237,6 +237,21 @@ t('Stimme: nur männliche Neural-Stimmen, nie ein Browser-Fallback', () => {
   const files = [...walk(path.join(__dirname, '..', 'public')), ...walk(path.join(__dirname, '..', 'modules')), path.join(__dirname, '..', 'server.js')]
   for (const f of files) if (/\.(js|html)$/.test(f)) assert(!/speechSynthesis\s*[.(]|SpeechSynthesisUtterance\s*\(/.test(fs.readFileSync(f, 'utf8')), 'speechSynthesis-Aufruf in ' + f)
 })
+t('Gift-Bibliothek: echte TikTok-Liste liefert Bild und Preis, Auswahl legt eine Regel an', () => {
+  const { g } = mkGifts()
+  const before = g.libraryList().length
+  assert(g.learnLibrary([{ id: 5655, name: 'Rose', coins: 1, icon: 'https://p16-webcast.tiktokcdn.com/img/rose.png' }, { id: 5487, name: 'Finger Heart', coins: 5, icon: 'https://p16-webcast.tiktokcdn.com/img/fh.png' }, { id: 9001, name: 'Drachenflamme', coins: 26999, icon: 'javascript:alert(1)' }]))
+  assert.strictEqual(g.rules.find(r => r.id === 'rose').icon, 'https://p16-webcast.tiktokcdn.com/img/rose.png')
+  assert.strictEqual(g.rules.find(r => r.id === 'finger_heart').icon, 'https://p16-webcast.tiktokcdn.com/img/fh.png', 'englischer Name trifft den deutschen Katalog-Eintrag')
+  const lib = g.libraryList()
+  assert.strictEqual(lib.length, before + 1); assert.strictEqual(lib[lib.length - 2].name === 'Drachenflamme' || lib.some(x => x.name === 'Drachenflamme' && x.icon === null && x.ruleId === null), true)
+  const r = g.addFromLibrary('drachenflamme'); assert.strictEqual(r.coins, 26999); assert.strictEqual(r.action, 'boss_warden'); assert(r.inLegend)
+  assert.strictEqual(g.libraryList().find(x => x.name === 'Drachenflamme').ruleId, r.id)
+  assert.strictEqual(g.learnLibrary([{ name: 'Rose', coins: 1, icon: 'https://p16-webcast.tiktokcdn.com/img/rose.png' }]), false, 'nichts Neues -> keine Änderung')
+  const g2 = mkGifts().g; g2.loadLibrary(g.librarySnapshot()); assert.strictEqual(g2.rules.find(r => r.id === 'rose').icon, 'https://p16-webcast.tiktokcdn.com/img/rose.png')
+  assert(g.publicConfig().length <= 24)
+})
+
 // ---------- Welt-Steuerung & Handy im WLAN ----------
 t('Welt: Tag/Nacht, Wetter und Regeln werden zu festen Server-Befehlen', () => {
   const { worldCommands, sanitizeWorld, cleanCommand, clock } = require('../modules/world-control')

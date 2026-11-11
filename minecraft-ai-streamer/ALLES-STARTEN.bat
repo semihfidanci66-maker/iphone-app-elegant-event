@@ -51,7 +51,7 @@ timeout /t 40 /nobreak >nul
 echo.
 echo  Starte KI-Streamer. Das Dashboard oeffnet sich im Browser.
 echo  Danach in Minecraft (CurseForge, Version 1.21.1) Server "localhost" hinzufuegen.
-echo  OBS-Browserquelle: http://localhost:3000/studio-overlay.html  (1920 x 1080)
+echo  OBS-Browserquelle: http://localhost:3000/studio-overlay.html  (1080 x 1920, hochkant)
 echo.
 set OPEN_BROWSER=1
 node server.js

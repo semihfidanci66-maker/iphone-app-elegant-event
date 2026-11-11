@@ -141,7 +141,7 @@ class MinecraftAIBot extends EventEmitter {
         ctx.watchdog.tick()
         ctx.liquid.brainTick() // 4-Sekunden-Garantie gegen Wasser/Lava
         this.camera.tick()
-        this.emit('pose', { yaw: bot.entity.yaw + ctx.look.headYawOffset, pitch: bot.entity.pitch + ctx.look.headPitchOffset, moveYaw: ctx.look.yaw, blocking: !!ctx.combat.blocking, onGround: bot.entity.onGround })
+        this.emit('pose', { yaw: bot.entity.yaw + ctx.look.headYawOffset, pitch: bot.entity.pitch + ctx.look.headPitchOffset, moveYaw: ctx.look.yaw, blocking: !!ctx.combat.blocking, onGround: bot.entity.onGround, speed: Math.hypot(bot.entity.velocity.x, bot.entity.velocity.z) })
         if (n % 4 === 0) this.emit('status', this.status())
       } catch (e) { this._emit('log', { message: 'Tick: ' + e.message }) }
     }

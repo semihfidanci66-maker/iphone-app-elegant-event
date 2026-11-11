@@ -140,6 +140,18 @@ td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width:
 .ico { width: 24px; height: 24px; object-fit: contain; vertical-align: middle; } .emo { font-size: 18px; }
 .tag { font-size: 10px; padding: 1px 6px; border-radius: 99px; background: #233247; color: var(--cyan); margin-left: 6px; }
 
+#lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; max-height: 330px; overflow: auto; padding: 2px; }
+#lib button { display: grid; justify-items: center; gap: 2px; padding: 8px 4px 6px; font-size: 12px; font-weight: 600; line-height: 1.2; position: relative; }
+#lib button img, #lib button .emo { width: 44px; height: 44px; object-fit: contain; display: grid; place-items: center; font-size: 32px; }
+#lib button span.nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lib button span.co { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+#lib button.have { border-color: #2f6b2a; background: #12240f; }
+#lib button.have::after { content: '✓'; position: absolute; right: 5px; top: 3px; color: var(--lime); font-weight: 800; }
+tr.flash td { animation: rowFlash 1.6s ease-out; }
+@keyframes rowFlash { 0%, 30% { background: rgba(79, 216, 255, .28); } }
+.pv { position: sticky; top: 120px; }
+.pv iframe { display: block; width: 100%; aspect-ratio: 9 / 16; border: 1px solid var(--line); border-radius: var(--rs); background: repeating-conic-gradient(#1a2330 0 25%, #121923 0 50%) 0 0 / 24px 24px; }
+td .mobSel { margin-left: 4px; max-width: 120px; }
 /* ---- Stream ---- */
 #tikBadge { display: block; margin-top: 10px; padding: 9px 12px; border-radius: var(--rs); background: var(--well); border: 1px solid var(--line); font-weight: 700; }
 #tikBadge.live { border-color: #2f6b2a; background: #12240f; color: var(--lime); }
@@ -267,18 +279,33 @@ td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width:
 
 <!-- ============================================================ GIFTS -->
 <div class="page" id="p-gifts">
-  <div class="stack">
-    <section>
-      <h2>Gift-Katalog <small id="giftCount"></small></h2>
-      <div class="row"><input id="giftFilter" placeholder="Gift suchen …" aria-label="Gift suchen"><label style="flex:0 0 74px">Test ×<input id="simN" type="number" value="1" min="1" max="50" aria-label="Combo"></label><button id="resetRules" class="sm danger">Auf Standard zurücksetzen</button></div>
-      <div class="tw" style="margin-top:10px"><table><thead><tr><th>An</th><th title="In der Overlay-Legende zeigen">Overlay</th><th></th><th>Gift</th><th>Coins</th><th>Was passiert</th><th>Menge</th><th>HP×</th><th>Text im Overlay</th><th></th></tr></thead><tbody id="rules"></tbody></table></div>
-    </section>
-    <section>
-      <h2>Eigenes Geschenk hinzufügen</h2>
-      <div class="row"><label>Name<input id="nName" placeholder="z. B. Drache"></label><label style="flex:0 1 84px">Coins<input id="nCoins" type="number" value="50" min="1"></label><label style="flex:0 1 70px">Emoji<input id="nEmoji" value="🎁"></label><label>Icon-URL (optional)<input id="nIcon" placeholder="https://…"></label></div>
-      <div class="row"><label>Was passiert<select id="nAction"></select></label><label id="nMobWrap">Mob<select id="nMob"></select></label><label style="flex:0 1 80px">Menge<input id="nAmount" type="number" value="1" min="1" max="20"></label><label style="flex:0 1 80px">HP×<input id="nHp" type="number" value="1" min="0.5" max="10" step="0.5"></label><button class="pri" id="nAdd" style="align-self:end">Hinzufügen</button></div>
-      <div class="hint">Unbekannte Gifts, die live ankommen, werden automatisch aufgenommen und lösen eine zum Coin-Wert passende Aktion aus.</div>
-    </section>
+  <div class="grid">
+    <div class="stack c8">
+      <section>
+        <h2>1 · TikTok-Gift auswählen <small id="libInfo"></small></h2>
+        <div class="row"><input id="libFilter" placeholder="Gift suchen, z. B. Rose oder 100 …" aria-label="TikTok-Gift suchen"><div class="seg" id="libSeg"><button data-lib="all" class="on">Alle</button><button data-lib="new">Noch nicht belegt</button><button data-lib="have">Belegt</button></div></div>
+        <div id="lib" style="margin-top:10px"></div>
+        <div class="hint" id="libHint"></div>
+      </section>
+      <section>
+        <h2>2 · Was passiert bei welchem Gift? <small id="giftCount"></small></h2>
+        <div class="row"><input id="giftFilter" placeholder="In deinen Gifts suchen …" aria-label="Gift suchen"><label style="flex:0 0 74px">Test ×<input id="simN" type="number" value="1" min="1" max="50" aria-label="Combo"></label><button id="resetRules" class="sm danger">Auf Standard zurücksetzen</button></div>
+        <div class="tw" style="margin-top:10px"><table><thead><tr><th>An</th><th title="Im Overlay anzeigen">Overlay</th><th></th><th>Gift</th><th>Coins</th><th>Was passiert</th><th>Menge</th><th>HP×</th><th>Text im Overlay</th><th></th></tr></thead><tbody id="rules"></tbody></table></div>
+        <div class="hint">Jede Änderung landet sofort im Overlay. Haken bei „Overlay“ = das Gift läuft in der Gift-Leiste mit (4 pro Seite, wechselt automatisch).</div>
+      </section>
+      <section>
+        <h2>Eigenes Geschenk (nicht in der Liste)</h2>
+        <div class="row"><label>Name<input id="nName" placeholder="z. B. Drache"></label><label style="flex:0 1 84px">Coins<input id="nCoins" type="number" value="50" min="1"></label><label style="flex:0 1 70px">Emoji<input id="nEmoji" value="🎁"></label><label>Bild-Adresse (optional)<input id="nIcon" placeholder="https://…"></label></div>
+        <div class="row"><label>Was passiert<select id="nAction"></select></label><label id="nMobWrap">Mob<select id="nMob"></select></label><label style="flex:0 1 80px">Menge<input id="nAmount" type="number" value="1" min="1" max="20"></label><label style="flex:0 1 80px">HP×<input id="nHp" type="number" value="1" min="0.5" max="10" step="0.5"></label><button class="pri" id="nAdd" style="align-self:end">Hinzufügen</button></div>
+      </section>
+    </div>
+    <div class="stack c4">
+      <section class="pv">
+        <h2>Overlay live <small><button class="sm" id="pvReload">Neu laden</button></small></h2>
+        <iframe id="pv" title="Overlay-Vorschau" loading="lazy"></iframe>
+        <div class="hint">So sieht es in OBS aus (ohne Ton). Ändere links etwas – die Karte blinkt hier kurz auf.</div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -299,7 +326,7 @@ td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width:
       </section>
       <section>
         <h2>Overlay</h2>
-        <div class="seg"><button data-fmt="16:9">🖥️ 16:9</button><button data-fmt="9:16">📱 9:16 (TikTok)</button><button data-fmt="custom">📐 Split</button></div>
+        <div class="seg"><button data-fmt="9:16">📱 9:16 (TikTok)</button><button data-fmt="16:9">🖥️ 16:9</button><button data-fmt="custom">📐 Split</button></div>
         <div class="row" style="margin-top:10px"><button id="dzBtn">🎨 Designer-Modus</button><button id="ovOpen">Overlay öffnen</button><button id="dzReset" class="sm danger">Layout zurücksetzen</button></div>
         <div class="hint">Im Designer ziehst du die Widgets direkt im Overlay zurecht. Änderungen landen sofort in OBS.</div>
       </section>
@@ -391,6 +418,7 @@ function showTab (id) {
   for (const p of $$('.page')) p.classList.toggle('on', p.id === 'p-' + id)
   for (const b of $$('nav.tabs button')) { b.classList.toggle('on', b.dataset.tab === id); b.setAttribute('aria-selected', b.dataset.tab === id) }
   store.set('tab', id)
+  if (id === 'gifts' && !$('pv').src) $('pv').src = 'studio-overlay.html?mute=1&format=9:16' + (DEMO ? '#demo' : '')
 }
 for (const b of $$('nav.tabs button')) b.onclick = () => { showTab(b.dataset.tab); scrollTo(0, 0) }
 showTab((location.hash.match(/tab=(\w+)/) || [])[1] || store.get('tab') || 'live')
@@ -484,19 +512,57 @@ function renderSky (s) {
   for (const b of $$('[data-diff]')) b.classList.toggle('on', b.dataset.diff === w.difficulty)
 }
 
+/* ---- TikTok-Bibliothek: echte Gifts zum Anklicken ---- */
+let library = { at: 0, gifts: [] }; let libMode = 'all'; let flashRule = null
+function renderLib () {
+  const q = $('libFilter').value.trim().toLowerCase()
+  const box = $('lib'); box.textContent = ''
+  const withIcon = library.gifts.filter(g => g.icon).length
+  $('libInfo').textContent = `${library.gifts.length} Gifts`
+  $('libHint').textContent = withIcon
+    ? `${withIcon} Gifts mit Originalbild und aktuellem Coin-Preis direkt von TikTok${library.at ? ' (Stand ' + new Date(library.at).toLocaleDateString('de-DE') + ')' : ''}. Anklicken legt das Gift an oder springt zu seiner Zeile.`
+    : 'Namen und Coin-Preise sind hinterlegt. Die Originalbilder und die komplette Gift-Liste deiner Region lädt das Programm automatisch von TikTok, sobald dein Live einmal verbunden ist. Bis dahin steht ein Emoji.'
+  for (const g of library.gifts) {
+    if (q && !g.name.toLowerCase().includes(q) && String(g.coins) !== q) continue
+    if (libMode === 'new' && g.ruleId) continue
+    if (libMode === 'have' && !g.ruleId) continue
+    const pic = g.icon ? el('img', { src: g.icon, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' }) : el('span', { className: 'emo', textContent: g.emoji })
+    if (g.icon) pic.onerror = () => pic.replaceWith(el('span', { className: 'emo', textContent: g.emoji }))
+    const b = el('button', { className: g.ruleId ? 'have' : '', title: g.ruleId ? 'Schon belegt – zur Zeile springen' : 'Hinzufügen' }, pic, el('span', { className: 'nm', textContent: g.name }), el('span', { className: 'co', textContent: '🪙 ' + g.coins }))
+    b.onclick = () => {
+      if (g.ruleId) { $('giftFilter').value = ''; flashRule = g.ruleId; renderRules(); return }
+      flashRule = 'new:' + g.name; send({ type: 'GIFT_ADD_LIBRARY', key: g.key }, `${g.name} hinzugefügt`)
+    }
+    box.appendChild(b)
+  }
+  if (!box.childElementCount) box.appendChild(el('div', { className: 'hint', textContent: 'Kein Gift gefunden.' }))
+}
+$('libFilter').oninput = renderLib
+for (const b of $$('[data-lib]')) b.onclick = () => { libMode = b.dataset.lib; for (const x of $$('[data-lib]')) x.classList.toggle('on', x === b); renderLib() }
+/** Legendentext passend zur Aktion: "3× Creeper" bzw. der Name der Aktion. */
+function autoLegend (action, mob, amount) {
+  if (action === 'spawn_mob') return `${amount > 1 ? amount + '× ' : ''}${(state.mobNames || {})[mob] || mob}`
+  const a = state.actions.find(x => x.id === action)
+  return a ? a.label.replace(/^\d+x /, '').replace(/ \(.*\)$/, '').replace(/^Boss: /, '') : ''
+}
+
 /* ---- Gift-Tabelle ---- */
 function renderRules () {
   const q = $('giftFilter').value.trim().toLowerCase()
   const tb = $('rules'); tb.textContent = ''
-  $('giftCount').textContent = `${state.rules.length} Gifts`
+  $('giftCount').textContent = `${state.rules.length} belegt · ${state.rules.filter(r => r.enabled && r.inLegend).length} im Overlay`
   for (const r of state.rules) {
     if (q && !r.giftName.toLowerCase().includes(q) && !String(r.coins).includes(q)) continue
     const up = patch => { Object.assign(r, patch); send({ type: 'GIFT_UPSERT', rule: { ...r, custom: r.custom } }) }
     const cb = (key, label) => { const c = el('input', { type: 'checkbox', checked: !!r[key] }); c.setAttribute('aria-label', label); c.onchange = () => up({ [key]: c.checked }); return c }
-    const num = (key, min, max, step, label) => { const c = el('input', { type: 'number', value: r[key], min, max, step }); c.setAttribute('aria-label', label); c.onchange = () => up({ [key]: Number(c.value) }); return c }
+    const num = (key, min, max, step, label) => { const c = el('input', { type: 'number', value: r[key], min, max, step }); c.setAttribute('aria-label', label); c.onchange = () => { const v = Number(c.value); if (key === 'amount' && r.action === 'spawn_mob') { up({ amount: v, legend: autoLegend('spawn_mob', r.mob || 'zombie', v) }); renderRules() } else up({ [key]: v }) }; return c }
     const sel = el('select'); sel.setAttribute('aria-label', 'Aktion')
     for (const a of state.actions) sel.appendChild(el('option', { value: a.id, textContent: a.label, selected: a.id === r.action }))
-    sel.onchange = () => { const a = state.actions.find(x => x.id === sel.value); up({ action: sel.value, legend: a ? a.label.replace(/^\d+x /, '').replace(/ \(.*\)$/, '') : r.legend }) }
+    const mobSel = el('select', { className: 'mobSel', hidden: r.action !== 'spawn_mob' }); mobSel.setAttribute('aria-label', 'Mob')
+    for (const m of state.mobs) mobSel.appendChild(el('option', { value: m, textContent: (state.mobNames || {})[m] || m, selected: m === (r.mob || 'zombie') }))
+    // Aktion oder Mob geändert -> Text im Overlay zieht automatisch mit
+    sel.onchange = () => { const mob = sel.value === 'spawn_mob' ? (r.mob || mobSel.value) : r.mob; up({ action: sel.value, mob, legend: autoLegend(sel.value, mob, r.amount) || r.legend }); renderRules() }
+    mobSel.onchange = () => { up({ mob: mobSel.value, legend: autoLegend('spawn_mob', mobSel.value, r.amount) }); renderRules() }
     const lg = el('input', { type: 'text', value: r.legend }); lg.setAttribute('aria-label', 'Legendentext'); lg.onchange = () => up({ legend: lg.value })
     const icon = r.icon ? el('img', { className: 'ico', src: r.icon, alt: '' }) : el('span', { className: 'emo', textContent: r.emoji })
     if (r.icon) { icon.referrerPolicy = 'no-referrer'; icon.onerror = () => icon.replaceWith(el('span', { className: 'emo', textContent: r.emoji })) }
@@ -506,7 +572,9 @@ function renderRules () {
     const test = el('button', { className: 'sm', textContent: 'Test' }); test.onclick = () => send({ type: 'SIM_GIFT', ruleId: r.id, user: $('simUser').value || 'TestUser', count: Number($('simN').value) || 1 }, `Test: ${r.giftName}`)
     const act = el('td', {}, test)
     if (r.custom || r.discovered) { const del = el('button', { className: 'sm danger', textContent: '✕', title: 'Gift löschen' }); del.onclick = () => send({ type: 'GIFT_REMOVE', id: r.id }); act.append(' ', del) }
-    tb.appendChild(el('tr', {}, el('td', {}, cb('enabled', 'aktiv')), el('td', {}, cb('inLegend', 'in der Overlay-Legende')), el('td', {}, icon), nameCell, el('td', {}, num('coins', 0, 100000, 1, 'Coins')), el('td', {}, sel), el('td', {}, num('amount', 1, 20, 1, 'Menge')), el('td', {}, num('hpMult', 0.5, 10, 0.5, 'HP-Multiplikator')), el('td', {}, lg), act))
+    const tr = el('tr', {}, el('td', {}, cb('enabled', 'aktiv')), el('td', {}, cb('inLegend', 'in der Overlay-Legende')), el('td', {}, icon), nameCell, el('td', {}, num('coins', 0, 100000, 1, 'Coins')), el('td', {}, sel, mobSel), el('td', {}, num('amount', 1, 20, 1, 'Menge')), el('td', {}, num('hpMult', 0.5, 10, 0.5, 'HP-Multiplikator')), el('td', {}, lg), act)
+    tb.appendChild(tr)
+    if (flashRule && (flashRule === r.id || flashRule === 'new:' + r.giftName)) { flashRule = null; tr.className = 'flash'; setTimeout(() => tr.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50) }
   }
 }
 $('giftFilter').oninput = renderRules
@@ -540,7 +608,7 @@ function renderState (s) {
     const v = $('voice'); for (const n of s.config.voices) v.appendChild(el('option', { value: n, textContent: n.replace('de-DE-', '').replace('Neural', ''), selected: n === s.config.voice }))
     for (const x of s.goals) $('goalSel').appendChild(el('option', { value: x.id, textContent: x.label }))
     for (const a of s.actions) if (a.id !== 'none') $('nAction').appendChild(el('option', { value: a.id, textContent: a.label }))
-    for (const m of s.mobs) $('nMob').appendChild(el('option', { value: m, textContent: m }))
+    for (const m of s.mobs) $('nMob').appendChild(el('option', { value: m, textContent: (s.mobNames || {})[m] || m }))
     $('nAction').value = 'spawn_mob'
     $('log').textContent = ''; for (const e of s.logs) addLog(e)
     $('feed').textContent = ''; for (const f of s.feed || []) addFeed(f)
@@ -554,7 +622,7 @@ function renderState (s) {
   const key = JSON.stringify(s.rules)
   if (key !== rulesKey && !['INPUT', 'SELECT'].includes(document.activeElement.tagName) || first) { rulesKey = key; renderRules() }
   for (const b of $$('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
-  for (const b of $$('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '16:9'))
+  for (const b of $$('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '9:16'))
   $('dzBtn').classList.toggle('on', !!s.designer)
   // Welt
   const w = s.world || { timeLock: 'off', rules: {} }
@@ -593,6 +661,7 @@ function onMsg (m) {
   if (m.type === 'STATE') renderState(m)
   else if (m.type === 'STATUS') { if (state) state.status = m.status; renderStatus(m.status) } else if (m.type === 'LOG') addLog(m.entry)
   else if (m.type === 'FEED') addFeed(m.item)
+  else if (m.type === 'GIFT_LIBRARY') { library = m; renderLib() }
   else if (m.type === 'TTS') addLog({ at: Date.now(), level: 'info', message: `🎙 (${m.emotion}) ${m.text}` })
   else if (m.type === 'DENIED') { toast('Kein Zugriff: Schlüssel fehlt'); ws.onclose = null; chip($('cWs'), 'bad', 'Kein Zugriff') }
 }
@@ -622,6 +691,7 @@ confirmTap($('dzReset'), () => send({ type: 'LAYOUT_RESET' }, 'Layout zurückges
 $('tunBtn').onclick = () => send({ type: state && state.tunnel.active ? 'TUNNEL_STOP' : 'TUNNEL_START' })
 $('lanCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText($('lanUrl').textContent).then(() => toast('Link kopiert'), () => toast('Kopieren nicht möglich'))
 confirmTap($('resetRules'), () => send({ type: 'GIFT_RULES_RESET' }, 'Gifts zurückgesetzt'))
+$('pvReload').onclick = () => { $('pv').src = $('pv').src }
 $('logClear').onclick = () => { $('log').textContent = '' }
 // Welt
 for (const b of $$('[data-time]')) b.onclick = () => send({ type: 'WORLD', op: 'time', value: b.dataset.time }, txt(b))
@@ -641,7 +711,7 @@ $('nAdd').onclick = () => {
   const name = $('nName').value.trim()
   if (!name) { $('nName').focus(); return }
   const a = state.actions.find(x => x.id === $('nAction').value)
-  send({ type: 'GIFT_UPSERT', rule: { giftName: name, coins: Number($('nCoins').value) || 1, emoji: $('nEmoji').value || '🎁', icon: $('nIcon').value.trim() || null, action: $('nAction').value, mob: $('nMob').value, amount: Number($('nAmount').value) || 1, hpMult: Number($('nHp').value) || 1, legend: $('nAction').value === 'spawn_mob' ? `${Number($('nAmount').value) || 1}× ${$('nMob').value}` : a.label, inLegend: true, enabled: true, custom: true } }, 'Gift hinzugefügt')
+  send({ type: 'GIFT_UPSERT', rule: { giftName: name, coins: Number($('nCoins').value) || 1, emoji: $('nEmoji').value || '🎁', icon: $('nIcon').value.trim() || null, action: $('nAction').value, mob: $('nMob').value, amount: Number($('nAmount').value) || 1, hpMult: Number($('nHp').value) || 1, legend: autoLegend($('nAction').value, $('nMob').value, Number($('nAmount').value) || 1) || a.label, inLegend: true, enabled: true, custom: true } }, 'Gift hinzugefügt')
   $('nName').value = ''; $('nIcon').value = ''
 }
 const chat = t => send({ type: 'SIM_CHAT', user: $('simUser').value || 'TestUser', text: t })
@@ -678,6 +748,7 @@ function demoSend (m) {
       break
     }
     case 'GIFT_REMOVE': s.rules = s.rules.filter(r => r.id !== m.id); break
+    case 'GIFT_ADD_LIBRARY': { const g = library.gifts.find(x => x.key === m.key); s.rules.push({ id: 'tt_' + g.key, giftName: g.name, match: [g.key], coins: g.coins, emoji: g.emoji, icon: null, action: 'zombie_fast', mob: null, amount: 1, hpMult: 1, legend: 'Zombie', enabled: true, inLegend: true, custom: false }); g.ruleId = 'tt_' + g.key; renderLib(); break }
     case 'SIM_GIFT': { const r = s.rules.find(x => x.id === m.ruleId); addFeed({ kind: 'gift', user: m.user, emoji: r.emoji, text: `${r.giftName} x${m.count} (${r.coins} Coins) → ${r.legend}` }); return }
     case 'SIM_CHAT': addFeed({ kind: 'chat', user: m.user, text: m.text, goal: /haus/i.test(m.text) ? 'house' : /nether/i.test(m.text) ? 'nether' : /schlaf/i.test(m.text) ? 'sleep' : /loot/i.test(m.text) ? 'corpse' : /diamant/i.test(m.text) ? 'diamonds' : null }); return
     case 'MODE': st.mode = m.mode; if (m.mode === 'cave') { st.underground = true; st.pos.y = 14; st.goal = 'Höhlen-Trip: Erze holen' } else { st.underground = false; st.pos.y = 66; st.goal = m.mode === 'fight' ? 'Kampfbereit' : 'Holz hacken' } break
@@ -717,15 +788,17 @@ function demo () {
     world: { timeLock: 'off', rules: { keepInventory: false, mobSpawning: true } },
     worldRules: [A('keepInventory', 'Inventar nach Tod behalten'), A('mobSpawning', 'Monster spawnen von selbst'), A('mobGriefing', 'Creeper zerstören Blöcke'), A('weatherCycle', 'Wetter wechselt von selbst')],
     config: { minecraft: { host: '127.0.0.1', port: 25565, username: 'KI_Streamer', version: '1.21.1' }, tiktokUsername: '', voice: 'de-DE-ConradNeural', voices: ['de-DE-ConradNeural', 'de-DE-KillianNeural', 'de-DE-FlorianMultilingualNeural'], cameraPlayer: '', cameraMode: 'auto' },
+    mobNames: { zombie: 'Zombies', creeper: 'Creeper', skeleton: 'Skelette', spider: 'Spinnen', witch: 'Hexen', enderman: 'Endermen', warden: 'Wärter' },
     mobs: ['zombie', 'husk', 'skeleton', 'stray', 'spider', 'creeper', 'witch', 'enderman', 'phantom', 'blaze', 'vindicator', 'piglin_brute', 'wither_skeleton', 'ravager', 'warden'],
     rules: [R('rose', 'Rose', 1, '🌹', 'zombie_fast', 'Zombie', true), R('tiktok', 'TikTok', 1, '🎵', 'zombie_fast', 'Zombie'), R('ice_cream', 'Eistüte', 1, '🍦', 'heal', 'Heilung', true), R('gg', 'GG', 1, '🎮', 'support_random', 'Support-Drop'), R('thumbs_up', 'Daumen hoch', 1, '👍', 'drop_food', 'Steaks'), R('finger_heart', 'Fingerherz', 5, '💖', 'skeleton_armored', 'Skelett-Schütze', true), R('rosa', 'Rosa-Traum', 15, '🌸', 'drop_bed', 'Bett'), R('donut', 'Donut', 30, '🍩', 'tnt_rain', 'TNT-Drop', true), R('show_heart', 'Zeig-Herz', 49, '🫰', 'lightning', 'Blitzeinschlag'), R('star', 'Stern', 99, '⭐', 'drop_weapon', 'Eisenschwert'), R('crown', 'Krone', 99, '👑', 'drop_armor', 'Eisenrüstung'), R('hand_heart', 'Handherz', 100, '🫶', 'baby_squad', 'Baby-Zombie-Squad', true), R('corgi', 'Corgi', 299, '🐕', 'spawn_mob', 'Verwüster'), R('money_gun', 'Money Gun', 500, '💸', 'hit_squad_vindicator', 'Hit-Squad x10', true), R('galaxy', 'Galaxie', 1000, '🌌', 'boss_ravager', 'Boss', true), R('lion', 'Löwe', 29999, '🦁', 'boss_warden', 'Wärter-Duo', false, 2, 2), R('tiktok_universe', 'TikTok Universe', 44999, '🌠', 'boss_warden', 'Apokalypse', false, 1, 3)],
     actions: [A('zombie_fast', 'Schneller Zombie'), A('skeleton_armored', 'Gepanzerter Skelett-Schütze'), A('spawn_mob', 'Mob spawnen (frei wählbar)'), A('tnt_rain', 'TNT-Regen'), A('lightning', 'Blitzeinschlag'), A('creeper_duo', 'Creeper-Duo'), A('baby_squad', '5x Baby-Zombie-Blitz-Squad'), A('hit_squad_vindicator', '10x Elite-Diener'), A('boss_ravager', 'Boss: Riesen-Verwüster'), A('boss_warden', 'Boss: Wärter'), A('heal', 'Heilung'), A('speed', 'Speed II'), A('support_golem', 'Eisengolem-Bodyguard'), A('support_random', 'Support-Drop (Zufall)'), A('drop_food', 'Essen droppen'), A('drop_weapon', 'Waffe droppen (Eisenschwert)'), A('drop_armor', 'Rüstung droppen (Eisen)'), A('drop_bed', 'Bett droppen'), A('drop_diamond_gear', 'Diamant-Ausrüstung droppen')],
     goals: [['wood', 'Holz holen'], ['house', 'Haus bauen'], ['bed', 'Bett craften'], ['sleep', 'Schlafen gehen'], ['corpse', 'Loot zurückholen'], ['iron_sword', 'Eisenschwert schmieden'], ['diamonds', 'Diamanten suchen'], ['enchant', 'Ausrüstung verzaubern'], ['nether', 'In den Nether gehen']].map(([id, label]) => ({ id, label })),
-    tts: { backend: 'msedge-tts', error: null }, layout: { format: '16:9' }, designer: false,
+    tts: { backend: 'msedge-tts', error: null }, layout: { format: '9:16' }, designer: false,
     feed: [{ kind: 'gift', user: 'Lukas', emoji: '🌹', text: 'Rose x3 (1 Coins) → Zombie' }, { kind: 'chat', user: 'Mia', text: 'Bau ein Haus', goal: 'house' }, { kind: 'follow', user: 'Tom', emoji: '➕', text: 'folgt jetzt' }],
     logs: [{ at: Date.now() - 30000, level: 'info', message: 'plan {"goal":"Eisenausrüstung & Schild","steps":["Eisen suchen","Eisen schmelzen","Eisenausrüstung craften"]}' }, { at: Date.now() - 8000, level: 'info', message: '🎙 (hype) Ansage von Mia im Chat: Wir bauen ein Haus!' }]
   }
   onMsg(demoState)
+  onMsg({ type: 'GIFT_LIBRARY', at: 0, gifts: [...demoState.rules.map(r => ({ key: r.giftName.toLowerCase(), name: r.giftName, coins: r.coins, emoji: r.emoji, icon: null, ruleId: r.id })), ...[['Herz-Me', 1, '💗'], ['Panda', 5, '🐼'], ['Parfüm', 20, '🧴'], ['Schmetterling', 88, '🦋'], ['Korallen', 499, '🪸'], ['Löwe', 29999, '🦁']].map(([name, coins, emoji]) => ({ key: name.toLowerCase(), name, coins, emoji, icon: null, ruleId: null }))].sort((a, b) => a.coins - b.coins) })
 }
 if (DEMO) demo(); else connect()
 </script>

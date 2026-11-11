@@ -18,11 +18,19 @@ Danach reicht jedes Mal `MC-SERVER-STARTEN.bat` + `START.bat`.
 | Seite | Adresse |
 |---|---|
 | Dashboard | http://localhost:3000/ |
-| Studio-Overlay (OBS-Browserquelle, 1920×1080, transparent) | http://localhost:3000/studio-overlay.html |
+| Studio-Overlay (OBS-Browserquelle, 1080×1920 hochkant, transparent) | http://localhost:3000/studio-overlay.html |
 | Handy-Fernbedienung | Dashboard → Reiter „Stream“ → QR-Code scannen (WLAN) oder Internet-Zugang starten |
 | Vorschau mit Beispieldaten | http://localhost:3000/preview.html |
 
 In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren – die Stimme kommt aus dem Overlay.
+
+## Neu in Version 5
+
+- **Overlay im TikTok-Hochformat (1080×1920) als Standard:** oben bleiben 230 px für Profil und Zuschauerzahl frei, unten links der Chat, ganz unten die Bedienleiste. In OBS die Browserquelle auf **1080 × 1920** stellen. 16:9 und Split bleiben im Reiter *Stream* wählbar.
+- **Gift-Leiste als Karussell:** vier Gift-Karten pro Seite (Bild, Name, Coins, Wirkung), alle 7 Sekunden klappen sie animiert zur nächsten Seite um. Bis zu 24 Gifts. Kommt ein Gift an, springt die Leiste auf dessen Seite und die Karte leuchtet auf.
+- **Dashboard ↔ Overlay sofort synchron:** Stellst du im Reiter *Gifts* z. B. die Rose von Zombie auf Creeper, steht im Overlay ohne Neuladen „Rose → Creeper“; die geänderte Karte blinkt kurz. Rechts im Reiter läuft das echte Overlay als Live-Vorschau mit.
+- **Echte TikTok-Gifts zum Anklicken:** Die Bibliothek im Reiter *Gifts* zeigt alle bekannten Gifts mit Coin-Preis. Sobald dein Live einmal verbunden ist, lädt das Programm die komplette Gift-Liste deiner Region mit Originalbildern und aktuellen Preisen von TikTok und speichert sie in `config/tiktok-gifts.json`. Bis dahin steht ein Emoji.
+- **Facecam mit Gefühlen:** Wut-Balken, der sich mit jedem Monster-Gift und jedem Treffer füllt. Die Figur wird sauer (Fäuste, rotes Gesicht, Zähne), rastet aus (stampft, schüttelt den Kopf, Rahmen bebt), gerät in Panik, ist nach dem Tod am Boden, jubelt bei Support-Gifts und Kills, schläft, hackt, isst und läuft sichtbar mit.
 
 ## Neu in Version 4
 
@@ -79,7 +87,7 @@ public/                      studio-overlay.html · index.html · mobile.html
 ## Tests
 
 ```
-npm test                                  # 29 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
+npm test                                  # 30 Logiktests ohne Server (Planer, Gifts, TikTok, Persona, Stimme)
 node test/browser-grabber.js              # Hintergrund-Browser gegen eine lokale Nachbau-Seite
 node test/live-liquid.js <port>           # Wasser-Rettung und Höhlen-Modi gegen einen Server
 node test/live-scenarios.js <port>        # Live-Szenarien gegen einen Server (Bot braucht OP, Flachwelt)

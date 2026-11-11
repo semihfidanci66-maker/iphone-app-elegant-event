@@ -30,6 +30,7 @@ const PORT = Number(process.env.PORT || 3000)
 const CFG_DIR = path.join(ROOT, 'config')
 const SETTINGS_FILE = path.join(CFG_DIR, 'settings.json')
 const LAYOUT_FILE = path.join(CFG_DIR, 'overlay-layout.json')
+const LIBRARY_FILE = path.join(CFG_DIR, 'tiktok-gifts.json')
 
 // ------------------------------------------------------------------ Konfiguration (/config/settings.json)
 function readJson (file, fallback) { try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch (_) { return fallback } }
@@ -62,7 +63,7 @@ function saveConfig () {
 }
 function sanitizeLayout (l) {
   if (!l || typeof l !== 'object') return null
-  const out = { format: ['16:9', '9:16', 'custom'].includes(l.format) ? l.format : '16:9', formats: {} }
+  const out = { format: ['16:9', '9:16', 'custom'].includes(l.format) ? l.format : '9:16', formats: {} }
   for (const f of ['16:9', '9:16', 'custom']) {
     const src = (l.formats && l.formats[f]) || {}
     const dst = out.formats[f] = {}
@@ -88,6 +89,7 @@ const gifts = new GiftEngine({
   botPos: () => { const s = bot.status(); return s.connected ? s.pos : null },
   onChange: () => { saveConfig(); syncGiftConfig(); broadcastState() }
 }, config.giftRules)
+gifts.loadLibrary(readJson(LIBRARY_FILE, null))
 const tunnel = new Tunnel(PORT, () => broadcastState())
 const mc = new McServer({ dir: path.join(ROOT, 'mc-server'), port: config.minecraft.port, ramGb: config.mcRamGb })
 bot.noSleep = config.world.timeLock === 'night'
@@ -183,6 +185,7 @@ function fullState () {
     worldRules: Object.entries(RULES).map(([id, r]) => ({ id, label: r.label })),
     config: { minecraft: config.minecraft, tiktokUsername: config.tiktokUsername || '', voice: tts.voice, voices: MALE_VOICES, cameraPlayer: bot.camera.player, cameraMode: bot.camera.mode },
     mobs: Object.keys(MOBS),
+    mobNames: Object.fromEntries(Object.entries(MOBS).map(([id, m]) => [id, m[1]])),
     layout,
     designer: designerOn,
     feed: feed.slice(-40),
@@ -198,6 +201,8 @@ let designerOn = false
 function pushFeed (item) { item.at = Date.now(); feed.push(item); if (feed.length > 80) feed.shift(); broadcast({ type: 'FEED', item }, isControl) }
 function broadcastState () { broadcast(fullState(), isControl) }
 function syncGiftConfig () { broadcast({ type: 'GIFT_CONFIG_SYNC', gifts: gifts.publicConfig() }) }
+const libraryMsg = () => ({ type: 'GIFT_LIBRARY', at: gifts.libraryAt, gifts: gifts.libraryList() })
+function syncLibrary () { broadcast(libraryMsg(), isControl) }
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x')
@@ -213,7 +218,7 @@ wss.on('connection', (ws, req) => {
   ws.on('error', () => clients.delete(ws))
   send(ws, { type: 'GIFT_CONFIG_SYNC', gifts: gifts.publicConfig() })
   if (ws.role === 'overlay') { send(ws, { type: 'STATUS', status: bot.status() }); send(ws, { type: 'LAYOUT', layout }); send(ws, { type: 'DESIGNER', on: designerOn }) }
-  else send(ws, fullState())
+  else { send(ws, fullState()); send(ws, libraryMsg()) }
   ws.on('message', raw => {
     let m
     try { m = JSON.parse(raw.toString()) } catch (_) { return }
@@ -238,9 +243,10 @@ function handle (m) {
     }
     case 'TIKTOK_DISCONNECT': tiktok.stop(); break
     case 'GIFT_RULES_SET': gifts.setRules(m.rules); saveConfig(); syncGiftConfig(); broadcastState(); break
-    case 'GIFT_UPSERT': { const r = gifts.upsertRule(m.rule || {}); if (r) { log('info', `Gift gespeichert: ${r.giftName} (${r.coins}) -> ${r.legend}`); saveConfig(); syncGiftConfig(); broadcastState() } break }
-    case 'GIFT_REMOVE': if (gifts.removeRule(String(m.id))) { saveConfig(); syncGiftConfig(); broadcastState() } break
-    case 'GIFT_RULES_RESET': gifts.resetRules(); saveConfig(); syncGiftConfig(); broadcastState(); break
+    case 'GIFT_UPSERT': { const r = gifts.upsertRule(m.rule || {}); if (r) { log('info', `Gift gespeichert: ${r.giftName} (${r.coins}) -> ${r.legend}`); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break }
+    case 'GIFT_REMOVE': if (gifts.removeRule(String(m.id))) { saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break
+    case 'GIFT_ADD_LIBRARY': { const r = gifts.addFromLibrary(m.key); if (r) { log('info', `Gift hinzugefügt: ${r.giftName} (${r.coins} Coins) -> ${r.legend}`); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState() } break }
+    case 'GIFT_RULES_RESET': gifts.resetRules(); gifts.learnLibrary(gifts.librarySnapshot().gifts, false); saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState(); break
     case 'DESIGNER': designerOn = !!m.on; broadcast({ type: 'DESIGNER', on: designerOn }); broadcastState(); break
     case 'LAYOUT_FORMAT': if (['16:9', '9:16', 'custom'].includes(m.format)) { layout = sanitizeLayout({ ...(layout || {}), format: m.format }); writeLater(LAYOUT_FILE, () => layout); broadcast({ type: 'LAYOUT', layout }); broadcastState() } break
     case 'LAYOUT_RESET': layout = null; try { fs.unlinkSync(LAYOUT_FILE) } catch (_) {} broadcast({ type: 'LAYOUT', layout: null, reset: true }); broadcastState(); break
@@ -338,6 +344,7 @@ async function stopMc () {
 
 // ------------------------------------------------------------------ Verdrahtung
 function onGift ({ viewer, gift, count, delta }) {
+  if (gift.name && (gift.icon || gift.coins) && !gift.ruleId) learnGifts([{ id: gift.id, name: gift.name, coins: gift.coins, icon: gift.icon }])
   const res = gifts.trigger(gift, viewer, delta)
   const rule = res.rule
   const effect = res.effect
@@ -373,6 +380,12 @@ tiktok.on('like', e => brain.onLike(e.viewer, e.count))
 let lastDiag = null
 tiktok.on('state', s => { if (s.diagnostic && s.diagnostic !== lastDiag) log('warn', 'TikTok: ' + s.diagnostic); lastDiag = s.diagnostic; broadcastState() })
 tiktok.on('gift_icons', icons => { if (gifts.learnIcons(icons)) { saveConfig(); syncGiftConfig(); broadcastState() } })
+function learnGifts (list) {
+  if (!gifts.learnLibrary(list)) return
+  writeLater(LIBRARY_FILE, () => gifts.librarySnapshot(), 1500)
+  saveConfig(); syncGiftConfig(); syncLibrary(); broadcastState()
+}
+tiktok.on('gift_list', list => { learnGifts(list); log('info', `TikTok-Gifts geladen: ${list.length} echte Gifts mit Bild und Coin-Preis`) })
 tiktok.on('live', e => {
   log('info', `TikTok LIVE verbunden: @${e.username} (Engine ${e.engine})`)
   broadcast({ type: 'CHIME', kind: 'live' })
@@ -399,7 +412,7 @@ server.listen(PORT, () => {
   console.log('')
   console.log('  Minecraft-KI-Streamer läuft')
   console.log(`  Dashboard:       http://localhost:${PORT}/`)
-  console.log(`  Studio-Overlay:  http://localhost:${PORT}/studio-overlay.html   (OBS-Browserquelle, 1920x1080)`)
+  console.log(`  Studio-Overlay:  http://localhost:${PORT}/studio-overlay.html   (OBS-Browserquelle: 1080x1920 hochkant für TikTok)`)
   console.log('  Handy:           QR-Code im Dashboard scannen (gleiches WLAN) oder Tunnel für unterwegs starten')
   console.log('')
   refreshLan()
