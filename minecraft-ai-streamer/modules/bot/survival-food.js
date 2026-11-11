@@ -27,7 +27,8 @@ class FoodPhase {
   // ---------------------------------------------------------------- Essen (außerhalb des Kampfes)
   needsToEat () {
     const bot = this.bot
-    return bot.food <= 14 || (bot.health < 14 && bot.food < 20)
+    const eatAt = this.ctx.policy ? this.ctx.policy().eatAt : 14
+    return bot.food <= eatAt || (bot.health < 14 && bot.food < 20)
   }
 
   async eatIfNeeded (token) {

@@ -2,180 +2,492 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e14">
 <title>KI-Streamer Regie</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
-/* Layout: oben links der TikTok-Connector, darunter zwei Spalten (Steuerung | Gifts + Live-Feed). */
-:root { color-scheme: dark; --bg: #0c1118; --panel: #141c27; --line: #243142; --ink: #e8eef6; --dim: #8fa1b8; --cyan: #46e0ff; --lime: #8bea5c; --gold: #ffd257; --red: #ff5a6a; --r: 12px; }
-* { box-sizing: border-box; }
+/* Aufbau: feste Kopfzeile mit Live-Status, darunter Reiter (Live · Welt · Gifts · Stream · System).
+   Auf schmalen Bildschirmen wandern die Reiter als Daumen-Leiste nach unten. */
+:root {
+  color-scheme: dark;
+  --bg: #0a0e14; --panel: #121923; --well: #0c121a; --raise: #1a2432; --line: #212d3d; --line2: #2e3e54;
+  --ink: #e9eff7; --dim: #8b9cb3; --cyan: #4fd8ff; --lime: #86e36a; --gold: #ffcf5c; --red: #ff6072; --violet: #a78bfa;
+  --r: 14px; --rs: 10px;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, 'Segoe UI', system-ui, sans-serif; padding-block: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); margin: 0 0 10px; }
-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; margin-bottom: 14px; }
-@media (max-width: 860px) { header, main { grid-template-columns: minmax(0, 1fr) !important; } }
-#tik { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; min-width: 0; }
-#tikBadge { display: block; margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: #0e151e; border: 1px solid var(--line); font-weight: 700; font-size: 13.5px; cursor: help; }
-#tikBadge.live { border-color: #2f6b2a; background: #12240f; color: var(--lime); }
-#tikBadge.wait { border-color: #6b5a1c; background: #241f0c; color: var(--gold); }
-#tikDiag { color: var(--dim); font-size: 12px; margin-top: 6px; min-height: 17px; overflow-wrap: anywhere; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; }
-.chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
-.chip.ok i { background: var(--lime); } .chip.bad i { background: var(--red); } .chip.warn i { background: var(--gold); }
-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 14px; align-items: start; }
-.col { display: grid; gap: 14px; min-width: 0; }
-section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; min-width: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, 'Segoe UI', system-ui, -apple-system, sans-serif; padding-bottom: 40px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* ---- Kopfzeile ---- */
+.top { position: sticky; top: 0; z-index: 20; background: rgba(10, 14, 20, .92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top, 0px); }
+.top .wrap { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; letter-spacing: .01em; margin-right: auto; }
+.brand img { width: 28px; height: 28px; border-radius: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+.chip.ok i { background: var(--lime); box-shadow: 0 0 8px var(--lime); } .chip.bad i { background: var(--red); } .chip.warn i { background: var(--gold); }
+.chip.live { border-color: #2f6b2a; background: #12240f; color: var(--lime); }
+
+/* ---- Reiter ---- */
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+nav.tabs::-webkit-scrollbar { display: none; }
+nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--dim); padding: 10px 14px; font-weight: 700; font-size: 14px; white-space: nowrap; display: flex; align-items: center; gap: 7px; }
+nav.tabs button:hover { color: var(--ink); background: none; }
+nav.tabs button.on { color: var(--ink); border-bottom-color: var(--cyan); background: none; box-shadow: none; }
+nav.tabs button span { font-size: 16px; }
+.page { display: none; padding-top: 16px; }
+.page.on { display: block; animation: in .18s ease-out; }
+@keyframes in { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .page.on { animation: none; } }
+@media (max-width: 720px) {
+  body { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+  .top nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: rgba(12, 17, 25, .96); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); justify-content: space-around; gap: 0; }
+  nav.tabs button { flex: 1; flex-direction: column; gap: 2px; padding: 8px 2px 9px; font-size: 11px; border-bottom: 0; border-top: 2px solid transparent; }
+  nav.tabs button.on { border-top-color: var(--cyan); color: var(--cyan); }
+  nav.tabs button span { font-size: 20px; }
+  .brand b { display: none; }
+  /* backdrop-filter würde die untere Leiste an die Kopfzeile ketten */
+  .top { backdrop-filter: none; background: var(--bg); }
+  .top .wrap { flex-wrap: nowrap; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+  .chips::-webkit-scrollbar { display: none; }
+}
+
+/* ---- Bausteine ---- */
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: start; }
+.c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c6 { grid-column: span 6; } .c7 { grid-column: span 7; } .c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
+@media (max-width: 980px) { .c4, .c5, .c6, .c7, .c8 { grid-column: span 12; } }
+.stack { display: grid; gap: 14px; min-width: 0; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; min-width: 0; }
+h2 { font-size: 15px; font-weight: 700; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+h2 small { font-weight: 500; color: var(--dim); font-size: 12.5px; margin-left: auto; }
+h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); margin: 16px 0 8px; font-weight: 700; }
+h3:first-child { margin-top: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .row + .row { margin-top: 8px; }
-input, select, button { font: inherit; color: var(--ink); background: #0e151e; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+input, select, button { font: inherit; color: var(--ink); background: var(--well); border: 1px solid var(--line); border-radius: var(--rs); padding: 9px 11px; min-width: 0; }
 input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
 input { flex: 1 1 120px; }
-button { cursor: pointer; font-weight: 600; background: #1b2635; }
-button:hover { background: #233247; }
-button.pri, button.on { background: var(--cyan); color: #04202a; border-color: transparent; }
-button.danger { background: #3a1820; border-color: #6b2a35; color: #ffb3bb; }
+button { cursor: pointer; font-weight: 650; background: var(--raise); border-color: var(--line2); transition: background .12s, transform .08s; }
+button:hover { background: #223047; }
+button:active { transform: scale(.98); }
+button.pri { background: var(--cyan); color: #04202a; border-color: transparent; }
+button.pri:hover { background: #7be3ff; }
+button.on { background: #11303b; border-color: var(--cyan); color: #c9f4ff; box-shadow: inset 0 0 0 1px var(--cyan); }
+button.danger { background: #33161d; border-color: #6b2a35; color: #ffb3bb; }
+button.danger:hover { background: #47202a; }
 button.sm { padding: 5px 9px; font-size: 12.5px; }
+button.sure { background: var(--red); color: #fff; border-color: transparent; }
+button:disabled { opacity: .45; cursor: not-allowed; }
 label { color: var(--dim); font-size: 12px; display: grid; gap: 4px; flex: 1 1 100px; min-width: 0; }
-.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
-.kv div { background: #0e151e; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.hint { color: var(--dim); font-size: 12.5px; margin-top: 8px; }
+.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--cyan); }
+.btns { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
+.btns.wide { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.tile { text-align: left; padding: 12px; line-height: 1.3; white-space: normal; display: flex; gap: 10px; align-items: center; }
+.tile > span { font-size: 22px; flex: none; }
+.tile b { display: block; font-size: 14px; }
+.tile small { display: block; font-weight: 500; color: var(--dim); font-size: 12px; margin-top: 1px; }
+.tile.on small { color: #9fdff0; }
+.tile.alarm { background: #3d1420; border-color: #8e3142; color: #ffd0d6; } .tile.alarm small { color: #f3a5b0; }
+.seg { display: flex; background: var(--well); border: 1px solid var(--line); border-radius: var(--rs); padding: 3px; gap: 3px; flex-wrap: wrap; }
+.seg button { flex: 1 1 auto; border: 0; background: none; padding: 8px 10px; border-radius: 7px; white-space: nowrap; }
+.seg button:hover { background: var(--raise); }
+.seg button.on { background: var(--cyan); color: #04202a; box-shadow: none; }
+
+/* ---- Live-Status ---- */
+#now { font-size: 20px; font-weight: 800; line-height: 1.25; }
+#nowSub { color: var(--dim); font-size: 13px; margin-top: 2px; min-height: 19px; }
+.bars { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.bar label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.bar label b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.bar div { height: 8px; border-radius: 99px; background: var(--well); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--red); transition: width .3s; }
+.bar.food i { background: var(--gold); }
+.kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px; margin-top: 12px; }
+.kv div { background: var(--well); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .kv b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
 .kv span { color: var(--dim); font-size: 11px; }
+#feed, #log { overflow: auto; background: var(--well); border: 1px solid var(--line); border-radius: var(--rs); padding: 10px; font-size: 13px; }
+#feed { height: 300px; } #log { height: 340px; font: 12px/1.5 ui-monospace, Consolas, monospace; color: #b9c6d8; }
+#log .warn { color: var(--gold); } #log .error { color: var(--red); }
+#feed div { padding: 3px 0; overflow-wrap: anywhere; } #feed b { color: var(--cyan); } #feed .gift b { color: var(--gold); } #feed .goal { color: var(--lime); font-weight: 600; }
+#feed:empty::before { content: 'Noch nichts los. Chat, Gifts und Follows erscheinen hier.'; color: var(--dim); }
+
+/* ---- Welt ---- */
+#sky { position: relative; height: 96px; border-radius: var(--rs); overflow: hidden; border: 1px solid var(--line); background: linear-gradient(#3b8fd9, #9ed0f5); transition: background 1s; }
+#sky.night { background: linear-gradient(#060a17, #1b2550); } #sky.dusk { background: linear-gradient(#35305f, #e9884f); }
+#sky .orb { position: absolute; font-size: 30px; transform: translate(-50%, -50%); transition: left 1s linear, top 1s linear; }
+#sky .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; background: #2f7d32; border-top: 3px solid #5a3d21; }
+#sky.night .ground { background: #173d1b; }
+#sky .info { position: absolute; left: 12px; top: 8px; font-weight: 800; font-size: 20px; text-shadow: 0 1px 4px rgba(0,0,0,.6); font-variant-numeric: tabular-nums; }
+#sky .info small { display: block; font-size: 12px; font-weight: 600; opacity: .9; }
+#sky .wx { position: absolute; right: 12px; top: 8px; font-size: 24px; }
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.switch:last-child { border-bottom: 0; }
+.switch .seg { flex: none; } .switch .seg button { padding: 5px 12px; font-size: 12.5px; }
+
+/* ---- Gifts ---- */
 table { width: 100%; border-collapse: collapse; }
-td, th { padding: 4px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; white-space: nowrap; }
-th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; position: sticky; top: 0; background: var(--panel); }
-td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width: 62px; padding: 4px 6px; flex: none; } td input[type=text] { width: 120px; padding: 4px 6px; }
-.tw { overflow: auto; max-height: 420px; border: 1px solid var(--line); border-radius: 8px; }
+td, th { padding: 5px 6px; text-align: left; border-bottom: 1px solid var(--line); font-size: 13px; white-space: nowrap; }
+th { color: var(--dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+td select { padding: 4px 6px; max-width: 190px; } td input[type=number] { width: 62px; padding: 4px 6px; flex: none; } td input[type=text] { width: 130px; padding: 4px 6px; }
+.tw { overflow: auto; max-height: 520px; border: 1px solid var(--line); border-radius: var(--rs); }
 .ico { width: 24px; height: 24px; object-fit: contain; vertical-align: middle; } .emo { font-size: 18px; }
 .tag { font-size: 10px; padding: 1px 6px; border-radius: 99px; background: #233247; color: var(--cyan); margin-left: 6px; }
-#feed, #log { height: 200px; overflow: auto; background: #0a0f15; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 13px; }
-#log { font: 12px/1.5 ui-monospace, Consolas, monospace; color: #b9c6d8; height: 150px; }
-#log .warn { color: var(--gold); } #log .error { color: var(--red); }
-#feed div { padding: 2px 0; overflow-wrap: anywhere; } #feed b { color: var(--cyan); } #feed .gift b { color: var(--gold); } #feed .goal { color: var(--lime); font-weight: 600; }
-#qr { width: 150px; height: 150px; border-radius: 8px; background: #fff; }
-.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; color: var(--cyan); }
-.hint { color: var(--dim); font-size: 12px; margin-top: 6px; }
-#plan { color: var(--lime); font-weight: 600; }
-#ctl { background: var(--panel); border: 2px solid #2b4a63; border-radius: var(--r); padding: 14px; margin-bottom: 14px; }
-#ctl h2 { font-size: 15px; color: var(--ink); letter-spacing: .02em; text-transform: none; }
-#ctl .big { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
-#ctl .small { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
-#ctl button { padding: 13px 12px; font-size: 14px; text-align: left; line-height: 1.3; white-space: normal; }
-#ctl button small { display: block; font-weight: 500; color: var(--dim); font-size: 12px; margin-top: 2px; }
-#ctl button.on { background: #12303a; color: var(--ink); border: 2px solid var(--cyan); }
-#ctl button.on small { color: #9fdff0; }
-#ctl button.alarm { background: #4a1420; border-color: #a03446; color: #ffd0d6; font-weight: 800; }
-#ctl button.alarm small { color: #f3a5b0; }
-#ctl button.water { background: #10293f; border-color: #2a5f8f; }
-#ctlState { margin-top: 10px; font-weight: 600; color: var(--lime); font-size: 13px; }
-#builder { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; margin-top: 10px; }
+
+#lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; max-height: 330px; overflow: auto; padding: 2px; }
+#lib button { display: grid; justify-items: center; gap: 2px; padding: 8px 4px 6px; font-size: 12px; font-weight: 600; line-height: 1.2; position: relative; }
+#lib button img, #lib button .emo { width: 44px; height: 44px; object-fit: contain; display: grid; place-items: center; font-size: 32px; }
+#lib button span.nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#lib button span.co { color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+#lib button.have { border-color: #2f6b2a; background: #12240f; }
+#lib button.have::after { content: '✓'; position: absolute; right: 5px; top: 3px; color: var(--lime); font-weight: 800; }
+tr.flash td { animation: rowFlash 1.6s ease-out; }
+@keyframes rowFlash { 0%, 30% { background: rgba(79, 216, 255, .28); } }
+.pv { position: sticky; top: 120px; }
+.pv iframe { display: block; width: 100%; aspect-ratio: 9 / 16; border: 1px solid var(--line); border-radius: var(--rs); background: repeating-conic-gradient(#1a2330 0 25%, #121923 0 50%) 0 0 / 24px 24px; }
+td .mobSel { margin-left: 4px; max-width: 120px; }
+/* ---- Stream ---- */
+#tikBadge { display: block; margin-top: 10px; padding: 9px 12px; border-radius: var(--rs); background: var(--well); border: 1px solid var(--line); font-weight: 700; }
+#tikBadge.live { border-color: #2f6b2a; background: #12240f; color: var(--lime); }
+#tikBadge.wait { border-color: #6b5a1c; background: #241f0c; color: var(--gold); }
+#tikDiag { color: var(--dim); font-size: 12.5px; margin-top: 6px; min-height: 18px; overflow-wrap: anywhere; }
+.qr { width: 156px; height: 156px; border-radius: 10px; background: #fff; flex: none; }
+.phone { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.phone > div { flex: 1 1 200px; min-width: 0; }
+#login { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; place-items: center; padding: 20px; }
+#login[hidden] { display: none; }
+#login form { display: grid; gap: 12px; justify-items: center; width: min(340px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 24px; text-align: center; }
+#login input, #login button { width: 100%; }
+#login p { margin: 0; color: var(--dim); }
+.view iframe { display: block; width: min(100%, 330px); margin: 0 auto; aspect-ratio: 9 / 16; border: 1px solid var(--line); border-radius: var(--rs); background: repeating-conic-gradient(#1a2330 0 25%, #121923 0 50%) 0 0 / 24px 24px; }
+.learnList { display: grid; gap: 6px; font-size: 13px; }
+.learnList > div { background: var(--well); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.learnList > div.empty { color: var(--dim); border-style: dashed; }
+.learnList small { color: var(--dim); display: block; }
+.learnList b { color: var(--cyan); }
+#toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: #05080c; border: 1px solid var(--line2); padding: 9px 16px; border-radius: 99px; font-weight: 600; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90%; text-align: center; z-index: 50; }
+#toast.on { opacity: 1; }
 </style>
 </head>
 <body>
-<header>
-  <div id="tik">
-    <h2>TikTok Live · Auto-Connector</h2>
-    <div class="row"><input id="tikUser" placeholder="@name oder https://www.tiktok.com/@name/live" autocomplete="off" spellcheck="false" aria-label="TikTok-Benutzername"><button class="pri" id="tikBtn">Verbinden</button></div>
-    <span id="tikBadge" title="">⚪ Nicht verbunden</span>
-    <div id="tikDiag"></div>
+<div class="top">
+  <div class="wrap">
+    <div class="brand"><img src="icon.svg" alt=""><b>KI-Streamer Regie</b></div>
+    <div class="chips">
+      <span class="chip" id="cTik"><i></i><span>TikTok</span></span>
+      <span class="chip" id="cBot"><i></i><span>Bot offline</span></span>
+      <span class="chip" id="cMc"><i></i><span>Minecraft</span></span>
+      <span class="chip" id="cTts"><i></i><span>Stimme</span></span>
+      <span class="chip" id="cWs"><i></i><span>Verbinde …</span></span>
+    </div>
   </div>
-  <div class="chips">
-    <span class="chip" id="cBot"><i></i><span>Bot offline</span></span>
-    <span class="chip" id="cTts"><i></i><span>Stimme</span></span>
-    <span class="chip" id="cWs"><i></i><span>Server</span></span>
+  <div class="wrap" style="padding-block:0">
+    <nav class="tabs" role="tablist">
+      <button data-tab="live" role="tab"><span>🎮</span>Live</button>
+      <button data-tab="world" role="tab"><span>🌍</span>Welt</button>
+      <button data-tab="gifts" role="tab"><span>🎁</span>Gifts</button>
+      <button data-tab="stream" role="tab"><span>📡</span>Stream</button>
+      <button data-tab="system" role="tab"><span>⚙️</span>System</button>
+    </nav>
   </div>
-</header>
-<section id="ctl">
-  <h2>🎮 Bot-Steuerung: Was soll die KI machen?</h2>
-  <div class="big">
-    <button data-mode="surface">☀️ AN DER OBERFLÄCHE SPIELEN<small>Standard – kein Höhlen-Graben. Holz, Jagd, Haus, Kämpfe draußen.</small></button>
-    <button data-mode="cave">⛏️ JETZT IN DIE HÖHLE GEHEN<small>1x Erze &amp; Diamanten holen, danach automatisch wieder hoch.</small></button>
-    <button class="alarm" data-cmd="abort_cave">🚨 HÖHLE SOFORT ABBRECHEN &amp; RAUS AN DIE OBERFLÄCHE!<small>Bricht alles unter Tage ab und bringt den Bot nach oben.</small></button>
-    <button class="water" data-cmd="rescue">💧 Aus Wasser/Lava/Loch befreien<small>Sofort-Rettung auf sicheren, trockenen Boden.</small></button>
+</div>
+
+<div class="wrap">
+<!-- ============================================================ LIVE -->
+<div class="page" id="p-live">
+  <div class="grid">
+    <div class="stack c7">
+      <section>
+        <div id="now">–</div>
+        <div id="nowSub"></div>
+        <div class="bars">
+          <div class="bar"><label>Herzen <b id="hpTxt">–</b></label><div><i id="hpBar"></i></div></div>
+          <div class="bar food"><label>Hunger <b id="foodTxt">–</b></label><div><i id="foodBar"></i></div></div>
+        </div>
+        <div class="kv" id="kv"></div>
+      </section>
+      <section id="ctl">
+        <h2>Was soll die KI machen?</h2>
+        <div class="btns wide">
+          <button class="tile" data-mode="surface"><span>☀️</span><div><b>An der Oberfläche spielen</b><small>Standard: Holz, Jagd, Haus, Kämpfe draußen</small></div></button>
+          <button class="tile" data-mode="cave"><span>⛏️</span><div><b>In die Höhle gehen</b><small>1× Erze &amp; Diamanten holen, dann wieder hoch</small></div></button>
+          <button class="tile" data-mode="fight"><span>⚔️</span><div><b>Nur kämpfen</b><small>Bleibt stehen und wartet auf Gegner</small></div></button>
+          <button class="tile alarm" data-cmd="abort_cave"><span>🚨</span><div><b>Höhle abbrechen</b><small>Sofort raus an die Oberfläche</small></div></button>
+        </div>
+        <h3>Ziele</h3>
+        <div class="btns"><button data-goal="house">🏠 Haus bauen</button><button data-goal="sleep">🛏️ Schlafen</button><button data-goal="wood">🪓 Holz holen</button><button data-goal="hunt">🍖 Jagen</button><button data-goal="iron_sword">🗡️ Eisenschwert</button><button data-goal="diamonds">💎 Diamanten</button><button data-goal="nether">🔥 Nether</button><button data-cmd="clear_goals">✖️ Ziele löschen</button></div>
+        <div class="row"><select id="goalSel" aria-label="Weiteres Ziel" style="flex:1 1 160px"></select><button id="goalBtn">Ziel erzwingen</button></div>
+        <h3>Hilfe &amp; Notfall</h3>
+        <div class="btns"><button id="bPause">⏸️ Pause</button><button data-cmd="rescue">💧 Aus Wasser retten</button><button data-cmd="unstuck">🧗 Befreien</button><button data-cmd="corpse">💀 Loot holen</button><button data-give="golden_apple:1">🍎 Goldapfel</button><button data-give="cooked_beef:8">🥩 Steaks</button><button id="bRespawn" class="danger">☠️ Respawn</button></div>
+        <div class="row"><input id="giveItem" placeholder="Item geben, z. B. iron_sword" list="items" aria-label="Item"><input id="giveN" type="number" value="1" min="1" max="64" style="flex:0 0 70px" aria-label="Anzahl"><button id="giveBtn">Geben</button>
+          <datalist id="items"><option value="cooked_beef"><option value="golden_apple"><option value="cobblestone"><option value="iron_ingot"><option value="diamond"><option value="shield"><option value="water_bucket"><option value="torch"><option value="oak_log"><option value="red_bed"><option value="iron_sword"><option value="iron_pickaxe"><option value="diamond_sword"></datalist></div>
+      </section>
+    </div>
+    <div class="stack c5">
+      <section class="view">
+        <h2>Stream-Ansicht <small><button class="sm" id="viewSound">🔇 Ton aus</button> <button class="sm" id="viewBtn">Anzeigen</button></small></h2>
+        <iframe id="view" title="Stream-Ansicht" allow="autoplay" hidden></iframe>
+        <div class="row" id="viewLinks"><button class="sm" id="viewTik">TikTok-Live öffnen</button></div>
+        <div class="hint" id="viewHint">Zeigt live, was die Zuschauer über dem Spiel sehen: Facecam, Gifts, Likes und Untertitel – auf Wunsch mit der Stimme. Das Spielbild selbst siehst du im TikTok-Live.</div>
+      </section>
+      <section>
+        <h2>Live-Feed <small>Chat · Gifts · Follows</small></h2>
+        <div id="feed" aria-live="off"></div>
+      </section>
+      <section>
+        <h2>Streamer sprechen lassen</h2>
+        <div class="row"><input id="sayTxt" placeholder="Was soll er sagen?" aria-label="Sprachzeile"><select id="sayEmo" aria-label="Stimmung"><option value="chill">Chill</option><option value="hype">Hype</option><option value="panic">Panik</option></select><button class="pri" id="sayBtn">Sprechen</button></div>
+        <div class="row"><label style="flex-direction:row;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)"><input type="checkbox" id="voiceOn" checked style="flex:none"> Stimme an (aus = der Streamer schweigt)</label></div>
+      </section>
+      <section>
+        <h2>Testen <small>ohne echten Stream</small></h2>
+        <div class="row"><input id="chatTxt" placeholder="Chat-Nachricht simulieren" aria-label="Chat simulieren"><input id="simUser" value="Lukas" style="flex:0 1 110px" aria-label="Test-Zuschauer"><button id="chatBtn">Senden</button></div>
+        <div class="row" id="chatQuick"></div>
+      </section>
+    </div>
   </div>
-  <div class="small">
-    <button data-goal="house">🏠 Haus bauen</button><button data-goal="sleep">🛏️ Bett bauen &amp; Schlafen</button><button data-cmd="corpse">💀 Todes-Loot holen</button><button data-mode="fight">⚔️ Nur Kämpfen</button>
+</div>
+
+<!-- ============================================================ WELT -->
+<div class="page" id="p-world">
+  <div class="grid">
+    <div class="stack c7">
+      <section>
+        <h2>Tageszeit <small id="lockTxt"></small></h2>
+        <div id="sky"><div class="info"><span id="clock">–:–</span><small id="phase">Bot ist nicht in der Welt</small></div><div class="wx" id="wx"></div><div class="orb" id="orb">☀️</div><div class="ground"></div></div>
+        <h3>Jetzt umstellen</h3>
+        <div class="btns" id="timeBtns"><button data-time="sunrise">🌅 Sonnenaufgang</button><button data-time="day">☀️ Tag</button><button data-time="noon">🔆 Mittag</button><button data-time="sunset">🌇 Abend</button><button data-time="night">🌙 Nacht</button><button data-time="midnight">🌑 Mitternacht</button></div>
+        <h3>Ablauf</h3>
+        <div class="seg" id="lockBtns"><button data-lock="off">🔄 Normal</button><button data-lock="day">☀️ Immer Tag</button><button data-lock="night">🌙 Immer Nacht</button><button data-lock="freeze">⏸️ Zeit anhalten</button></div>
+        <div class="hint">„Immer Nacht“ sorgt für mehr Monster und Action im Stream. Der Bot geht dann nicht von selbst schlafen.</div>
+      </section>
+      <section>
+        <h2>Wetter &amp; Schwierigkeit</h2>
+        <h3>Wetter</h3>
+        <div class="seg" id="wxBtns"><button data-weather="clear">☀️ Sonne</button><button data-weather="rain">🌧️ Regen</button><button data-weather="thunder">⛈️ Gewitter</button></div>
+        <h3>Schwierigkeit</h3>
+        <div class="seg" id="diffBtns"><button data-diff="peaceful">🕊️ Friedlich</button><button data-diff="easy">🙂 Einfach</button><button data-diff="normal">😐 Normal</button><button data-diff="hard">💀 Schwer</button></div>
+        <h3>Sofort</h3>
+        <div class="btns"><button id="clearMobs">🧹 Alle Monster entfernen</button><button id="saveWorld">💾 Welt speichern</button></div>
+      </section>
+    </div>
+    <div class="stack c5">
+      <section>
+        <h2>Minecraft-Server <small id="mcTxt"></small></h2>
+        <div class="btns"><button class="pri" id="mcStart">▶️ Starten</button><button id="mcRestart">🔁 Neustart</button><button class="danger" id="mcStop">⏹️ Stoppen</button></div>
+        <div class="hint" id="mcHint"></div>
+        <h3>Eigener Server-Befehl</h3>
+        <div class="row"><input id="cmdTxt" placeholder="z. B. time set 6000 oder tp KI_Streamer 0 80 0" aria-label="Server-Befehl" spellcheck="false" autocapitalize="off"><button id="cmdBtn">Senden</button></div>
+      </section>
+      <section>
+        <h2>Spielregeln</h2>
+        <div id="rulesBox"></div>
+        <div class="hint">Die Schalter zeigen, was zuletzt hier eingestellt wurde.</div>
+      </section>
+    </div>
   </div>
-  <div id="ctlState"></div>
-</section>
-<main>
-  <div class="col">
-    <section>
-      <h2>Bot</h2>
-      <div class="row" id="plan">–</div>
-      <div class="kv" id="kv" style="margin-top:10px"></div>
-      <div class="row" style="margin-top:10px">
-        <button id="bStart">Start</button><button id="bPause">Pause</button><button id="bUnstuck">Unstuck</button><button id="bCorpse">Loot holen</button><button id="bSleep">Schlafen</button><button id="bRespawn" class="danger">Respawn</button>
-      </div>
-      <div class="row"><select id="goalSel" aria-label="Ziel"></select><button id="goalBtn">Ziel erzwingen</button></div>
-      <div class="row"><input id="giveItem" placeholder="Item, z. B. cooked_beef" list="items" aria-label="Item"><input id="giveN" type="number" value="8" min="1" max="64" style="flex:0 0 70px" aria-label="Anzahl"><button id="giveBtn">Geben</button>
-        <datalist id="items"><option value="cooked_beef"><option value="golden_apple"><option value="cobblestone"><option value="iron_ingot"><option value="diamond"><option value="shield"><option value="water_bucket"><option value="torch"><option value="oak_log"><option value="red_bed"><option value="iron_sword"></datalist></div>
-    </section>
-    <section>
-      <h2>Kamera &amp; Overlay</h2>
-      <div class="row" id="camBtns"><button data-cam="ego">👁️ Ego-Perspektive</button><button data-cam="third">🎥 3rd-Person-Freecam</button><button data-cam="auto">🔄 Auto-Regie</button></div>
-      <div class="row"><label>Dein Minecraft-Name (Aufnahme-Account)<input id="camPlayer" placeholder="wird in den Zuschauermodus gesetzt"></label></div>
-      <div class="row"><button id="dzBtn">🎨 Designer-Modus</button><button data-fmt="16:9">🖥️ 16:9</button><button data-fmt="9:16">📱 9:16</button><button data-fmt="custom">📐 Split</button><button id="dzReset" class="sm">Layout zurücksetzen</button></div>
-      <div class="hint">Designer: Widgets im Overlay ziehen und skalieren (auch per F2 direkt im Overlay). Änderungen landen sofort in OBS.</div>
-    </section>
-    <section>
-      <h2>Sprachzeile</h2>
-      <div class="row"><input id="sayTxt" placeholder="Was soll der Streamer sagen?" aria-label="Sprachzeile"><select id="sayEmo" aria-label="Stimmung"><option value="chill">Chill</option><option value="hype">Hype</option><option value="panic">Panik</option></select><button id="sayBtn">Sprechen</button></div>
-    </section>
-    <section>
-      <h2>Minecraft-Server</h2>
-      <div class="row"><label>Host<input id="mcHost"></label><label>Port<input id="mcPort" type="number"></label><label>Bot-Name<input id="mcUser"></label><label>Version<input id="mcVer"></label></div>
-      <div class="row"><label>Stimme<select id="voice"></select></label><button id="cfgBtn" style="align-self:end">Speichern</button></div>
-    </section>
-    <section>
-      <h2>Handy-Fernbedienung</h2>
-      <div class="row" style="align-items:flex-start">
-        <img id="qr" alt="QR-Code für die Handy-Fernbedienung" hidden>
-        <div style="flex:1 1 180px;min-width:0"><button id="tunBtn" class="pri">Cloud-Tunnel starten</button><div class="mono" id="tunUrl" style="margin-top:8px"></div><div class="hint" id="tunHint"></div></div>
-      </div>
-    </section>
+</div>
+
+<!-- ============================================================ GIFTS -->
+<div class="page" id="p-gifts">
+  <div class="grid">
+    <div class="stack c8">
+      <section>
+        <h2>1 · TikTok-Gift auswählen <small id="libInfo"></small></h2>
+        <div class="row"><input id="libFilter" placeholder="Gift suchen, z. B. Rose oder 100 …" aria-label="TikTok-Gift suchen"><div class="seg" id="libSeg"><button data-lib="all" class="on">Alle</button><button data-lib="new">Noch nicht belegt</button><button data-lib="have">Belegt</button></div></div>
+        <div class="row"><div class="seg" id="libPrice"><button data-price="" class="on">Alle Preise</button><button data-price="1-9">1–9</button><button data-price="10-99">10–99</button><button data-price="100-999">100–999</button><button data-price="1000-9999">1.000–9.999</button><button data-price="10000-999999">ab 10.000</button></div></div>
+        <div id="lib" style="margin-top:10px"></div>
+        <div class="hint" id="libHint"></div>
+      </section>
+      <section>
+        <h2>2 · Was passiert bei welchem Gift? <small id="giftCount"></small></h2>
+        <div class="row"><input id="giftFilter" placeholder="In deinen Gifts suchen …" aria-label="Gift suchen"><label style="flex:0 0 74px">Test ×<input id="simN" type="number" value="1" min="1" max="50" aria-label="Combo"></label><button id="resetRules" class="sm danger">Auf Standard zurücksetzen</button></div>
+        <div class="tw" style="margin-top:10px"><table><thead><tr><th>An</th><th title="Im Overlay anzeigen">Overlay</th><th></th><th>Gift</th><th>Coins</th><th>Was passiert</th><th>Menge</th><th>HP×</th><th>Text im Overlay</th><th></th></tr></thead><tbody id="rules"></tbody></table></div>
+        <div class="hint">Jede Änderung landet sofort im Overlay. Haken bei „Overlay“ = das Gift läuft in der Gift-Leiste mit (4 pro Seite, wechselt automatisch).</div>
+      </section>
+      <section>
+        <h2>❤️ Like-Ziel <small id="lkInfo"></small></h2>
+        <div class="row"><div class="seg" id="lkOn"><button data-lkon="1">An</button><button data-lkon="0">Aus</button></div><span style="color:var(--dim)">Alle</span><div class="seg" id="lkEveryBtns"><button data-every="50">50</button><button data-every="100">100</button><button data-every="150">150</button><button data-every="200">200</button><button data-every="500">500</button></div><input id="lkEvery" type="number" min="10" max="100000" style="flex:0 0 90px" aria-label="Likes pro Ziel"><span style="color:var(--dim)">Likes passiert:</span></div>
+        <div class="row"><select id="lkAction" aria-label="Aktion beim Like-Ziel" style="flex:1 1 180px"></select><select id="lkMob" aria-label="Mob" style="flex:0 1 150px"></select><label style="flex:0 0 74px">Menge<input id="lkAmount" type="number" value="1" min="1" max="10"></label></div>
+        <div class="row"><label style="flex-direction:row;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)"><input type="checkbox" id="lkEsc" style="flex:none"> Jede Runde eins mehr (bis +4) – „tippt weiter, die nächsten bringen noch mehr“</label></div>
+        <div class="bar" style="margin-top:12px"><label><span id="lkState">–</span><b id="lkNext"></b></label><div><i id="lkBarFill" style="background:#ff5c93"></i></div></div>
+        <div class="row" style="margin-top:10px"><span style="color:var(--dim)">Testen:</span><button class="sm" data-simlike="Max:25">+25 von Max</button><button class="sm" data-simlike="Lukas:25">+25 von Lukas</button><button class="sm" data-simlike="Mia:60">+60 von Mia</button><button class="sm danger" id="lkReset">Zähler auf 0</button></div>
+        <div class="hint">Alle Zuschauer füllen den Balken gemeinsam. Wer den letzten Like zum Ziel schickt, bekommt die Aktion mit seinem Namen – der Streamer sagt es an.</div>
+      </section>
+      <section>
+        <h2>Eigenes Geschenk (nicht in der Liste)</h2>
+        <div class="row"><label>Name<input id="nName" placeholder="z. B. Drache"></label><label style="flex:0 1 84px">Coins<input id="nCoins" type="number" value="50" min="1"></label><label style="flex:0 1 70px">Emoji<input id="nEmoji" value="🎁"></label><label>Bild-Adresse (optional)<input id="nIcon" placeholder="https://…"></label></div>
+        <div class="row"><label>Was passiert<select id="nAction"></select></label><label id="nMobWrap">Mob<select id="nMob"></select></label><label style="flex:0 1 80px">Menge<input id="nAmount" type="number" value="1" min="1" max="20"></label><label style="flex:0 1 80px">HP×<input id="nHp" type="number" value="1" min="0.5" max="10" step="0.5"></label><button class="pri" id="nAdd" style="align-self:end">Hinzufügen</button></div>
+      </section>
+    </div>
+    <div class="stack c4">
+      <section class="pv">
+        <h2>Overlay live <small><button class="sm" id="pvReload">Neu laden</button></small></h2>
+        <iframe id="pv" title="Overlay-Vorschau" loading="lazy"></iframe>
+        <div class="hint">So sieht es in OBS aus (ohne Ton). Ändere links etwas – die Karte blinkt hier kurz auf.</div>
+      </section>
+    </div>
   </div>
-  <div class="col">
-    <section>
-      <h2>Gift-Katalog <span id="giftCount" style="color:var(--cyan)"></span></h2>
-      <div class="row"><input id="giftFilter" placeholder="Gift suchen …" aria-label="Gift suchen"><input id="simUser" value="Lukas" style="flex:0 1 120px" aria-label="Test-Zuschauer"><input id="simN" type="number" value="1" min="1" max="50" style="flex:0 0 64px" aria-label="Combo"><button id="resetRules" class="sm">Standard</button></div>
-      <div class="tw" style="margin-top:8px"><table><thead><tr><th>An</th><th>Leg.</th><th></th><th>Gift</th><th>Coins</th><th>Aktion</th><th>Menge</th><th>HP×</th><th>Text in der Legende</th><th></th></tr></thead><tbody id="rules"></tbody></table></div>
-      <div id="builder">
-        <h2 style="margin-bottom:8px">+ Eigenes Geschenk hinzufügen</h2>
-        <div class="row"><label>Name<input id="nName" placeholder="z. B. Drache"></label><label style="flex:0 1 84px">Coins<input id="nCoins" type="number" value="50" min="1"></label><label style="flex:0 1 70px">Emoji<input id="nEmoji" value="🎁"></label><label>Icon-URL (optional)<input id="nIcon" placeholder="https://…"></label></div>
-        <div class="row"><label>Aktion<select id="nAction"></select></label><label id="nMobWrap">Mob<select id="nMob"></select></label><label style="flex:0 1 80px">Menge<input id="nAmount" type="number" value="1" min="1" max="20"></label><label style="flex:0 1 80px">HP×<input id="nHp" type="number" value="1" min="0.5" max="10" step="0.5"></label><button class="pri" id="nAdd" style="align-self:end">Hinzufügen</button></div>
-        <div class="hint">Unbekannte Gifts, die live ankommen, werden automatisch hier aufgenommen (Auto-Discovery) und lösen eine zum Coin-Wert passende Aktion aus.</div>
-      </div>
-    </section>
-    <section>
-      <h2>Live-Feed (Chat · Gifts · Follows)</h2>
-      <div id="feed" aria-live="off"></div>
-      <div class="row"><input id="chatTxt" placeholder="Chat simulieren, z. B. Bau ein Haus" aria-label="Chat simulieren"><button id="chatBtn">Senden</button></div>
-      <div class="row" id="chatQuick"></div>
-    </section>
-    <section>
-      <h2>Protokoll</h2>
-      <div id="log" aria-live="off"></div>
-    </section>
+</div>
+
+<!-- ============================================================ STREAM -->
+<div class="page" id="p-stream">
+  <div class="grid">
+    <div class="stack c6">
+      <section id="tik">
+        <h2>TikTok Live</h2>
+        <div class="row"><input id="tikUser" placeholder="@name oder Link zu deinem Live" autocomplete="off" spellcheck="false" aria-label="TikTok-Benutzername"><button class="pri" id="tikBtn">Verbinden</button></div>
+        <span id="tikBadge">⚪ Nicht verbunden</span>
+        <div id="tikDiag"></div>
+      </section>
+      <section>
+        <h2>Kamera</h2>
+        <div class="seg" id="camBtns"><button data-cam="ego">👁️ Ego</button><button data-cam="third">🎥 Freecam</button><button data-cam="auto">🔄 Auto-Regie</button></div>
+        <div class="row" style="margin-top:10px"><label>Dein Minecraft-Name (der Account, den du in OBS aufnimmst)<input id="camPlayer" placeholder="wird in den Zuschauermodus gesetzt"></label></div>
+      </section>
+      <section>
+        <h2>Overlay</h2>
+        <div class="seg"><button data-fmt="9:16">📱 9:16 (TikTok)</button><button data-fmt="16:9">🖥️ 16:9</button><button data-fmt="custom">📐 Split</button></div>
+        <div class="row" style="margin-top:10px"><button id="dzBtn">🎨 Designer-Modus</button><button id="ovOpen">Overlay öffnen</button><button id="dzReset" class="sm danger">Layout zurücksetzen</button></div>
+        <div class="hint">Im Designer ziehst du die Widgets direkt im Overlay zurecht. Änderungen landen sofort in OBS.</div>
+      </section>
+    </div>
+    <div class="stack c6">
+      <section>
+        <h2>📱 Fernzugriff</h2>
+        <h3>Zuhause im selben WLAN</h3>
+        <div class="phone">
+          <img class="qr" id="lanQr" alt="QR-Code für das Handy im WLAN" hidden>
+          <div><div id="lanTxt" class="hint" style="margin-top:0"></div><div class="mono" id="lanUrl" style="margin-top:8px"></div><div class="row" style="margin-top:8px"><button class="sm" id="lanCopy" hidden>Link kopieren</button></div></div>
+        </div>
+        <h3>Von überall (Arbeit, unterwegs)</h3>
+        <div class="phone">
+          <img class="qr" id="qr" alt="QR-Code für die Handy-Fernbedienung über das Internet" hidden>
+          <div><button id="tunBtn">Internet-Zugang starten</button><div class="hint" id="tunHint"></div>
+            <div id="tunLinks" hidden style="margin-top:8px"><div class="hint" style="margin:0">Dashboard:</div><div class="mono" id="tunDash"></div><div class="hint" style="margin:6px 0 0">Handy-Fernbedienung:</div><div class="mono" id="tunUrl"></div><div class="row" style="margin-top:8px"><button class="sm" id="tunCopy">Dashboard-Link kopieren</button></div></div></div>
+        </div>
+        <div class="switch" style="margin-top:10px"><span>Internet-Zugang bei jedem Programmstart automatisch öffnen</span><div class="seg"><button data-auto="1">An</button><button data-auto="0">Aus</button></div></div>
+        <div class="switch"><span>Neue Adresse als Push aufs Handy schicken (ntfy-App)</span><div class="seg"><button data-push="1">An</button><button data-push="0">Aus</button></div></div>
+        <div id="pushBox" hidden><div class="hint">1. App „ntfy“ aufs Handy laden. 2. Dort dieses Thema abonnieren. 3. „Test senden“ drücken. Die Nachricht enthält nur die Adresse, nie den Zugangscode.</div><div class="row"><span class="mono" id="pushTopic"></span><button class="sm" id="pushCopy">Kopieren</button><button class="sm" id="pushTest">Test senden</button></div></div>
+        <h3>Zugangscode</h3>
+        <div class="row"><input id="pwNew" type="text" placeholder="Neuer Zugangscode (mind. 8 Zeichen)" autocomplete="off" spellcheck="false" aria-label="Neuer Zugangscode"><button id="pwSet">Ändern</button><button class="sm" id="pwShow">Aktuellen zeigen</button></div>
+        <div class="hint" id="pwHint">Von außen fragt die Seite nach diesem Code. Wer Adresse und Code hat, kann alles steuern – gib ihn nicht weiter. Ändern geht nur hier am PC.</div>
+        <div class="hint">Tipp: Seite am Handy öffnen, dann „Teilen → Zum Home-Bildschirm“. So startet die Fernbedienung wie eine App.</div>
+      </section>
+      <section>
+        <h2>Stimme</h2>
+        <div class="row"><select id="voice" aria-label="Stimme" style="flex:1 1 160px"></select><button id="voiceTest">Probe hören</button></div>
+        <div class="hint">Die Stimme kommt aus dem Overlay. In OBS bei der Browserquelle „Audio über OBS steuern“ aktivieren.</div>
+      </section>
+    </div>
   </div>
-</main>
+</div>
+
+<!-- ============================================================ SYSTEM -->
+<div class="page" id="p-system">
+  <div class="grid">
+    <div class="stack c5">
+      <section>
+        <h2>Bot-Verbindung</h2>
+        <div class="btns"><button id="bStart" class="pri">Start</button></div>
+        <h3>Minecraft-Server-Adresse</h3>
+        <div class="row"><label>Host<input id="mcHost"></label><label style="flex:0 1 90px">Port<input id="mcPort" type="number"></label></div>
+        <div class="row"><label>Bot-Name<input id="mcUser"></label><label style="flex:0 1 90px">Version<input id="mcVer"></label></div>
+        <div class="row"><button id="cfgBtn">Speichern</button></div>
+        <div class="hint">Nach dem Speichern den Bot einmal stoppen und starten.</div>
+      </section>
+      <section>
+        <h2>🧠 Sprachmodell <small id="llmInfo"></small></h2>
+        <div class="row"><div class="seg"><button data-llmon="1">An</button><button data-llmon="0">Aus</button></div><select id="llmModel" aria-label="Modell" style="flex:1 1 180px"></select></div>
+        <div class="row"><input id="llmKey" type="password" placeholder="API-Schlüssel (sk-ant-…)" autocomplete="off" spellcheck="false" aria-label="Anthropic API-Schlüssel"><button id="llmKeyBtn">Speichern</button><button id="llmKeyDel" class="sm danger" hidden>Löschen</button></div>
+        <div class="row"><label style="flex:0 1 150px">Höchstens pro Stream ($)<input id="llmBudget" type="number" min="0.05" max="50" step="0.05"></label><label style="flex:0 1 150px">Antworten pro Stunde<input id="llmRate" type="number" min="20" max="2000" step="10"></label></div>
+        <div class="row"><label style="flex-direction:row;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)"><input type="checkbox" id="llmMono" style="flex:none"> Auch spontane Sprüche, wenn der Chat still ist</label></div>
+        <div class="bar" style="margin-top:12px"><label><span id="llmState">–</span><b id="llmCost"></b></label><div><i id="llmBar" style="background:var(--violet)"></i></div></div>
+        <div class="row" style="margin-top:10px"><button id="llmTest">Testen</button><button id="llmReset" class="sm">Zähler auf 0</button></div>
+        <div class="hint">Mit Schlüssel formuliert der Streamer Chat-Antworten frei. Ist das Budget erreicht oder die Antwort zu langsam, spricht er seine festen Texte. Den Schlüssel bekommst du unter console.anthropic.com; er bleibt auf diesem PC (config/settings.json).</div>
+      </section>
+      <section>
+        <h2>Seiten</h2>
+        <div class="row"><a class="mono" href="studio-overlay.html" target="_blank" rel="noopener">Studio-Overlay</a></div>
+        <div class="row"><a class="mono" href="mobile.html" target="_blank" rel="noopener">Handy-Fernbedienung</a></div>
+        <div class="row"><a class="mono" href="preview.html" target="_blank" rel="noopener">Vorschau mit Beispieldaten</a></div>
+      </section>
+    </div>
+    <div class="stack c7">
+      <section>
+        <h2>🎓 Gelerntes <small id="learnInfo"></small></h2>
+        <h3>Aus Fehlern</h3>
+        <div id="lessons" class="learnList"></div>
+        <h3>So spielt er dadurch anders</h3>
+        <div id="policyBox" class="learnList"></div>
+        <h3>Tipps aus dem Chat</h3>
+        <div id="tipsBox" class="learnList"></div>
+        <h3>Auswege, die er ausprobiert hat</h3>
+        <div id="stratBox" class="learnList"></div>
+        <div class="row" style="margin-top:12px"><button class="sm danger" id="learnReset">Fehler-Gedächtnis löschen</button><button class="sm danger" id="wisdomReset">Chat-Tipps löschen</button></div>
+        <div class="hint">Der Bot merkt sich Tode und Fehlschläge und passt sein Verhalten an. Tipps aus dem Chat wirken nur, wenn sie auf eine feste, sinnvolle Regel passen. Beides bleibt über Neustarts erhalten.</div>
+      </section>
+      <section>
+        <h2>Protokoll <small><button class="sm" id="logClear">Leeren</button></small></h2>
+        <div id="log" aria-live="off"></div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+<div id="login" hidden><form id="loginForm"><img src="icon.svg" alt="" width="56" height="56"><h2 style="justify-content:center">KI-Streamer Regie</h2><p id="loginTxt">Bitte den Zugangscode eingeben.</p><input id="loginPw" type="password" placeholder="Zugangscode" autocomplete="current-password"><button class="pri" type="submit">Anmelden</button></form></div>
+<div id="toast" role="status"></div>
+
 <script>
 'use strict'
 const $ = id => document.getElementById(id)
+const $$ = sel => document.querySelectorAll(sel)
 const DEMO = /(^|[?&#])demo\b/.test(location.search + location.hash)
 let ws = null; let state = null; let rulesKey = ''
-const send = m => { if (DEMO) return demoSend(m); if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)) }
+const toast = t => { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 1700) }
+const send = (m, label) => {
+  if (DEMO) { demoSend(m); if (label) toast(label); return true }
+  if (!ws || ws.readyState !== 1) { toast('Keine Verbindung zum Programm'); return false }
+  ws.send(JSON.stringify(m)); if (label) toast(label); return true
+}
 const chip = (el, cls, text) => { el.className = 'chip ' + cls; el.lastElementChild.textContent = text }
 const ACT = { wood: 'Holz hacken', craft: 'Craften', mine: 'Mining', hunt: 'Jagd', smelt: 'Ofen', build: 'Hausbau', enchant: 'Verzaubern', portal: 'Portalbau', nether: 'Nether', combat: 'Kampf', eat: 'Essen', sleep: 'Schlafen', corpse: 'Corpse-Run', swim: 'Im Wasser', guard: 'Kampfbereit', exit_cave: 'Raus aus der Höhle', explore: 'Erkunden', idle: 'Basis', paused: 'Pause', offline: 'Offline' }
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e }
+const store = { get: k => { try { return localStorage.getItem(k) } catch (_) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (_) {} } }
+/** Gefährliche Knöpfe: erst beim zweiten Tippen innerhalb von 3 Sekunden auslösen. */
+function confirmTap (btn, fn) {
+  let t = null; let label = ''
+  btn.addEventListener('click', () => {
+    if (t) { clearTimeout(t); t = null; btn.classList.remove('sure'); btn.textContent = label; fn(); return }
+    label = btn.textContent; btn.textContent = 'Sicher? Nochmal tippen'; btn.classList.add('sure')
+    t = setTimeout(() => { t = null; btn.classList.remove('sure'); btn.textContent = label }, 3000)
+  })
+}
 
-/* ---- TikTok oben links: säubern, dauerhaft merken (localStorage + Server), automatisch verbinden ---- */
+/* ---- Reiter ---- */
+function showTab (id) {
+  if (!$('p-' + id)) id = 'live'
+  for (const p of $$('.page')) p.classList.toggle('on', p.id === 'p-' + id)
+  for (const b of $$('nav.tabs button')) { b.classList.toggle('on', b.dataset.tab === id); b.setAttribute('aria-selected', b.dataset.tab === id) }
+  store.set('tab', id)
+  if (id === 'gifts' && !$('pv').src) $('pv').src = 'studio-overlay.html?mute=1&format=9:16' + (DEMO ? '#demo' : '')
+}
+for (const b of $$('nav.tabs button')) b.onclick = () => { showTab(b.dataset.tab); scrollTo(0, 0) }
+showTab((location.hash.match(/tab=(\w+)/) || [])[1] || store.get('tab') || 'live')
+
+/* ---- TikTok: Namen säubern, merken, automatisch verbinden ---- */
 function sanitize (input) {
   let s = String(input || '').trim()
   const m = /tiktok\.com\/@([^/?#\s]+)/i.exec(s)
   if (m) s = m[1]
   return s.replace(/^https?:\/\/\S*?\/@?/i, '').replace(/[/?#].*$/, '').replace(/^@+/, '').replace(/\s+/g, '').replace(/[^\p{L}\p{N}_.]/gu, '').slice(0, 30)
 }
-const store = { get: k => { try { return localStorage.getItem(k) } catch (_) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (_) {} } }
 function tikConnect () {
   const name = sanitize($('tikUser').value)
   $('tikUser').value = name
@@ -190,12 +502,14 @@ function renderTik (t) {
   const b = $('tikBadge')
   b.textContent = t.badge
   b.className = t.phase === 'live' ? 'live' : t.phase === 'idle' ? '' : 'wait'
-  b.title = t.diagnostic || (t.phase === 'live' ? `Engine ${t.engine} aktiv` : 'Kein Fehler')
-  $('tikDiag').textContent = t.diagnostic ? 'Diagnose: ' + t.diagnostic : t.phase === 'live' ? `Engine ${t.engine === 'B' ? 'B (lokales Relay)' : 'A (direkt)'} · Gifts, Chat und Likes kommen in Echtzeit an.` : t.phase === 'idle' ? 'Name eingeben – er wird gespeichert und beim nächsten Start automatisch verbunden.' : ''
+  $('tikDiag').textContent = t.diagnostic ? 'Hinweis: ' + t.diagnostic : t.phase === 'live' ? 'Gifts, Chat und Likes kommen in Echtzeit an.' : t.phase === 'idle' ? 'Name eingeben. Er wird gespeichert und beim nächsten Start automatisch verbunden.' : ''
   $('tikBtn').textContent = t.phase === 'idle' ? 'Verbinden' : 'Trennen'
+  chip($('cTik'), t.phase === 'live' ? 'ok live' : t.phase === 'idle' ? '' : 'warn', t.phase === 'live' ? `LIVE · ${t.viewers} Zuschauer` : t.phase === 'idle' ? 'TikTok aus' : 'TikTok wartet')
   if (t.phase === 'live' && !wasLive) chime()
   wasLive = t.phase === 'live'
 }
+$('cTik').style.cursor = 'pointer'; $('cTik').onclick = () => showTab('stream')
+$('cMc').style.cursor = 'pointer'; $('cMc').onclick = () => showTab('world')
 let actx = null
 function chime () {
   try {
@@ -206,81 +520,267 @@ function chime () {
 }
 addEventListener('pointerdown', () => { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume() } catch (_) {} }, { passive: true })
 
+/* ---- Bot-Status ---- */
+const DIFF = { peaceful: 'Friedlich', easy: 'Einfach', normal: 'Normal', hard: 'Schwer' }
 function renderStatus (s) {
   if (!s) return
   chip($('cBot'), s.connected ? (s.fighting ? 'warn' : 'ok') : 'bad', s.connected ? `${s.username} · ${ACT[s.activity] || s.activity}` : 'Bot offline')
-  $('plan').textContent = s.connected ? (s.goal || ACT[s.activity] || '–') + (s.viewerGoals && s.viewerGoals.length ? `  ·  Wunsch: ${s.viewerGoals.map(g => g.label + (g.by ? ' (' + g.by + ')' : '')).join(', ')}` : '') + (s.lastDeath ? `  ·  Loot despawnt in ${s.lastDeath.secondsLeft}s` : '') : 'Bot ist nicht in der Welt'
+  $('now').textContent = s.connected ? (s.goal || ACT[s.activity] || '–') : 'Bot ist nicht in der Welt'
+  $('now').style.color = s.fighting ? 'var(--red)' : ''
+  const sub = []
+  if (s.connected) {
+    sub.push({ surface: 'Oberfläche', cave: 'Höhlen-Trip', fight: 'Nur Kämpfen' }[s.mode] || 'Oberfläche')
+    sub.push(s.inLiquid ? 'im Wasser/in Lava!' : s.underground ? `unter Tage (Y ${s.pos.y})` : `Y ${s.pos.y}`)
+    if (s.viewerGoals && s.viewerGoals.length) sub.push('Wunsch: ' + s.viewerGoals.map(g => g.label + (g.by ? ` (${g.by})` : '')).join(', '))
+    if (s.lastDeath) sub.push(`Loot verschwindet in ${s.lastDeath.secondsLeft}s`)
+  } else sub.push('Läuft der Minecraft-Server? Reiter „Welt“ → Starten')
+  $('nowSub').textContent = sub.join('  ·  ')
+  $('hpTxt').textContent = s.connected ? (s.health / 2).toFixed(1) + ' / 10' : '–'
+  $('hpBar').style.width = s.connected ? Math.max(0, Math.min(100, s.health * 5)) + '%' : '0'
+  $('foodTxt').textContent = s.connected ? (s.food / 2).toFixed(1) + ' / 10' : '–'
+  $('foodBar').style.width = s.connected ? Math.max(0, Math.min(100, s.food * 5)) + '%' : '0'
   const i = s.inv || {}
-  const cells = s.connected ? [['Herzen', (s.health / 2).toFixed(1)], ['Hunger', s.food], ['Y', s.pos.y], ['Gegner', s.threats], ['Holz', i.logs], ['Stein', i.cobble], ['Eisen', i.iron], ['Diamant', i.diamonds], ['Essen', i.food], ['Bett', i.hasBed ? 'ja' : 'nein'], ['Kills', s.kills], ['Tode', s.deaths]] : []
+  const cells = s.connected ? [['Gegner', s.threats], ['Holz', i.logs], ['Stein', i.cobble], ['Eisen', i.iron], ['Diamant', i.diamonds], ['Essen', i.food], ['Bett', i.hasBed ? 'ja' : 'nein'], ['Kills', s.kills], ['Tode', s.deaths]] : []
   const kv = $('kv'); kv.textContent = ''
   for (const [k, v] of cells) kv.appendChild(el('div', {}, el('b', { textContent: v ?? 0 }), el('span', { textContent: k })))
-  $('bPause').textContent = s.paused ? 'Weiter' : 'Pause'
-  for (const b of document.querySelectorAll('#ctl [data-mode]')) b.classList.toggle('on', b.dataset.mode === (s.mode || 'surface'))
-  $('ctlState').textContent = !s.connected ? '' : `Modus: ${{ surface: 'Oberfläche', cave: 'Höhlen-Trip', fight: 'Nur Kämpfen' }[s.mode] || 'Oberfläche'} · ${s.inLiquid ? 'im Wasser/in Lava!' : s.underground ? 'unter Tage (Y ' + s.pos.y + ')' : 'an der Oberfläche (Y ' + s.pos.y + ')'}`
+  $('bPause').textContent = s.paused ? '▶️ Weiter' : '⏸️ Pause'
+  $('bPause').classList.toggle('on', !!s.paused)
+  for (const b of $$('#ctl [data-mode]')) b.classList.toggle('on', s.connected && b.dataset.mode === (s.mode || 'surface'))
+  renderSky(s)
+}
+function renderSky (s) {
+  const w = s.connected && s.world
+  const sky = $('sky')
+  if (!w) { $('clock').textContent = '–:–'; $('phase').textContent = 'Bot ist nicht in der Welt'; $('wx').textContent = ''; $('orb').hidden = true; for (const b of $$('[data-diff]')) b.classList.remove('on'); return }
+  const t = ((w.time % 24000) + 24000) % 24000
+  const mins = Math.floor(((t + 6000) % 24000) * 0.06)
+  $('clock').textContent = String(Math.floor(mins / 60) % 24).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0')
+  const night = t >= 13000 && t < 23000
+  const dusk = !night && (t >= 11500 || t >= 23000 || t < 500)
+  sky.className = night ? 'night' : dusk ? 'dusk' : ''
+  $('phase').textContent = night ? 'Nacht · Monster unterwegs' : t >= 23000 || t < 500 ? 'Sonnenaufgang' : t >= 11500 ? 'Sonnenuntergang' : 'Tag'
+  const orb = $('orb'); orb.hidden = false
+  // Sonne läuft von Tick 23000 bis 13000 über den Himmel, der Mond von 13000 bis 23000
+  const prog = night ? (t - 13000) / 10000 : ((t + 1000) % 24000) / 14000
+  orb.textContent = night ? '🌙' : '☀️'
+  orb.style.left = (8 + prog * 84) + '%'
+  orb.style.top = (72 - Math.sin(prog * Math.PI) * 44) + '%'
+  $('wx').textContent = w.thunder ? '⛈️' : w.raining ? '🌧️' : ''
+  for (const b of $$('[data-weather]')) b.classList.toggle('on', b.dataset.weather === (w.thunder ? 'thunder' : w.raining ? 'rain' : 'clear'))
+  for (const b of $$('[data-diff]')) b.classList.toggle('on', b.dataset.diff === w.difficulty)
 }
 
+/* ---- TikTok-Bibliothek: echte Gifts zum Anklicken ---- */
+let library = { at: 0, gifts: [] }; let libMode = 'all'; let libPrice = null; let flashRule = null
+const LIB_MAX = 140 // mehr Karten auf einmal machen die Seite träge – Suche und Preisfilter grenzen ein
+function renderLib () {
+  const q = $('libFilter').value.trim().toLowerCase()
+  const box = $('lib'); box.textContent = ''
+  const withIcon = library.gifts.filter(g => g.icon).length
+  $('libInfo').textContent = `${library.gifts.length} Gifts`
+  let shown = 0; let total = 0
+  for (const g of library.gifts) {
+    if (q && !g.name.toLowerCase().includes(q) && !(g.alt || '').includes(q) && String(g.coins) !== q) continue
+    if (libMode === 'new' && g.ruleId) continue
+    if (libMode === 'have' && !g.ruleId) continue
+    if (libPrice && (g.coins < libPrice[0] || g.coins > libPrice[1])) continue
+    total++
+    if (shown >= LIB_MAX) continue
+    shown++
+    const pic = g.icon ? el('img', { src: g.icon, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' }) : el('span', { className: 'emo', textContent: g.emoji })
+    if (g.icon) pic.onerror = () => pic.replaceWith(el('span', { className: 'emo', textContent: g.emoji }))
+    const b = el('button', { className: g.ruleId ? 'have' : '', title: g.ruleId ? 'Schon belegt – zur Zeile springen' : 'Hinzufügen' }, pic, el('span', { className: 'nm', textContent: g.name }), el('span', { className: 'co', textContent: '🪙 ' + g.coins }))
+    b.onclick = () => {
+      if (g.ruleId) { $('giftFilter').value = ''; flashRule = g.ruleId; renderRules(); return }
+      flashRule = 'new:' + g.name; send({ type: 'GIFT_ADD_LIBRARY', key: g.key }, `${g.name} hinzugefügt`)
+    }
+    box.appendChild(b)
+  }
+  if (!box.childElementCount) box.appendChild(el('div', { className: 'hint', textContent: 'Kein Gift gefunden.' }))
+  $('libHint').textContent = `${total > shown ? `Zeige ${shown} von ${total} – Suche oder Preisfilter benutzen. ` : `${total} Gifts. `}Alle TikTok-Gifts für Deutschland mit Originalbild und Coin-Preis (${withIcon} mit Bild). Anklicken legt das Gift an oder springt zu seiner Zeile. Preise aktualisieren sich von selbst, sobald dein Live verbunden ist.`
+}
+$('libFilter').oninput = renderLib
+for (const b of $$('[data-price]')) b.onclick = () => { libPrice = b.dataset.price ? b.dataset.price.split('-').map(Number) : null; for (const x of $$('[data-price]')) x.classList.toggle('on', x === b); renderLib(); $('lib').scrollTop = 0 }
+for (const b of $$('[data-lib]')) b.onclick = () => { libMode = b.dataset.lib; for (const x of $$('[data-lib]')) x.classList.toggle('on', x === b); renderLib() }
+/** Legendentext passend zur Aktion: "3× Creeper" bzw. der Name der Aktion. */
+function autoLegend (action, mob, amount) {
+  if (action === 'spawn_mob') return `${amount > 1 ? amount + '× ' : ''}${(state.mobNames || {})[mob] || mob}`
+  const a = state.actions.find(x => x.id === action)
+  return a ? a.label.replace(/^\d+x /, '').replace(/ \(.*\)$/, '').replace(/^Boss: /, '') : ''
+}
+
+/* ---- Gift-Tabelle ---- */
 function renderRules () {
   const q = $('giftFilter').value.trim().toLowerCase()
   const tb = $('rules'); tb.textContent = ''
-  $('giftCount').textContent = `· ${state.rules.length} Gifts`
+  $('giftCount').textContent = `${state.rules.length} belegt · ${state.rules.filter(r => r.enabled && r.inLegend).length} im Overlay`
   for (const r of state.rules) {
     if (q && !r.giftName.toLowerCase().includes(q) && !String(r.coins).includes(q)) continue
     const up = patch => { Object.assign(r, patch); send({ type: 'GIFT_UPSERT', rule: { ...r, custom: r.custom } }) }
     const cb = (key, label) => { const c = el('input', { type: 'checkbox', checked: !!r[key] }); c.setAttribute('aria-label', label); c.onchange = () => up({ [key]: c.checked }); return c }
-    const num = (key, min, max, step, label) => { const c = el('input', { type: 'number', value: r[key], min, max, step }); c.setAttribute('aria-label', label); c.onchange = () => up({ [key]: Number(c.value) }); return c }
+    const num = (key, min, max, step, label) => { const c = el('input', { type: 'number', value: r[key], min, max, step }); c.setAttribute('aria-label', label); c.onchange = () => { const v = Number(c.value); if (key === 'amount' && r.action === 'spawn_mob') { up({ amount: v, legend: autoLegend('spawn_mob', r.mob || 'zombie', v) }); renderRules() } else up({ [key]: v }) }; return c }
     const sel = el('select'); sel.setAttribute('aria-label', 'Aktion')
     for (const a of state.actions) sel.appendChild(el('option', { value: a.id, textContent: a.label, selected: a.id === r.action }))
-    sel.onchange = () => { const a = state.actions.find(x => x.id === sel.value); up({ action: sel.value, legend: a ? a.label.replace(/^\d+x /, '').replace(/ \(.*\)$/, '') : r.legend }) }
+    const mobSel = el('select', { className: 'mobSel', hidden: r.action !== 'spawn_mob' }); mobSel.setAttribute('aria-label', 'Mob')
+    for (const m of state.mobs) mobSel.appendChild(el('option', { value: m, textContent: (state.mobNames || {})[m] || m, selected: m === (r.mob || 'zombie') }))
+    // Aktion oder Mob geändert -> Text im Overlay zieht automatisch mit
+    sel.onchange = () => { const mob = sel.value === 'spawn_mob' ? (r.mob || mobSel.value) : r.mob; up({ action: sel.value, mob, legend: autoLegend(sel.value, mob, r.amount) || r.legend }); renderRules() }
+    mobSel.onchange = () => { up({ mob: mobSel.value, legend: autoLegend('spawn_mob', mobSel.value, r.amount) }); renderRules() }
     const lg = el('input', { type: 'text', value: r.legend }); lg.setAttribute('aria-label', 'Legendentext'); lg.onchange = () => up({ legend: lg.value })
     const icon = r.icon ? el('img', { className: 'ico', src: r.icon, alt: '' }) : el('span', { className: 'emo', textContent: r.emoji })
     if (r.icon) { icon.referrerPolicy = 'no-referrer'; icon.onerror = () => icon.replaceWith(el('span', { className: 'emo', textContent: r.emoji })) }
     const nameCell = el('td', {}, r.giftName)
     if (r.custom) nameCell.appendChild(el('span', { className: 'tag', textContent: 'eigen' }))
     if (r.discovered) nameCell.appendChild(el('span', { className: 'tag', textContent: 'live entdeckt' }))
-    const test = el('button', { className: 'sm', textContent: 'Test' }); test.onclick = () => send({ type: 'SIM_GIFT', ruleId: r.id, user: $('simUser').value || 'TestUser', count: Number($('simN').value) || 1 })
+    const test = el('button', { className: 'sm', textContent: 'Test' }); test.onclick = () => send({ type: 'SIM_GIFT', ruleId: r.id, user: $('simUser').value || 'TestUser', count: Number($('simN').value) || 1 }, `Test: ${r.giftName}`)
     const act = el('td', {}, test)
     if (r.custom || r.discovered) { const del = el('button', { className: 'sm danger', textContent: '✕', title: 'Gift löschen' }); del.onclick = () => send({ type: 'GIFT_REMOVE', id: r.id }); act.append(' ', del) }
-    tb.appendChild(el('tr', {}, el('td', {}, cb('enabled', 'aktiv')), el('td', {}, cb('inLegend', 'in der Overlay-Legende')), el('td', {}, icon), nameCell, el('td', {}, num('coins', 0, 100000, 1, 'Coins')), el('td', {}, sel), el('td', {}, num('amount', 1, 20, 1, 'Menge')), el('td', {}, num('hpMult', 0.5, 10, 0.5, 'HP-Multiplikator')), el('td', {}, lg), act))
+    const tr = el('tr', {}, el('td', {}, cb('enabled', 'aktiv')), el('td', {}, cb('inLegend', 'in der Overlay-Legende')), el('td', {}, icon), nameCell, el('td', {}, num('coins', 0, 100000, 1, 'Coins')), el('td', {}, sel, mobSel), el('td', {}, num('amount', 1, 20, 1, 'Menge')), el('td', {}, num('hpMult', 0.5, 10, 0.5, 'HP-Multiplikator')), el('td', {}, lg), act)
+    tb.appendChild(tr)
+    if (flashRule && (flashRule === r.id || flashRule === 'new:' + r.giftName)) { flashRule = null; tr.className = 'flash'; setTimeout(() => tr.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50) }
   }
 }
 $('giftFilter').oninput = renderRules
 
+/* ---- Gesamtzustand ---- */
+const LOCK = { off: '', day: 'Immer Tag aktiv', night: 'Immer Nacht aktiv', freeze: 'Zeit angehalten' }
+function renderMc (mc, botOn) {
+  const run = mc.phase === 'running'
+  const txt = mc.phase === 'starting' ? 'startet …' : mc.phase === 'stopping' ? 'fährt herunter …' : run ? (mc.own ? 'läuft' : 'läuft (eigenes Fenster)') : botOn ? 'läuft (anderer PC)' : 'aus'
+  $('mcTxt').textContent = txt
+  chip($('cMc'), run || botOn ? 'ok' : mc.phase === 'stopped' ? 'bad' : 'warn', 'Minecraft ' + txt)
+  $('mcStart').disabled = mc.phase !== 'stopped' || !mc.installed
+  $('mcStop').disabled = !(run || botOn)
+  $('mcRestart').disabled = !(run && mc.own)
+  $('mcHint').textContent = mc.error || (!mc.installed ? 'Auf diesem PC ist noch kein Server eingerichtet. Einmal ALLES-STARTEN.bat ausführen.' : run && !mc.own ? 'Der Server läuft in einem eigenen Fenster. Stoppen geht von hier, Neustart erst, wenn er hier gestartet wurde.' : mc.phase === 'stopped' ? 'Starten dauert etwa 30–40 Sekunden. Der Bot verbindet sich danach von selbst.' : '')
+}
 function renderState (s) {
   const first = !state
   state = s
   renderStatus(s.status); renderTik(s.tiktok)
-  chip($('cTts'), s.tts.error ? 'warn' : 'ok', s.tts.error ? 'Stimme: offline (nur Untertitel)' : `Stimme ${s.config.voice.replace('de-DE-', '').replace('Neural', '')}`)
-  $('bStart').textContent = s.botRunning ? 'Stop' : 'Start'
+  chip($('cTts'), s.tts.error ? 'warn' : 'ok', s.tts.error ? 'Stimme offline' : `Stimme ${s.config.voice.replace('de-DE-', '').replace('Neural', '')}`)
+  $('cTts').title = s.tts.error ? 'Der Sprachdienst ist nicht erreichbar. Das Overlay zeigt nur Untertitel.' : ''
+  $('bStart').textContent = s.botRunning ? 'Bot stoppen' : 'Bot starten'
+  $('bStart').className = s.botRunning ? '' : 'pri'
   if (first) {
     // Server-Wert gewinnt; ist dort nichts gespeichert, wird der Browser-Wert übernommen und automatisch verbunden
     const saved = s.config.tiktokUsername || sanitize(store.get('tiktokUsername'))
     $('tikUser').value = saved
     if (saved) { store.set('tiktokUsername', saved); if (!s.config.tiktokUsername && !DEMO) send({ type: 'TIKTOK_CONNECT', username: saved }) }
     $('mcHost').value = s.config.minecraft.host; $('mcPort').value = s.config.minecraft.port; $('mcUser').value = s.config.minecraft.username; $('mcVer').value = s.config.minecraft.version; $('camPlayer').value = s.config.cameraPlayer || ''
-    const v = $('voice'); for (const n of s.config.voices) v.appendChild(el('option', { value: n, textContent: n.replace('de-DE-', '').replace('Neural', '') + ' (männlich)', selected: n === s.config.voice }))
+    const v = $('voice'); for (const n of s.config.voices) v.appendChild(el('option', { value: n, textContent: n.replace('de-DE-', '').replace('Neural', ''), selected: n === s.config.voice }))
     for (const x of s.goals) $('goalSel').appendChild(el('option', { value: x.id, textContent: x.label }))
-    for (const a of s.actions) if (a.id !== 'none') $('nAction').appendChild(el('option', { value: a.id, textContent: a.label }))
-    for (const m of s.mobs) $('nMob').appendChild(el('option', { value: m, textContent: m }))
+    for (const a of s.actions) if (a.id !== 'none') { $('nAction').appendChild(el('option', { value: a.id, textContent: a.label })); $('lkAction').appendChild(el('option', { value: a.id, textContent: a.label })) }
+    for (const m of s.mobs) $('lkMob').appendChild(el('option', { value: m, textContent: (s.mobNames || {})[m] || m }))
+    for (const m of s.mobs) $('nMob').appendChild(el('option', { value: m, textContent: (s.mobNames || {})[m] || m }))
     $('nAction').value = 'spawn_mob'
     $('log').textContent = ''; for (const e of s.logs) addLog(e)
     $('feed').textContent = ''; for (const f of s.feed || []) addFeed(f)
+    const rb = $('rulesBox')
+    for (const r of s.worldRules || []) {
+      const seg = el('div', { className: 'seg' })
+      for (const [val, label] of [[true, 'An'], [false, 'Aus']]) { const b = el('button', { textContent: label }); b.dataset.rule = r.id; b.dataset.val = val; b.onclick = () => send({ type: 'WORLD', op: 'rule', name: r.id, value: val }, `${r.label}: ${label}`); seg.appendChild(b) }
+      rb.appendChild(el('div', { className: 'switch' }, el('span', { textContent: r.label }), seg))
+    }
   }
   const key = JSON.stringify(s.rules)
   if (key !== rulesKey && !['INPUT', 'SELECT'].includes(document.activeElement.tagName) || first) { rulesKey = key; renderRules() }
-  for (const b of document.querySelectorAll('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
-  for (const b of document.querySelectorAll('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '16:9'))
+  for (const b of $$('[data-cam]')) b.classList.toggle('on', b.dataset.cam === s.config.cameraMode)
+  for (const b of $$('[data-fmt]')) b.classList.toggle('on', b.dataset.fmt === ((s.layout && s.layout.format) || '9:16'))
   $('dzBtn').classList.toggle('on', !!s.designer)
+  // Gelerntes
+  if (s.learning) {
+    const Lr = s.learning; const Wd = s.wisdom || { tips: [], unknown: [] }
+    const fill = (id, rows, empty) => { const box = $(id); box.textContent = ''; if (!rows.length) box.appendChild(el('div', { className: 'empty', textContent: empty })); for (const r of rows) box.appendChild(r) }
+    $('learnInfo').textContent = `${Lr.deaths} Tode ausgewertet · ${Lr.lessons.length} Lehren · ${Wd.tips.length} Tipps`
+    fill('lessons', Lr.lessons.map(l => el('div', {}, el('span', { textContent: l.text }))), 'Noch keine Lehren. Die erste entsteht beim ersten Tod.')
+    const P = Lr.policy; const why = k => (P.reasons[k] ? ` (${P.reasons[k]})` : '')
+    const rows = []
+    if (P.retreatHp !== 12) rows.push(`Zieht sich schon bei ${P.retreatHp / 2} Herzen zurück statt bei 6${why('retreatHp')}`)
+    if (P.funnelAt !== 4) rows.push(`Weicht schon bei ${P.funnelAt} Gegnern zurück${why('funnelAt')}`)
+    if (P.creeperCaution) rows.push(`Creeper: ${P.creeperCaution >= 2 ? 'nur treffen-und-weg, im Gang einmauern' : 'mehr Abstand'}${why('creeperCaution')}`)
+    if (P.avoid.length) rows.push(`Weicht aus: ${P.avoid.join(', ')}${why('avoid')}`)
+    if (P.eatAt !== 14) rows.push(`Isst früher und nimmt ${P.foodReserve} Essen mit${why('eatAt') || why('foodReserve')}`)
+    if (P.caveNeedsIron) rows.push(`Tiefe Höhle erst mit Eisenausrüstung${why('caveNeedsIron')}`)
+    if (P.caveNeedsWater) rows.push(`Tiefe Mine erst mit Wassereimer${why('caveNeedsWater')}`)
+    if (P.nightShelter) rows.push(`Bunkert sich nachts ohne Bett ein${why('nightShelter')}`)
+    if (P.pillarWhenSwarmed) rows.push(`Baut sich bei Übermacht hoch${why('pillarWhenSwarmed')}`)
+    if (P.maxDrop !== 3) rows.push(`Springt höchstens ${P.maxDrop} Blöcke tief${why('maxDrop')}`)
+    if (P.shieldFirst) rows.push(`Baut das Schild zuerst${why('shieldFirst')}`)
+    if (P.torchStock !== 6) rows.push(`Nimmt ${P.torchStock} Fackeln mit${why('torchStock')}`)
+    fill('policyBox', rows.map(t => el('div', {}, el('span', { textContent: t }))), 'Spielt noch nach den Grundregeln.')
+    fill('tipsBox', [...Wd.tips.map(t => {
+      const on = el('input', { type: 'checkbox', checked: t.enabled, disabled: t.already }); on.setAttribute('aria-label', 'Tipp aktiv'); on.style.flex = 'none'
+      on.onchange = () => send({ type: 'WISDOM_TOGGLE', id: t.id, enabled: on.checked })
+      const del = el('button', { className: 'sm danger', textContent: '✕', title: 'Tipp löschen' }); del.onclick = () => send({ type: 'WISDOM_REMOVE', id: t.id })
+      return el('div', {}, on, el('span', { style: 'flex:1' }, el('b', { textContent: t.by }), `: ${t.label}`, el('small', { textContent: (t.already ? 'Macht er schon. ' : t.effect + ' ') + (t.count > 1 ? `${t.count}× genannt. ` : '') + (t.applied ? `${t.applied}× angewandt.` : '') })), del)
+    }), ...Wd.unknown.slice(0, 4).map(u => el('div', { className: 'empty' }, el('span', {}, el('b', { textContent: u.by }), `: ${u.text}`, el('small', { textContent: 'Nicht verstanden – nur notiert.' }))))], 'Noch keine Tipps. Beispiel im Chat: „Nutz Goldrüstung im Nether“.')
+    fill('stratBox', Lr.strategies.map(x => el('div', {}, el('span', { textContent: `${x.action}: ${x.label}` }), el('b', { textContent: `${x.wins} von ${x.tries} geholfen` }))), 'Noch keine. Nach drei Fehlschlägen hintereinander probiert er einen Ausweg.')
+  }
+  // Sprachmodell
+  const G = s.llm
+  if (G) {
+    const sel = $('llmModel')
+    if (!sel.childElementCount) for (const m of G.models) sel.appendChild(el('option', { value: m.id, textContent: m.label }))
+    if (document.activeElement !== sel) sel.value = G.model
+    for (const b of $$('[data-llmon]')) b.classList.toggle('on', (b.dataset.llmon === '1') === G.enabled)
+    if (document.activeElement !== $('llmBudget')) $('llmBudget').value = G.budgetUsd
+    if (document.activeElement !== $('llmRate')) $('llmRate').value = G.maxPerHour
+    $('llmMono').checked = G.monologues
+    $('llmKey').placeholder = G.hasKey ? 'Schlüssel ist hinterlegt (zum Ändern neu eingeben)' : 'API-Schlüssel (sk-ant-…)'
+    $('llmKeyDel').hidden = !G.hasKey
+    $('llmInfo').textContent = !G.hasKey ? 'kein Schlüssel' : !G.enabled ? 'aus' : G.budgetHit ? 'Budget erreicht' : 'aktiv'
+    $('llmState').textContent = G.lastError ? 'Problem: ' + G.lastError : `${G.ok} Antworten${G.failed ? ', ' + G.failed + ' mit festem Text' : ''}${G.avgMs ? ' · Ø ' + (G.avgMs / 1000).toFixed(1) + ' s' : ''}`
+    $('llmCost').textContent = `${G.costUsd.toFixed(3)} $ von ${G.budgetUsd} $`
+    $('llmBar').style.width = Math.min(100, G.costUsd / G.budgetUsd * 100) + '%'
+  }
+  // Like-Ziel
+  const L = s.likes
+  if (L) {
+    const c = L.config; const busy = id => document.activeElement === $(id)
+    for (const b of $$('[data-lkon]')) b.classList.toggle('on', (b.dataset.lkon === '1') === c.enabled)
+    for (const b of $$('[data-every]')) b.classList.toggle('on', Number(b.dataset.every) === c.every)
+    if (!busy('lkEvery')) $('lkEvery').value = c.every
+    if (!busy('lkAction')) $('lkAction').value = c.action
+    if (!busy('lkMob')) $('lkMob').value = c.mob
+    $('lkMob').hidden = c.action !== 'spawn_mob'
+    if (!busy('lkAmount')) $('lkAmount').value = c.amount
+    $('lkEsc').checked = c.escalate
+    $('lkInfo').textContent = c.enabled ? `${L.total} Likes in diesem Stream · ${L.level} Ziele geknackt` : 'ausgeschaltet'
+    $('lkState').textContent = c.enabled ? `${L.progress} / ${L.every} Likes${L.last ? ' · zuletzt: ' + L.last : ''}` : 'Like-Ziel ist aus'
+    $('lkNext').textContent = c.enabled ? '➜ ' + L.legend : ''
+    $('lkBarFill').style.width = c.enabled ? Math.min(100, L.progress / L.every * 100) + '%' : '0'
+  }
+  // Welt
+  const w = s.world || { timeLock: 'off', rules: {} }
+  for (const b of $$('[data-lock]')) b.classList.toggle('on', b.dataset.lock === w.timeLock)
+  $('lockTxt').textContent = LOCK[w.timeLock] || ''
+  for (const b of $$('[data-rule]')) b.classList.toggle('on', String(w.rules[b.dataset.rule]) === b.dataset.val)
+  renderMc(s.mc || { phase: 'stopped', installed: false }, s.status.connected)
+  // Handy
+  const lan = s.lan || { urls: [] }
+  $('lanQr').hidden = !lan.qr; if (lan.qr) $('lanQr').src = lan.qr
+  $('lanUrl').textContent = lan.urls[0] || ''
+  $('lanCopy').hidden = !lan.urls[0]
+  $('lanTxt').textContent = lan.urls[0] ? 'QR-Code mit der Handy-Kamera scannen. Handy und PC müssen im selben WLAN sein. Fragt Windows beim ersten Mal nach der Firewall, „Zugriff zulassen“ wählen.' : 'Kein WLAN/Netzwerk gefunden. Verbinde den PC mit deinem Router.'
   const tn = s.tunnel
   $('qr').hidden = !tn.qr; if (tn.qr) $('qr').src = tn.qr
-  $('tunUrl').textContent = tn.url || ''
-  $('tunBtn').textContent = tn.active ? 'Tunnel stoppen' : tn.starting ? 'Startet …' : 'Cloud-Tunnel starten'
-  $('tunHint').textContent = tn.error ? tn.error : tn.active ? `Aktiv über ${tn.provider}. QR-Code mit dem Handy scannen.` : 'Öffentliche HTTPS-URL mit geheimem Schlüssel. QR scannen – funktioniert über 5G.'
+  $('tunLinks').hidden = !tn.active
+  $('tunUrl').textContent = tn.base ? tn.base + '/mobile.html' : ''
+  $('tunDash').textContent = tn.base ? tn.base + '/' : ''
+  const rm = s.remote || {}
+  for (const b of $$('[data-auto]')) b.classList.toggle('on', (b.dataset.auto === '1') === !!rm.autoTunnel)
+  for (const b of $$('[data-push]')) b.classList.toggle('on', (b.dataset.push === '1') === !!rm.notify)
+  $('pushBox').hidden = !rm.notify
+  $('pushTopic').textContent = rm.notifyTopic || ''
+  $('tunBtn').textContent = tn.active ? 'Internet-Zugang stoppen' : tn.starting ? 'Startet …' : 'Internet-Zugang starten'
+  $('tunHint').textContent = tn.error ? tn.error : tn.active ? `Aktiv über ${tn.provider}. Die Adresse ändert sich bei jedem Start – am einfachsten per Push aufs Handy schicken lassen.` : 'Öffnet eine verschlüsselte Adresse, über die du Dashboard und Fernbedienung von überall erreichst.'
 }
 
 function trim (box, max) { while (box.childElementCount > max) box.firstChild.remove() }
 function addLog (e) {
   const box = $('log'); const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30
-  box.appendChild(el('div', { className: e.level, textContent: new Date(e.at).toLocaleTimeString('de-DE') + '  ' + e.message })); trim(box, 150)
+  box.appendChild(el('div', { className: e.level, textContent: new Date(e.at).toLocaleTimeString('de-DE') + '  ' + e.message })); trim(box, 200)
   if (stick) box.scrollTop = box.scrollHeight
 }
 function addFeed (f) {
@@ -295,92 +795,193 @@ function onMsg (m) {
   if (m.type === 'STATE') renderState(m)
   else if (m.type === 'STATUS') { if (state) state.status = m.status; renderStatus(m.status) } else if (m.type === 'LOG') addLog(m.entry)
   else if (m.type === 'FEED') addFeed(m.item)
+  else if (m.type === 'GIFT_LIBRARY') { library = m; renderLib() }
   else if (m.type === 'TTS') addLog({ at: Date.now(), level: 'info', message: `🎙 (${m.emotion}) ${m.text}` })
+  else if (m.type === 'DENIED') { ws.onclose = null; chip($('cWs'), 'bad', 'Kein Zugriff'); $('loginTxt').textContent = m.reason + '. Den Zugangscode siehst du am PC im Dashboard (Reiter Stream).'; $('login').hidden = false; $('loginPw').focus() }
 }
 
+/* ---- Knöpfe ---- */
+const txt = b => b.textContent.trim().slice(0, 30)
 $('bStart').onclick = () => send({ type: 'BOT', cmd: state && state.botRunning ? 'stop' : 'start' })
 $('bPause').onclick = () => send({ type: 'BOT', cmd: state && state.status.paused ? 'resume' : 'pause' })
-$('bUnstuck').onclick = () => send({ type: 'BOT', cmd: 'unstuck' })
-$('bCorpse').onclick = () => send({ type: 'BOT', cmd: 'corpse' })
-$('bSleep').onclick = () => send({ type: 'BOT', cmd: 'goal', goal: 'sleep' })
-$('bRespawn').onclick = () => send({ type: 'BOT', cmd: 'respawn' })
-$('goalBtn').onclick = () => send({ type: 'BOT', cmd: 'goal', goal: $('goalSel').value })
-$('giveBtn').onclick = () => send({ type: 'BOT', cmd: 'give', item: $('giveItem').value.trim(), count: Number($('giveN').value) || 1 })
-$('sayBtn').onclick = () => { if ($('sayTxt').value.trim()) { send({ type: 'SAY', text: $('sayTxt').value, emotion: $('sayEmo').value }); $('sayTxt').value = '' } }
-$('cfgBtn').onclick = () => send({ type: 'CONFIG_SET', minecraft: { host: $('mcHost').value, port: Number($('mcPort').value), username: $('mcUser').value, version: $('mcVer').value }, voice: $('voice').value })
-$('camPlayer').onchange = () => send({ type: 'CONFIG_SET', cameraPlayer: $('camPlayer').value.trim() })
-for (const b of document.querySelectorAll('#ctl [data-mode]')) b.onclick = () => send({ type: 'MODE', mode: b.dataset.mode })
-for (const b of document.querySelectorAll('#ctl [data-cmd]')) b.onclick = () => send({ type: 'BOT', cmd: b.dataset.cmd })
-for (const b of document.querySelectorAll('#ctl [data-goal]')) b.onclick = () => send({ type: 'BOT', cmd: 'goal', goal: b.dataset.goal })
-for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => send({ type: 'CAMERA', mode: b.dataset.cam })
-for (const b of document.querySelectorAll('[data-fmt]')) b.onclick = () => send({ type: 'LAYOUT_FORMAT', format: b.dataset.fmt })
+confirmTap($('bRespawn'), () => send({ type: 'BOT', cmd: 'respawn' }, 'Respawn'))
+$('goalBtn').onclick = () => send({ type: 'BOT', cmd: 'goal', goal: $('goalSel').value }, 'Ziel gesetzt')
+$('giveBtn').onclick = () => { const it = $('giveItem').value.trim(); if (it) send({ type: 'BOT', cmd: 'give', item: it, count: Number($('giveN').value) || 1 }, 'Gegeben: ' + it) }
+for (const b of $$('[data-give]')) b.onclick = () => { const [item, n] = b.dataset.give.split(':'); send({ type: 'BOT', cmd: 'give', item, count: Number(n) }, txt(b)) }
+$('sayBtn').onclick = () => { if ($('sayTxt').value.trim()) { send({ type: 'SAY', text: $('sayTxt').value, emotion: $('sayEmo').value }, 'Wird gesprochen'); $('sayTxt').value = '' } }
+$('voiceOn').onchange = () => send({ type: 'VOICE_ENABLED', enabled: $('voiceOn').checked }, $('voiceOn').checked ? 'Stimme an' : 'Stimme aus')
+$('voice').onchange = () => send({ type: 'CONFIG_SET', voice: $('voice').value }, 'Stimme gewechselt')
+$('voiceTest').onclick = () => send({ type: 'SAY', text: 'So Chat, hört ihr mich? Dann kann es ja losgehen!', emotion: 'hype' }, 'Probe läuft im Overlay')
+$('cfgBtn').onclick = () => send({ type: 'CONFIG_SET', minecraft: { host: $('mcHost').value, port: Number($('mcPort').value), username: $('mcUser').value, version: $('mcVer').value } }, 'Gespeichert')
+$('camPlayer').onchange = () => send({ type: 'CONFIG_SET', cameraPlayer: $('camPlayer').value.trim() }, 'Gespeichert')
+for (const b of $$('#ctl [data-mode]')) b.onclick = () => send({ type: 'MODE', mode: b.dataset.mode }, b.querySelector('b').textContent)
+for (const b of $$('#ctl [data-cmd]')) b.onclick = () => send({ type: 'BOT', cmd: b.dataset.cmd }, (b.querySelector('b') || b).textContent.trim())
+for (const b of $$('#ctl [data-goal]')) b.onclick = () => send({ type: 'BOT', cmd: 'goal', goal: b.dataset.goal }, txt(b))
+for (const b of $$('[data-cam]')) b.onclick = () => send({ type: 'CAMERA', mode: b.dataset.cam })
+for (const b of $$('[data-fmt]')) b.onclick = () => send({ type: 'LAYOUT_FORMAT', format: b.dataset.fmt })
 $('dzBtn').onclick = () => send({ type: 'DESIGNER', on: !(state && state.designer) })
-$('dzReset').onclick = () => send({ type: 'LAYOUT_RESET' })
+$('ovOpen').onclick = () => open('studio-overlay.html', '_blank', 'noopener')
+confirmTap($('dzReset'), () => send({ type: 'LAYOUT_RESET' }, 'Layout zurückgesetzt'))
 $('tunBtn').onclick = () => send({ type: state && state.tunnel.active ? 'TUNNEL_STOP' : 'TUNNEL_START' })
-$('resetRules').onclick = () => send({ type: 'GIFT_RULES_RESET' })
+const copy = (t, msg) => navigator.clipboard && navigator.clipboard.writeText(t).then(() => toast(msg), () => toast('Kopieren nicht möglich'))
+$('tunCopy').onclick = () => copy($('tunDash').textContent, 'Link kopiert')
+for (const b of $$('[data-auto]')) b.onclick = () => send({ type: 'REMOTE_SET', remote: { autoTunnel: b.dataset.auto === '1' } }, b.dataset.auto === '1' ? 'Startet ab jetzt automatisch' : 'Automatik aus')
+for (const b of $$('[data-push]')) b.onclick = () => send({ type: 'REMOTE_SET', remote: { notify: b.dataset.push === '1' } }, b.dataset.push === '1' ? 'Push an' : 'Push aus')
+$('pushCopy').onclick = () => copy($('pushTopic').textContent, 'Thema kopiert')
+$('pushTest').onclick = () => send({ type: 'REMOTE_TEST' }, 'Test wird gesendet')
+$('pwSet').onclick = () => { const v = $('pwNew').value.trim(); if (v.length < 8) return toast('Mindestens 8 Zeichen'); send({ type: 'REMOTE_SET', remote: { password: v } }, 'Zugangscode geändert'); $('pwNew').value = '' }
+$('pwShow').onclick = () => { const u = state && state.lan && state.lan.urls[0]; const k = u ? new URL(u).searchParams.get('k') : null; $('pwHint').textContent = k ? 'Aktueller Zugangscode: ' + k : 'Der Code wird nur am PC selbst angezeigt.' }
+// Stream-Ansicht (Overlay live, auf Wunsch mit Ton)
+let viewSound = false
+const viewLoad = () => { const v = $('view'); v.hidden = false; v.src = 'studio-overlay.html?format=9:16' + (viewSound ? '' : '&mute=1') + (DEMO ? '#demo' : ''); $('viewBtn').textContent = 'Ausblenden' }
+$('viewBtn').onclick = () => { const v = $('view'); if (v.hidden) viewLoad(); else { v.hidden = true; v.removeAttribute('src'); $('viewBtn').textContent = 'Anzeigen' } }
+$('viewSound').onclick = () => { viewSound = !viewSound; $('viewSound').textContent = viewSound ? '🔊 Ton an' : '🔇 Ton aus'; $('viewSound').classList.toggle('on', viewSound); viewLoad() }
+$('viewTik').onclick = () => { const n = state && state.config.tiktokUsername; if (!n) return toast('Erst im Reiter Stream den TikTok-Namen eintragen'); open('https://www.tiktok.com/@' + encodeURIComponent(n) + '/live', '_blank', 'noopener') }
+$('lanCopy').onclick = () => navigator.clipboard && navigator.clipboard.writeText($('lanUrl').textContent).then(() => toast('Link kopiert'), () => toast('Kopieren nicht möglich'))
+confirmTap($('resetRules'), () => send({ type: 'GIFT_RULES_RESET' }, 'Gifts zurückgesetzt'))
+$('pvReload').onclick = () => { $('pv').src = $('pv').src }
+$('logClear').onclick = () => { $('log').textContent = '' }
+// Welt
+for (const b of $$('[data-time]')) b.onclick = () => send({ type: 'WORLD', op: 'time', value: b.dataset.time }, txt(b))
+for (const b of $$('[data-lock]')) b.onclick = () => send({ type: 'WORLD', op: 'timelock', value: b.dataset.lock }, txt(b))
+for (const b of $$('[data-weather]')) b.onclick = () => send({ type: 'WORLD', op: 'weather', value: b.dataset.weather }, txt(b))
+for (const b of $$('[data-diff]')) b.onclick = () => send({ type: 'WORLD', op: 'difficulty', value: b.dataset.diff }, txt(b))
+$('clearMobs').onclick = () => send({ type: 'WORLD', op: 'clear_mobs' }, 'Monster entfernt')
+$('saveWorld').onclick = () => send({ type: 'WORLD', op: 'save' }, 'Welt wird gespeichert')
+$('mcStart').onclick = () => send({ type: 'MC_SERVER', cmd: 'start' }, 'Server startet …')
+confirmTap($('mcRestart'), () => send({ type: 'MC_SERVER', cmd: 'restart' }, 'Server startet neu …'))
+confirmTap($('mcStop'), () => send({ type: 'MC_SERVER', cmd: 'stop' }, 'Server wird gestoppt …'))
+const sendCmd = () => { const t = $('cmdTxt').value.trim(); if (t && send({ type: 'MC_COMMAND', text: t }, 'Befehl gesendet')) $('cmdTxt').value = '' }
+$('cmdBtn').onclick = sendCmd
+confirmTap($('learnReset'), () => send({ type: 'LEARN_RESET' }, 'Fehler-Gedächtnis gelöscht'))
+confirmTap($('wisdomReset'), () => send({ type: 'WISDOM_RESET' }, 'Chat-Tipps gelöscht'))
+// Sprachmodell
+const setLlm = (patch, label) => send({ type: 'LLM_SET', llm: patch }, label)
+for (const b of $$('[data-llmon]')) b.onclick = () => setLlm({ enabled: b.dataset.llmon === '1' }, b.dataset.llmon === '1' ? 'Sprachmodell an' : 'Sprachmodell aus')
+$('llmModel').onchange = () => setLlm({ model: $('llmModel').value }, 'Modell gewechselt')
+$('llmBudget').onchange = () => setLlm({ budgetUsd: Number($('llmBudget').value) }, 'Gespeichert')
+$('llmRate').onchange = () => setLlm({ maxPerHour: Number($('llmRate').value) }, 'Gespeichert')
+$('llmMono').onchange = () => setLlm({ monologues: $('llmMono').checked }, 'Gespeichert')
+$('llmKeyBtn').onclick = () => { const k = $('llmKey').value.trim(); if (!k) return $('llmKey').focus(); setLlm({ apiKey: k, enabled: true }, 'Schlüssel gespeichert'); $('llmKey').value = '' }
+confirmTap($('llmKeyDel'), () => setLlm({ apiKey: '', enabled: false }, 'Schlüssel gelöscht'))
+$('llmTest').onclick = () => send({ type: 'LLM_TEST' }, 'Test läuft – Ergebnis im Protokoll')
+$('llmReset').onclick = () => send({ type: 'LLM_RESET' }, 'Zähler zurückgesetzt')
+// Like-Ziel
+const setLikes = (patch, label) => send({ type: 'LIKES_SET', likes: patch }, label)
+for (const b of $$('[data-lkon]')) b.onclick = () => setLikes({ enabled: b.dataset.lkon === '1' }, b.dataset.lkon === '1' ? 'Like-Ziel an' : 'Like-Ziel aus')
+for (const b of $$('[data-every]')) b.onclick = () => setLikes({ every: Number(b.dataset.every) }, `Alle ${b.dataset.every} Likes`)
+$('lkEvery').onchange = () => setLikes({ every: Number($('lkEvery').value) }, 'Gespeichert')
+$('lkAction').onchange = () => setLikes({ action: $('lkAction').value }, 'Gespeichert')
+$('lkMob').onchange = () => setLikes({ mob: $('lkMob').value }, 'Gespeichert')
+$('lkAmount').onchange = () => setLikes({ amount: Number($('lkAmount').value) }, 'Gespeichert')
+$('lkEsc').onchange = () => setLikes({ escalate: $('lkEsc').checked }, 'Gespeichert')
+for (const b of $$('[data-simlike]')) b.onclick = () => { const [user, n] = b.dataset.simlike.split(':'); send({ type: 'SIM_LIKE', user, count: Number(n) }) }
+confirmTap($('lkReset'), () => send({ type: 'LIKES_RESET' }, 'Zähler zurückgesetzt'))
+// Gifts
 $('nAction').onchange = () => { $('nMobWrap').hidden = $('nAction').value !== 'spawn_mob' }
 $('nAdd').onclick = () => {
   const name = $('nName').value.trim()
   if (!name) { $('nName').focus(); return }
   const a = state.actions.find(x => x.id === $('nAction').value)
-  send({ type: 'GIFT_UPSERT', rule: { giftName: name, coins: Number($('nCoins').value) || 1, emoji: $('nEmoji').value || '🎁', icon: $('nIcon').value.trim() || null, action: $('nAction').value, mob: $('nMob').value, amount: Number($('nAmount').value) || 1, hpMult: Number($('nHp').value) || 1, legend: $('nAction').value === 'spawn_mob' ? `${Number($('nAmount').value) || 1}× ${$('nMob').value}` : a.label, inLegend: true, enabled: true, custom: true } })
+  send({ type: 'GIFT_UPSERT', rule: { giftName: name, coins: Number($('nCoins').value) || 1, emoji: $('nEmoji').value || '🎁', icon: $('nIcon').value.trim() || null, action: $('nAction').value, mob: $('nMob').value, amount: Number($('nAmount').value) || 1, hpMult: Number($('nHp').value) || 1, legend: autoLegend($('nAction').value, $('nMob').value, Number($('nAmount').value) || 1) || a.label, inLegend: true, enabled: true, custom: true } }, 'Gift hinzugefügt')
   $('nName').value = ''; $('nIcon').value = ''
 }
 const chat = t => send({ type: 'SIM_CHAT', user: $('simUser').value || 'TestUser', text: t })
 $('chatBtn').onclick = () => { if ($('chatTxt').value.trim()) { chat($('chatTxt').value); $('chatTxt').value = '' } }
-for (const x of [$('chatTxt'), $('sayTxt')]) x.addEventListener('keydown', e => { if (e.key === 'Enter') (x === $('chatTxt') ? $('chatBtn') : $('sayBtn')).click() })
+for (const [inp, btn] of [['chatTxt', 'chatBtn'], ['sayTxt', 'sayBtn'], ['cmdTxt', 'cmdBtn'], ['giveItem', 'giveBtn']]) $(inp).addEventListener('keydown', e => { if (e.key === 'Enter') $(btn).click() })
 for (const q of ['Was machst du gerade?', "Wie geht's?", 'Bau ein Haus', 'Geh schlafen', 'Hol deinen Loot', 'Geh Diamanten farmen', 'Geh in den Nether']) { const b = el('button', { className: 'sm', textContent: q }); b.onclick = () => chat(q); $('chatQuick').appendChild(b) }
 
+$('loginForm').onsubmit = e => { e.preventDefault(); const v = $('loginPw').value.trim(); if (!v) return; store.set('remoteKey', v); $('loginPw').value = ''; $('login').hidden = true; connect() }
 function connect () {
-  const k = new URLSearchParams(location.search).get('k')
+  let k = new URLSearchParams(location.search).get('k')
+  if (k) store.set('remoteKey', k); else k = store.get('remoteKey')
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?role=dashboard${k ? '&k=' + encodeURIComponent(k) : ''}`)
-  ws.onopen = () => chip($('cWs'), 'ok', 'Server verbunden')
+  ws.onopen = () => chip($('cWs'), 'ok', 'Verbunden')
   ws.onmessage = e => { try { onMsg(JSON.parse(e.data)) } catch (_) {} }
-  ws.onclose = () => { chip($('cWs'), 'bad', 'Server getrennt'); setTimeout(connect, 1500) }
+  ws.onclose = () => { chip($('cWs'), 'bad', 'Programm getrennt'); setTimeout(connect, 1500) }
 }
 
-/* ---- Vorschau ohne Server (#demo): simuliert Watchdog, Gift-Builder und Live-Feed lokal ---- */
+/* ---- Vorschau ohne Server (#demo): simuliert die wichtigsten Abläufe lokal ---- */
 let demoState = null; let demoT = null
 function demoSend (m) {
-  const s = demoState; const tk = s.tiktok
+  const s = demoState; const tk = s.tiktok; const st = s.status
   const badge = () => { tk.badge = tk.phase === 'live' ? `🟢 LIVE VERBUNDEN (@${tk.username} | Zuschauer: ${tk.viewers})` : tk.phase === 'waiting' ? `🟡 Warte auf Live-Start von @${tk.username} (Prüfe alle 8s)...` : '⚪ Nicht verbunden' }
-  if (m.type === 'TIKTOK_CONNECT') {
-    clearTimeout(demoT)
-    if (!m.username) return
-    Object.assign(tk, { phase: 'waiting', username: m.username, diagnostic: 'Stream ist noch nicht live', viewers: 0 }); s.config.tiktokUsername = m.username; badge(); onMsg(s)
-    demoT = setTimeout(() => { Object.assign(tk, { phase: 'live', engine: 'A', diagnostic: null, viewers: 128 }); badge(); onMsg(s); addLog({ at: Date.now(), level: 'info', message: `TikTok LIVE verbunden: @${tk.username} (Engine A)` }); onMsg({ type: 'TTS', emotion: 'hype', text: 'So Chat, die Verbindung steht! Wir sind live drin – wehe, ihr eskaliert heute wieder mit den Rosen!' }) }, 4000)
-  } else if (m.type === 'TIKTOK_DISCONNECT') { clearTimeout(demoT); Object.assign(tk, { phase: 'idle', diagnostic: null }); badge(); onMsg(s) } else if (m.type === 'GIFT_UPSERT') {
-    const id = m.rule.id || 'custom_' + m.rule.giftName.toLowerCase().replace(/[^a-z0-9]+/g, '_')
-    const i = s.rules.findIndex(r => r.id === id)
-    if (i >= 0) Object.assign(s.rules[i], m.rule); else s.rules.push({ ...m.rule, id, match: [m.rule.giftName.toLowerCase()] })
-    onMsg(s)
-  } else if (m.type === 'GIFT_REMOVE') { s.rules = s.rules.filter(r => r.id !== m.id); onMsg(s) } else if (m.type === 'SIM_GIFT') {
-    const r = s.rules.find(x => x.id === m.ruleId); addFeed({ kind: 'gift', user: m.user, emoji: r.emoji, text: `${r.giftName} x${m.count} (${r.coins} Coins) → ${r.legend}` })
-  } else if (m.type === 'SIM_CHAT') addFeed({ kind: 'chat', user: m.user, text: m.text, goal: /haus/i.test(m.text) ? 'house' : /nether/i.test(m.text) ? 'nether' : /schlaf/i.test(m.text) ? 'sleep' : /loot/i.test(m.text) ? 'corpse' : /diamant/i.test(m.text) ? 'diamonds' : null })
-  else if (m.type === 'MODE') { s.status.mode = m.mode; if (m.mode === 'cave') { s.status.underground = true; s.status.pos.y = 14; s.status.goal = 'Höhlen-Trip: Erze holen' } else if (m.mode === 'surface') { s.status.underground = false; s.status.pos.y = 66 } onMsg(s) } else if (m.type === 'BOT' && m.cmd === 'abort_cave') { Object.assign(s.status, { mode: 'surface', underground: false, goal: 'Raus an die Oberfläche' }); s.status.pos.y = 66; onMsg(s); onMsg({ type: 'TTS', emotion: 'hype', text: 'Alles klar, Höhle abgebrochen! Wir sind wieder oben an der frischen Luft, Chat!' }) } else if (m.type === 'BOT' && m.cmd === 'rescue') { s.status.inLiquid = false; onMsg(s); onMsg({ type: 'TTS', emotion: 'hype', text: 'Puh, gerettet! Wieder auf festem, trockenem Boden.' }) }
-  else if (m.type === 'CAMERA') { s.config.cameraMode = m.mode; onMsg(s) } else if (m.type === 'DESIGNER') { s.designer = m.on; onMsg(s) } else if (m.type === 'LAYOUT_FORMAT') { s.layout = { format: m.format }; onMsg(s) } else addLog({ at: Date.now(), level: 'info', message: 'Vorschau: ' + JSON.stringify(m) })
+  switch (m.type) {
+    case 'TIKTOK_CONNECT':
+      clearTimeout(demoT)
+      if (!m.username) return
+      Object.assign(tk, { phase: 'waiting', username: m.username, diagnostic: 'Stream ist noch nicht live', viewers: 0 }); s.config.tiktokUsername = m.username; badge()
+      demoT = setTimeout(() => { Object.assign(tk, { phase: 'live', engine: 'A', diagnostic: null, viewers: 128 }); badge(); onMsg(s); addLog({ at: Date.now(), level: 'info', message: `TikTok LIVE verbunden: @${tk.username}` }) }, 3000)
+      break
+    case 'TIKTOK_DISCONNECT': clearTimeout(demoT); Object.assign(tk, { phase: 'idle', diagnostic: null }); badge(); break
+    case 'GIFT_UPSERT': {
+      const id = m.rule.id || 'custom_' + m.rule.giftName.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+      const i = s.rules.findIndex(r => r.id === id)
+      if (i >= 0) Object.assign(s.rules[i], m.rule); else s.rules.push({ ...m.rule, id, match: [m.rule.giftName.toLowerCase()] })
+      break
+    }
+    case 'GIFT_REMOVE': s.rules = s.rules.filter(r => r.id !== m.id); break
+    case 'GIFT_ADD_LIBRARY': { const g = library.gifts.find(x => x.key === m.key); if (!g || g.ruleId) break; s.rules.push({ id: 'tt_' + g.key, giftName: g.name, match: [g.key], coins: g.coins, emoji: g.emoji, icon: null, action: 'zombie_fast', mob: null, amount: 1, hpMult: 1, legend: 'Zombie', enabled: true, inLegend: true, custom: false }); g.ruleId = 'tt_' + g.key; renderLib(); break }
+    case 'SIM_GIFT': { const r = s.rules.find(x => x.id === m.ruleId); addFeed({ kind: 'gift', user: m.user, emoji: r.emoji, text: `${r.giftName} x${m.count} (${r.coins} Coins) → ${r.legend}` }); return }
+    case 'SIM_CHAT': addFeed({ kind: 'chat', user: m.user, text: m.text, goal: /haus/i.test(m.text) ? 'house' : /nether/i.test(m.text) ? 'nether' : /schlaf/i.test(m.text) ? 'sleep' : /loot/i.test(m.text) ? 'corpse' : /diamant/i.test(m.text) ? 'diamonds' : null }); return
+    case 'MODE': st.mode = m.mode; if (m.mode === 'cave') { st.underground = true; st.pos.y = 14; st.goal = 'Höhlen-Trip: Erze holen' } else { st.underground = false; st.pos.y = 66; st.goal = m.mode === 'fight' ? 'Kampfbereit' : 'Holz hacken' } break
+    case 'BOT':
+      if (m.cmd === 'abort_cave') { Object.assign(st, { mode: 'surface', underground: false, goal: 'Raus an die Oberfläche' }); st.pos.y = 66 } else if (m.cmd === 'pause' || m.cmd === 'resume') st.paused = m.cmd === 'pause'
+      else if (m.cmd === 'start' || m.cmd === 'stop') s.botRunning = m.cmd === 'start'
+      else addLog({ at: Date.now(), level: 'info', message: 'Vorschau: ' + JSON.stringify(m) })
+      break
+    case 'WORLD':
+      if (m.op === 'time') st.world.time = { sunrise: 23000, day: 1000, noon: 6000, sunset: 12000, night: 13000, midnight: 18000 }[m.value]
+      else if (m.op === 'timelock') { s.world.timeLock = m.value; if (m.value === 'day') st.world.time = 6000; if (m.value === 'night') st.world.time = 18000 } else if (m.op === 'weather') { st.world.raining = m.value !== 'clear'; st.world.thunder = m.value === 'thunder' } else if (m.op === 'difficulty') st.world.difficulty = m.value
+      else if (m.op === 'rule') s.world.rules[m.name] = m.value
+      break
+    case 'MC_SERVER':
+      if (m.cmd === 'stop') { s.mc.phase = 'stopped'; s.mc.own = false; st.connected = false } else { s.mc.phase = 'starting'; s.mc.own = true; setTimeout(() => { s.mc.phase = 'running'; st.connected = true; onMsg(s) }, 2500) }
+      break
+    case 'LLM_SET': { const { apiKey, ...rest } = m.llm; Object.assign(s.llm, Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined))); if (typeof apiKey === 'string') s.llm.hasKey = !!apiKey; break }
+    case 'LIKES_SET': Object.assign(s.likes.config, m.likes); s.likes.every = s.likes.config.every; break
+    case 'LIKES_RESET': Object.assign(s.likes, { progress: 0, total: 0, level: 0, last: null }); break
+    case 'SIM_LIKE': { const k = s.likes; k.progress += m.count; k.total += m.count; k.last = m.user; if (k.progress >= k.every) { k.progress -= k.every; k.level++; addFeed({ kind: 'gift', user: m.user, emoji: '❤️', text: `knackt ${k.every} Likes → ${k.legend}` }) } break }
+    case 'CAMERA': s.config.cameraMode = m.mode; break
+    case 'DESIGNER': s.designer = m.on; break
+    case 'LAYOUT_FORMAT': s.layout = { format: m.format }; break
+    case 'TUNNEL_START': case 'TUNNEL_STOP': s.tunnel.active = m.type === 'TUNNEL_START'; s.tunnel.provider = 'Vorschau'; s.tunnel.base = s.tunnel.active ? 'https://beispiel-adresse.trycloudflare.com' : null; break
+    case 'REMOTE_SET': Object.assign(s.remote, Object.fromEntries(Object.entries(m.remote).filter(([k]) => k !== 'password'))); break
+    default: addLog({ at: Date.now(), level: 'info', message: 'Vorschau: ' + JSON.stringify(m) })
+  }
+  onMsg(s)
 }
 function demo () {
-  chip($('cWs'), 'warn', 'Vorschau (Beispieldaten)')
+  chip($('cWs'), 'warn', 'Vorschau')
   const A = (id, label) => ({ id, label })
   const R = (id, giftName, coins, emoji, action, legend, inLegend = false, amount = 1, hpMult = 1) => ({ id, giftName, match: [giftName.toLowerCase()], coins, emoji, icon: null, action, mob: null, amount, hpMult, legend, enabled: true, inLegend, custom: false })
   demoState = {
     type: 'STATE',
-    status: { connected: true, username: 'KI_Streamer', mode: 'surface', underground: false, inLiquid: false, activity: 'wood', goal: 'Holz hacken', health: 17, food: 16, pos: { x: 118, y: 66, z: -37 }, threats: 0, fighting: false, kills: 12, deaths: 1, paused: false, inv: { logs: 9, cobble: 71, iron: 4, diamonds: 0, food: 6, hasBed: true }, viewerGoals: [{ label: 'Haus bauen', by: 'Mia' }] },
+    status: { connected: true, username: 'KI_Streamer', mode: 'surface', underground: false, inLiquid: false, activity: 'wood', goal: 'Holz hacken', health: 17, food: 16, pos: { x: 118, y: 66, z: -37 }, threats: 0, fighting: false, kills: 12, deaths: 1, paused: false, world: { time: 9000, raining: false, thunder: false, difficulty: 'normal' }, inv: { logs: 9, cobble: 71, iron: 4, diamonds: 0, food: 6, hasBed: true }, viewerGoals: [{ label: 'Haus bauen', by: 'Mia' }] },
     botRunning: true,
     tiktok: { phase: 'idle', username: null, engine: null, viewers: 0, diagnostic: null, badge: '⚪ Nicht verbunden' },
-    tunnel: { active: false, starting: false, url: null, qr: null, error: null },
+    tunnel: { active: false, starting: false, base: null, url: null, qr: null, error: null },
+    remote: { autoTunnel: false, notify: false, notifyTopic: 'ki-streamer-Beispiel123' },
+    lan: { urls: ['http://192.168.178.20:3000/mobile.html?k=Beispiel'], qr: null },
+    mc: { installed: true, phase: 'running', own: true, error: null },
+    learning: { deaths: 3, mistakes: 7, lessons: [{ id: 'creeper_1', text: 'Creeper: mehr Abstand halten, nur treffen und sofort zurück.' }, { id: 'night_1', text: 'Nachts draußen gestorben: Bett früher besorgen und nachts ohne Bett einbunkern.' }], recent: [], policy: { retreatHp: 12, funnelAt: 4, eatAt: 14, foodReserve: 5, creeperCaution: 1, maxDrop: 3, avoid: ['warden'], caveNeedsIron: false, caveNeedsWater: false, nightShelter: true, pillarWhenSwarmed: false, shieldFirst: false, torchStock: 6, reasons: { creeperCaution: 'aus einem Creeper-Tod gelernt', avoid: 'Tipp von Lea', nightShelter: 'nachts draußen gestorben' } }, strategies: [{ action: 'MineIron', name: 'relocate', label: 'woanders versuchen', tries: 2, wins: 1 }] },
+    wisdom: { tips: [{ id: 'avoid_warden', label: 'Warden nicht bekämpfen', effect: 'Weicht einem natürlichen Wärter aus, statt zu kämpfen.', already: false, by: 'Lea', text: 'Schlag den Warden nicht', count: 2, supporters: [], enabled: true, applied: 1 }], unknown: [{ by: 'Ben', text: 'du solltest einen bogen craften' }] },
+    llm: { enabled: true, hasKey: true, model: 'claude-haiku-5-5', budgetUsd: 0.5, maxPerHour: 300, monologues: true, models: [A('claude-haiku-5-5', 'Claude Haiku 5.5 (schnell, günstig)'), A('claude-sonnet-5-5', 'Claude Sonnet 5.5 (wortgewandter, ca. 20× teurer)')], calls: 142, ok: 139, failed: 3, costUsd: 0.036, avgMs: 900, lastError: null, budgetHit: false },
+    likes: { config: { enabled: true, every: 100, action: 'zombie_fast', mob: 'zombie', amount: 1, escalate: true }, enabled: true, every: 100, progress: 63, total: 263, level: 2, last: 'Max', legend: '3× Zombie' },
+    world: { timeLock: 'off', rules: { keepInventory: false, mobSpawning: true } },
+    worldRules: [A('keepInventory', 'Inventar nach Tod behalten'), A('mobSpawning', 'Monster spawnen von selbst'), A('mobGriefing', 'Creeper zerstören Blöcke'), A('weatherCycle', 'Wetter wechselt von selbst')],
     config: { minecraft: { host: '127.0.0.1', port: 25565, username: 'KI_Streamer', version: '1.21.1' }, tiktokUsername: '', voice: 'de-DE-ConradNeural', voices: ['de-DE-ConradNeural', 'de-DE-KillianNeural', 'de-DE-FlorianMultilingualNeural'], cameraPlayer: '', cameraMode: 'auto' },
+    mobNames: { zombie: 'Zombies', creeper: 'Creeper', skeleton: 'Skelette', spider: 'Spinnen', witch: 'Hexen', enderman: 'Endermen', warden: 'Wärter' },
     mobs: ['zombie', 'husk', 'skeleton', 'stray', 'spider', 'creeper', 'witch', 'enderman', 'phantom', 'blaze', 'vindicator', 'piglin_brute', 'wither_skeleton', 'ravager', 'warden'],
     rules: [R('rose', 'Rose', 1, '🌹', 'zombie_fast', 'Zombie', true), R('tiktok', 'TikTok', 1, '🎵', 'zombie_fast', 'Zombie'), R('ice_cream', 'Eistüte', 1, '🍦', 'heal', 'Heilung', true), R('gg', 'GG', 1, '🎮', 'support_random', 'Support-Drop'), R('thumbs_up', 'Daumen hoch', 1, '👍', 'drop_food', 'Steaks'), R('finger_heart', 'Fingerherz', 5, '💖', 'skeleton_armored', 'Skelett-Schütze', true), R('rosa', 'Rosa-Traum', 15, '🌸', 'drop_bed', 'Bett'), R('donut', 'Donut', 30, '🍩', 'tnt_rain', 'TNT-Drop', true), R('show_heart', 'Zeig-Herz', 49, '🫰', 'lightning', 'Blitzeinschlag'), R('star', 'Stern', 99, '⭐', 'drop_weapon', 'Eisenschwert'), R('crown', 'Krone', 99, '👑', 'drop_armor', 'Eisenrüstung'), R('hand_heart', 'Handherz', 100, '🫶', 'baby_squad', 'Baby-Zombie-Squad', true), R('corgi', 'Corgi', 299, '🐕', 'spawn_mob', 'Verwüster'), R('money_gun', 'Money Gun', 500, '💸', 'hit_squad_vindicator', 'Hit-Squad x10', true), R('galaxy', 'Galaxie', 1000, '🌌', 'boss_ravager', 'Boss', true), R('lion', 'Löwe', 29999, '🦁', 'boss_warden', 'Wärter-Duo', false, 2, 2), R('tiktok_universe', 'TikTok Universe', 44999, '🌠', 'boss_warden', 'Apokalypse', false, 1, 3)],
     actions: [A('zombie_fast', 'Schneller Zombie'), A('skeleton_armored', 'Gepanzerter Skelett-Schütze'), A('spawn_mob', 'Mob spawnen (frei wählbar)'), A('tnt_rain', 'TNT-Regen'), A('lightning', 'Blitzeinschlag'), A('creeper_duo', 'Creeper-Duo'), A('baby_squad', '5x Baby-Zombie-Blitz-Squad'), A('hit_squad_vindicator', '10x Elite-Diener'), A('boss_ravager', 'Boss: Riesen-Verwüster'), A('boss_warden', 'Boss: Wärter'), A('heal', 'Heilung'), A('speed', 'Speed II'), A('support_golem', 'Eisengolem-Bodyguard'), A('support_random', 'Support-Drop (Zufall)'), A('drop_food', 'Essen droppen'), A('drop_weapon', 'Waffe droppen (Eisenschwert)'), A('drop_armor', 'Rüstung droppen (Eisen)'), A('drop_bed', 'Bett droppen'), A('drop_diamond_gear', 'Diamant-Ausrüstung droppen')],
     goals: [['wood', 'Holz holen'], ['house', 'Haus bauen'], ['bed', 'Bett craften'], ['sleep', 'Schlafen gehen'], ['corpse', 'Loot zurückholen'], ['iron_sword', 'Eisenschwert schmieden'], ['diamonds', 'Diamanten suchen'], ['enchant', 'Ausrüstung verzaubern'], ['nether', 'In den Nether gehen']].map(([id, label]) => ({ id, label })),
-    tts: { backend: 'msedge-tts', error: null }, layout: { format: '16:9' }, designer: false,
+    tts: { backend: 'msedge-tts', error: null }, layout: { format: '9:16' }, designer: false,
     feed: [{ kind: 'gift', user: 'Lukas', emoji: '🌹', text: 'Rose x3 (1 Coins) → Zombie' }, { kind: 'chat', user: 'Mia', text: 'Bau ein Haus', goal: 'house' }, { kind: 'follow', user: 'Tom', emoji: '➕', text: 'folgt jetzt' }],
     logs: [{ at: Date.now() - 30000, level: 'info', message: 'plan {"goal":"Eisenausrüstung & Schild","steps":["Eisen suchen","Eisen schmelzen","Eisenausrüstung craften"]}' }, { at: Date.now() - 8000, level: 'info', message: '🎙 (hype) Ansage von Mia im Chat: Wir bauen ein Haus!' }]
   }
   onMsg(demoState)
-  $('tikDiag').textContent = 'Vorschau: Namen oder TikTok-URL eingeben und „Verbinden“ klicken – der Watchdog wird simuliert.'
+  onMsg({ type: 'GIFT_LIBRARY', at: 0, gifts: [...demoState.rules.map(r => ({ key: r.giftName.toLowerCase(), name: r.giftName, coins: r.coins, emoji: r.emoji, icon: null, ruleId: r.id })), ...[['Herz-Me', 1, '💗'], ['Panda', 5, '🐼'], ['Parfüm', 20, '🧴'], ['Schmetterling', 88, '🦋'], ['Korallen', 499, '🪸'], ['Löwe', 29999, '🦁']].map(([name, coins, emoji]) => ({ key: name.toLowerCase(), name, coins, emoji, icon: null, ruleId: null }))].sort((a, b) => a.coins - b.coins) })
 }
 if (DEMO) demo(); else connect()
 </script>

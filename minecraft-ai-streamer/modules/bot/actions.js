@@ -184,13 +184,19 @@ class HumanActions {
   findMatch (re) { return this.items().find(i => re.test(i.name)) || null }
   findFirst (names) { for (const n of names) { const it = this.find(n); if (it) return it } return null }
 
-  bestTool (kind) {
-    for (const t of PICK_TIERS) { const it = this.find(`${t}_${kind}`); if (it) return it }
+  /** Bestes Werkzeug einer Art. healthy: nur Werkzeug mit mindestens 10 % Rest-Haltbarkeit. */
+  bestTool (kind, o = {}) {
+    for (const t of PICK_TIERS) {
+      const it = this.find(`${t}_${kind}`)
+      if (!it) continue
+      if (o.healthy && it.maxDurability && 1 - (it.durabilityUsed || 0) / it.maxDurability < 0.10) continue
+      return it
+    }
     return null
   }
 
   pickTier () {
-    const it = this.bestTool('pickaxe')
+    const it = this.bestTool('pickaxe', { healthy: true })
     if (!it) return 0
     return { wooden: 1, golden: 1, stone: 2, iron: 3, diamond: 4, netherite: 5 }[it.name.split('_')[0]] || 0
   }
@@ -417,6 +423,8 @@ class HumanActions {
     const token = o.token
     if (token) token.check()
     const moves = o.moves || this.walkMoves
+    // gelernt: nach einem Sturz-Tod keine tiefen Sprünge mehr
+    if (this.ctx.policy) { const d = this.ctx.policy().maxDrop; this.walkMoves.maxDropDown = d; this.digMoves.maxDropDown = d }
     bot.pathfinder.setMovements(moves)
     this.ctx.look.setProfile(o.profile || 'walk')
     let timer = null

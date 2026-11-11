@@ -5,7 +5,7 @@
  * ABSOLUTE REGEL: Es gibt keinen Browser-Fallback (window.speechSynthesis) und keine andere Stimme.
  * Fällt der Dienst aus, bleibt der Streamer stumm und das Overlay zeigt nur Untertitel.
  *
- * Emotion -> Prosodie:  chill +5 % / +0 Hz · hype +18 % / +6 Hz · panic +25 % / +12 Hz
+ * Emotion -> Prosodie:  chill +5 % / -3 Hz · hype +18 % / +6 Hz · panic +25 % / +12 Hz
  */
 const { spawn } = require('child_process')
 const fs = require('fs')
@@ -15,7 +15,7 @@ const crypto = require('crypto')
 
 const MALE_VOICES = ['de-DE-ConradNeural', 'de-DE-KillianNeural', 'de-DE-FlorianMultilingualNeural']
 const PROSODY = {
-  chill: { rate: '+5%', pitch: '+0Hz' },
+  chill: { rate: '+5%', pitch: '-3Hz' }, // leicht gelangweilt, sehr selbstsicher
   hype: { rate: '+18%', pitch: '+6Hz' },
   panic: { rate: '+25%', pitch: '+12Hz' }
 }
